@@ -1,0 +1,16 @@
+name: CLA
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce configured CLA verification
+        run: |
+          echo "MCPlica requires a CLA and does not use DCO."
+          echo "This starter intentionally fails closed until the GitHub organization-approved CLA verification service is wired here."
+          echo "Do not remove this required check or merge external contributions without verified CLA acceptance."
+          exit 1

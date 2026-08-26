@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+      - run: UV_PROJECT_ENVIRONMENT=backend/.venv uv sync --project backend
+      - run: cd backend && UV_PROJECT_ENVIRONMENT=.venv uv run ruff check app tests
+      - run: cd backend && UV_PROJECT_ENVIRONMENT=.venv uv run pyright app
+      - run: cd backend && UV_PROJECT_ENVIRONMENT=.venv uv run pytest
+
+  runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+      - run: UV_PROJECT_ENVIRONMENT=mcp_runtime/.venv uv sync --project mcp_runtime
+      - run: cd mcp_runtime && UV_PROJECT_ENVIRONMENT=.venv uv run ruff check app tests
+      - run: cd mcp_runtime && UV_PROJECT_ENVIRONMENT=.venv uv run pyright app
+      - run: cd mcp_runtime && UV_PROJECT_ENVIRONMENT=.venv uv run pytest
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: corepack enable
+      - run: cd frontend && pnpm install --no-frozen-lockfile
+      - run: cd frontend && pnpm lint
+      - run: cd frontend && pnpm typecheck
+      - run: cd frontend && pnpm test -- --run
+      - run: cd frontend && pnpm build
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - run: docker build -f infra/docker/backend.Dockerfile -t mcplica/backend:test .
+      - run: docker build -f infra/docker/runtime.Dockerfile -t mcplica/runtime:test .
+      - run: docker build -f infra/docker/frontend.Dockerfile -t mcplica/frontend:test .

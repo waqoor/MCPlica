@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+backend/.venv/
+mcp_runtime/.venv/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+runtime-secrets/
+
+# IDE/OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Runtime data
+artifacts/
+infra/volumes/
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# Build/package
+build/
+dist/
+*.egg-info/

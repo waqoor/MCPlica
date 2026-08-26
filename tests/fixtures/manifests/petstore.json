@@ -1,0 +1,42 @@
+{
+  "schema_version": "mcp-manifest/v1",
+  "manifest_id": "starter-petstore",
+  "project": {"id": "fixture-project", "name": "Pet Store", "slug": "petstore"},
+  "runtime_compatibility": ">=0.1,<1.0",
+  "servers": [{"id": "main", "url": "https://petstore.example.com/api", "description": "Fixture upstream"}],
+  "auth_profiles": [{"id": "bearer", "type": "bearer", "secret_env": "MCP_UPSTREAM_BEARER_TOKEN"}],
+  "tools": [
+    {
+      "name": "get_pet",
+      "title": "Get pet",
+      "description": "Retrieve a pet by its identifier.",
+      "input_schema": {
+        "type": "object",
+        "properties": {"pet_id": {"type": "string"}},
+        "required": ["pet_id"],
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {"id": {"type": "string"}, "name": {"type": "string"}},
+        "required": ["id", "name"]
+      },
+      "operation_key": "op_fixture_get_pet",
+      "request_mapping": {
+        "server_ref": "main",
+        "method": "GET",
+        "path": "/pets/{pet_id}",
+        "parameters": [{"tool_field": "pet_id", "source_name": "pet_id", "target": "path", "required": true}],
+        "body": null
+      },
+      "security_profile_ref": "bearer",
+      "timeout_ms": 30000,
+      "max_response_bytes": 2000000,
+      "enabled": true,
+      "provenance": {"source_pointer": "#/paths/~1pets~1{pet_id}/get"}
+    }
+  ],
+  "resources": [],
+  "security": {"inbound_auth_mode": "static_bearer", "allow_insecure_none_only_in_development": true},
+  "build": {"build_id": "fixture-build", "source_digest": "fixture", "created_at": "2026-08-24T00:00:00+00:00", "compiler_version": "0.1.0"}
+}

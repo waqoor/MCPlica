@@ -1,0 +1,36 @@
+{
+  "openapi": "3.1.0",
+  "info": {"title": "Pet Store", "version": "1.0.0"},
+  "servers": [{"url": "https://petstore.example.com/api"}],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {"type": "http", "scheme": "bearer"}
+    }
+  },
+  "security": [{"bearerAuth": []}],
+  "paths": {
+    "/pets/{pet_id}": {
+      "get": {
+        "operationId": "getPet",
+        "summary": "Get pet",
+        "parameters": [
+          {"name": "pet_id", "in": "path", "required": true, "schema": {"type": "string"}}
+        ],
+        "responses": {
+          "200": {
+            "description": "Pet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {"id": {"type": "string"}, "name": {"type": "string"}},
+                  "required": ["id", "name"]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

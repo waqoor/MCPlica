@@ -1,0 +1,16 @@
+api:
+  dashboard: true
+  insecure: true # local starter only; disable/publicly protect in production
+
+entryPoints:
+  web:
+    address: ":80"
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: mcplica-edge
+
+log:
+  level: INFO
