@@ -9,7 +9,9 @@ def validate_manifest(manifest: MCPManifest) -> None:
     server_ids = {server.id for server in manifest.servers}
     auth_ids = {profile.id for profile in manifest.auth_profiles}
 
-    duplicate_names = [name for name, count in Counter(t.name for t in manifest.tools).items() if count > 1]
+    duplicate_names = [
+        name for name, count in Counter(t.name for t in manifest.tools).items() if count > 1
+    ]
     if duplicate_names:
         raise ValidationError(f"Duplicate MCP tool names: {duplicate_names}")
 

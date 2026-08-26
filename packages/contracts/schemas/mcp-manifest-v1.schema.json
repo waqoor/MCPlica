@@ -1,0 +1,832 @@
+{
+  "$defs": {
+    "AuthProfile": {
+      "additionalProperties": false,
+      "properties": {
+        "credential_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credential Ref"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "enum": [
+                "header",
+                "query"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Location"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "prefix": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prefix"
+        },
+        "scopes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Scopes",
+          "type": "array"
+        },
+        "token_auth_method": {
+          "default": "client_secret_basic",
+          "enum": [
+            "client_secret_basic",
+            "client_secret_post"
+          ],
+          "title": "Token Auth Method",
+          "type": "string"
+        },
+        "token_url": {
+          "anyOf": [
+            {
+              "format": "uri",
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Token Url"
+        },
+        "type": {
+          "enum": [
+            "none",
+            "bearer",
+            "api_key",
+            "basic",
+            "oauth2_client_credentials",
+            "static_header"
+          ],
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ],
+      "title": "AuthProfile",
+      "type": "object"
+    },
+    "BuildMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "analysis_model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Analysis Model"
+        },
+        "build_id": {
+          "title": "Build Id",
+          "type": "string"
+        },
+        "canonical_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Canonical Sha256",
+          "type": "string"
+        },
+        "compiler_version": {
+          "title": "Compiler Version",
+          "type": "string"
+        },
+        "created_at": {
+          "title": "Created At",
+          "type": "string"
+        },
+        "embedding_model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Embedding Model"
+        },
+        "prompt_bundle_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prompt Bundle Version"
+        },
+        "source_digest": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Source Digest",
+          "type": "string"
+        },
+        "source_version_ids": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Source Version Ids",
+          "type": "array"
+        },
+        "validation_model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Validation Model"
+        }
+      },
+      "required": [
+        "build_id",
+        "source_version_ids",
+        "source_digest",
+        "canonical_sha256",
+        "created_at",
+        "compiler_version"
+      ],
+      "title": "BuildMetadata",
+      "type": "object"
+    },
+    "HttpMethod": {
+      "enum": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "title": "HttpMethod",
+      "type": "string"
+    },
+    "JsonObject": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "type": "object"
+    },
+    "JsonScalar": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "JsonValue": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/JsonScalar"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "array"
+        },
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "MCPResource": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "title": "Content",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "mime_type": {
+          "default": "text/markdown",
+          "title": "Mime Type",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "provenance": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Provenance",
+          "type": "object"
+        },
+        "uri": {
+          "title": "Uri",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uri",
+        "name",
+        "content"
+      ],
+      "title": "MCPResource",
+      "type": "object"
+    },
+    "MCPTool": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "input_schema": {
+          "$ref": "#/$defs/JsonObject"
+        },
+        "max_request_bytes": {
+          "default": 10000000,
+          "maximum": 100000000,
+          "minimum": 1024,
+          "title": "Max Request Bytes",
+          "type": "integer"
+        },
+        "max_response_bytes": {
+          "default": 2000000,
+          "maximum": 50000000,
+          "minimum": 1024,
+          "title": "Max Response Bytes",
+          "type": "integer"
+        },
+        "name": {
+          "pattern": "^[a-z_][a-z0-9_]{0,127}$",
+          "title": "Name",
+          "type": "string"
+        },
+        "operation_key": {
+          "title": "Operation Key",
+          "type": "string"
+        },
+        "output_schema": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JsonObject"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "provenance": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Provenance",
+          "type": "object"
+        },
+        "request_mapping": {
+          "$ref": "#/$defs/RequestMapping"
+        },
+        "responses": {
+          "items": {
+            "$ref": "#/$defs/ResponseDefinition"
+          },
+          "title": "Responses",
+          "type": "array"
+        },
+        "security_profile_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Security Profile Ref"
+        },
+        "timeout_ms": {
+          "default": 30000,
+          "maximum": 300000,
+          "minimum": 100,
+          "title": "Timeout Ms",
+          "type": "integer"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "title",
+        "description",
+        "input_schema",
+        "operation_key",
+        "request_mapping"
+      ],
+      "title": "MCPTool",
+      "type": "object"
+    },
+    "ManifestProject": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "slug": {
+          "title": "Slug",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "slug"
+      ],
+      "title": "ManifestProject",
+      "type": "object"
+    },
+    "MultipartFileMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "content_field": {
+          "title": "Content Field",
+          "type": "string"
+        },
+        "content_type_field": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content Type Field"
+        },
+        "default_content_type": {
+          "default": "application/octet-stream",
+          "title": "Default Content Type",
+          "type": "string"
+        },
+        "default_filename": {
+          "default": "upload.bin",
+          "title": "Default Filename",
+          "type": "string"
+        },
+        "filename_field": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Filename Field"
+        },
+        "part_name": {
+          "title": "Part Name",
+          "type": "string"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "part_name",
+        "content_field"
+      ],
+      "title": "MultipartFileMapping",
+      "type": "object"
+    },
+    "ParameterMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "allow_reserved": {
+          "default": false,
+          "title": "Allow Reserved",
+          "type": "boolean"
+        },
+        "explode": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Explode"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "source_name": {
+          "title": "Source Name",
+          "type": "string"
+        },
+        "style": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Style"
+        },
+        "target": {
+          "$ref": "#/$defs/ParameterTarget"
+        },
+        "tool_field": {
+          "title": "Tool Field",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tool_field",
+        "source_name",
+        "target"
+      ],
+      "title": "ParameterMapping",
+      "type": "object"
+    },
+    "ParameterTarget": {
+      "enum": [
+        "path",
+        "query",
+        "header"
+      ],
+      "title": "ParameterTarget",
+      "type": "string"
+    },
+    "RequestBodyMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "default": "application/json",
+          "enum": [
+            "application/json",
+            "application/x-www-form-urlencoded",
+            "multipart/form-data"
+          ],
+          "title": "Media Type",
+          "type": "string"
+        },
+        "multipart_files": {
+          "items": {
+            "$ref": "#/$defs/MultipartFileMapping"
+          },
+          "title": "Multipart Files",
+          "type": "array"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "tool_field": {
+          "default": "body",
+          "title": "Tool Field",
+          "type": "string"
+        }
+      },
+      "title": "RequestBodyMapping",
+      "type": "object"
+    },
+    "RequestMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RequestBodyMapping"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "method": {
+          "$ref": "#/$defs/HttpMethod"
+        },
+        "parameters": {
+          "items": {
+            "$ref": "#/$defs/ParameterMapping"
+          },
+          "title": "Parameters",
+          "type": "array"
+        },
+        "path": {
+          "pattern": "^/",
+          "title": "Path",
+          "type": "string"
+        },
+        "server_ref": {
+          "title": "Server Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "server_ref",
+        "method",
+        "path"
+      ],
+      "title": "RequestMapping",
+      "type": "object"
+    },
+    "ResponseDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "media_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Media Type"
+        },
+        "schema": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JsonObject"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "status_code": {
+          "title": "Status Code",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status_code"
+      ],
+      "title": "ResponseDefinition",
+      "type": "object"
+    },
+    "RuntimeSecurity": {
+      "additionalProperties": false,
+      "properties": {
+        "allow_insecure_none_only_in_development": {
+          "default": true,
+          "title": "Allow Insecure None Only In Development",
+          "type": "boolean"
+        },
+        "allowed_upstream_hosts": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Allowed Upstream Hosts",
+          "type": "array"
+        },
+        "default_max_response_bytes": {
+          "default": 2000000,
+          "maximum": 50000000,
+          "minimum": 1024,
+          "title": "Default Max Response Bytes",
+          "type": "integer"
+        },
+        "default_timeout_ms": {
+          "default": 30000,
+          "maximum": 300000,
+          "minimum": 100,
+          "title": "Default Timeout Ms",
+          "type": "integer"
+        },
+        "inbound_auth_mode": {
+          "default": "static_bearer",
+          "enum": [
+            "static_bearer",
+            "oidc",
+            "none"
+          ],
+          "title": "Inbound Auth Mode",
+          "type": "string"
+        }
+      },
+      "required": [
+        "allowed_upstream_hosts"
+      ],
+      "title": "RuntimeSecurity",
+      "type": "object"
+    },
+    "ServerDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "url": {
+          "format": "uri",
+          "minLength": 1,
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "url"
+      ],
+      "title": "ServerDefinition",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "auth_profiles": {
+      "items": {
+        "$ref": "#/$defs/AuthProfile"
+      },
+      "title": "Auth Profiles",
+      "type": "array"
+    },
+    "build": {
+      "$ref": "#/$defs/BuildMetadata"
+    },
+    "manifest_id": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Manifest Id",
+      "type": "string"
+    },
+    "project": {
+      "$ref": "#/$defs/ManifestProject"
+    },
+    "resources": {
+      "items": {
+        "$ref": "#/$defs/MCPResource"
+      },
+      "title": "Resources",
+      "type": "array"
+    },
+    "runtime_compatibility": {
+      "default": ">=1.0,<2.0",
+      "title": "Runtime Compatibility",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "mcp-manifest/v1",
+      "default": "mcp-manifest/v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "security": {
+      "$ref": "#/$defs/RuntimeSecurity"
+    },
+    "servers": {
+      "items": {
+        "$ref": "#/$defs/ServerDefinition"
+      },
+      "minItems": 1,
+      "title": "Servers",
+      "type": "array"
+    },
+    "tools": {
+      "items": {
+        "$ref": "#/$defs/MCPTool"
+      },
+      "title": "Tools",
+      "type": "array"
+    }
+  },
+  "required": [
+    "manifest_id",
+    "project",
+    "servers",
+    "tools",
+    "security",
+    "build"
+  ],
+  "title": "MCPManifest",
+  "type": "object"
+}

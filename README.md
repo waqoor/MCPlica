@@ -2,9 +2,9 @@
 
 **MCPlica** is an open-source, self-hosted API-to-MCP compiler and deployment platform.
 
-It ingests a company's OpenAPI specification or structured API inventory, optionally incorporates product/API documentation, uses OpenRouter and Milvus only during analysis/build/review, deterministically compiles an MCP-equivalent manifest, validates it, and serves each product through an isolated generic MCP runtime.
+It ingests a company's OpenAPI specification or structured API inventory, optionally incorporates product/API documentation, uses OpenRouter and Milvus only during analysis/build/review, deterministically compiles and validates an MCP manifest, and serves each project through an isolated generic MCP runtime.
 
-> **Starter repository scope:** this repository establishes the production-oriented architecture, executable contracts, core clients, project CRUD foundation, deterministic OpenAPI-to-MCP compiler starter, manifest-driven MCP runtime, Docker/Compose topology, frontend shell, migrations, tests, and governance scaffolding. It is intentionally a starter implementation, not the complete implementation described in `docs/implementation_plan.md`.
+> **Release status:** MCPlica is pre-stable. The repository contains the product workspaces, typed control-plane/runtime boundaries, deployment/security controls, CI/release automation, and operator documentation, but a production release still requires the external and live-environment gates in `docs/release/release-checklist.md`.
 
 ## Non-negotiable boundaries
 
@@ -26,7 +26,7 @@ It ingests a company's OpenAPI specification or structured API inventory, option
 backend/             FastAPI builder/control plane
 mcp_runtime/         Reusable generic MCP serving runtime
 packages/contracts/  Infrastructure-free Pydantic contracts shared by builder/runtime
-frontend/            React + Vite + Tailwind + shadcn-style component shell
+frontend/            React control plane, typed API clients, unit and browser E2E tests
 migrations/          Alembic database migrations
 infra/               Docker Compose, Traefik, Milvus, Dockerfiles
 scripts/             Developer/bootstrap utilities
@@ -49,7 +49,7 @@ docs/                Authoritative implementation specifications
    cp .env.example .env
    ```
 
-2. Generate a strong encryption key and edit `.env`:
+2. Generate the encryption key and independent auth/pepper/bootstrap secrets, then replace every blank or `REPLACE_...` value in `.env`:
 
    ```bash
    python scripts/generate_secret_key.py
@@ -67,19 +67,25 @@ docs/                Authoritative implementation specifications
    make install-frontend
    ```
 
-5. Start infrastructure and applications:
+5. Start infrastructure/applications and apply migrations:
 
    ```bash
    make compose-up
+   docker compose --env-file .env -f infra/compose.yaml exec api alembic -c ../migrations/alembic.ini upgrade head
    ```
 
-6. Open:
+6. Bootstrap the first administrator using the non-echoing CLI, remove the bootstrap secret, then open:
+
+   ```bash
+   docker compose --env-file .env -f infra/compose.yaml exec api python -m app.cli.bootstrap_admin --email admin@example.com --display-name "MCPlica Admin"
+   ```
 
    - MCPlica UI: `http://localhost:8080`
    - Backend OpenAPI: `http://localhost:8000/docs`
    - Backend health: `http://localhost:8000/api/v1/health`
-   - Milvus WebUI: `http://localhost:9091/webui/`
-   - Traefik dashboard (local only): `http://localhost:8081`
+
+   PostgreSQL, Redis, Milvus, etcd, and MinIO stay exclusively on the internal
+   builder network and are intentionally not published on host ports.
 
 ## Local development without full Compose
 
@@ -90,39 +96,40 @@ make backend-dev
 make frontend-dev
 ```
 
-For the runtime, provide a manifest:
+The generic runtime is launched through the deployment worker so it receives a verified manifest digest and project-scoped read-only secret bundle. Exercise it in isolation through its security/protocol tests:
 
 ```bash
 cd mcp_runtime
-MCP_MANIFEST_PATH=../tests/fixtures/manifests/petstore.json \
-MCP_UPSTREAM_BEARER_TOKEN='replace-me' \
-uv run uvicorn app.main:app --host 0.0.0.0 --port 9000
+uv run pytest tests/test_manifest_security.py tests/test_protocol_and_auth.py
 ```
 
-The MCP endpoint is `/mcp`; liveness is `/healthz`.
+Deployed runtime liveness is `/healthz`, readiness is `/readyz`, and MCP Streamable HTTP is `/mcp`. Do not inject ad hoc credential environment variables in place of the canonical secret bundle.
 
-## Starter vertical slice
+The complete setup, production TLS, configuration, backup, and upgrade procedures are in `docs/operations/`.
 
-The starter already includes:
+## Implemented product surface
+
+The canonical implementation includes:
 
 - shared `mcp-manifest/v1` contracts;
 - FastAPI application factory and health/readiness endpoints;
 - PostgreSQL/Redis/Milvus/OpenRouter/HTTP/Docker/storage clients;
-- Project model, repository, service, CRUD API, and Alembic initial migration;
-- deterministic OpenAPI parser and compiler starter;
-- manifest validator;
+- cookie/CSRF authentication, local admin/builder roles, settings, audit and encrypted credential boundaries;
+- projects, immutable sources/versions, parsing/indexing, canonical build evidence, validation and deployment lifecycle;
+- deterministic OpenAPI/inventory compilers with explicit provenance and manifest validation;
 - low-level official MCP Python SDK runtime that advertises exact manifest JSON Schemas;
 - generic upstream HTTP request builder/executor;
-- bearer/API-key/basic upstream authentication from environment secrets;
+- project-scoped upstream and inbound MCP authentication from mounted secret bundles;
 - static inbound bearer protection for MCP endpoints;
 - DNS/host-bound request execution (runtime never accepts arbitrary destination URLs from MCP callers);
-- Docker Compose builder topology plus Traefik and Milvus 3.0.0 standalone dependencies;
-- React administration shell and Projects screen;
-- baseline unit tests and GitHub Actions workflow.
+- hardened Docker/Compose topology plus a fail-closed production TLS override;
+- responsive ten-step React workflow and project/global operational workspaces;
+- frontend unit and Chromium/Firefox/WebKit/mobile E2E journeys;
+- CI, dependency/secret/image scans, SBOM/checksum generation, and signed digest release automation.
 
 ## Authoritative implementation specifications
 
-Read these before expanding the starter:
+Read these before changing product behavior:
 
 1. `docs/architecture.md`
 2. `docs/design_document.md`
@@ -131,10 +138,10 @@ Read these before expanding the starter:
 5. `docs/tech_stack.md`
 6. `docs/open_source_and_sponsorship_model.md`
 
-`docs/implementation_plan.md` is the execution order for incremental implementation.
+`docs/implementation_plan.md` is the execution order. `docs/README.md` indexes user, API, operations, security, and release documentation.
 
 ## License and contributions
 
 MCPlica is licensed under **GNU Affero General Public License v3.0 only (`AGPL-3.0-only`)**.
 
-External code contributions require acceptance of the MCPlica Contributor License Agreement. DCO is intentionally not used. See `CLA.md` and `CONTRIBUTING.md`.
+External code contributions require acceptance of the MCPlica Contributor License Agreement. DCO is intentionally not used. See `CLA.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, and `GOVERNANCE.md`.

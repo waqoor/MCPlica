@@ -1,3 +1,4 @@
-from cryptography.fernet import Fernet
+import base64
+import secrets
 
-print(Fernet.generate_key().decode())
+print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode("ascii"))

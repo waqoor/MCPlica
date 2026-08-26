@@ -1,0 +1,125 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  actions: read
+  contents: write
+  id-token: write
+  packages: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify release tag and default-branch ancestry
+        shell: bash
+        run: |
+          [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]
+          git fetch --no-tags origin master
+          git merge-base --is-ancestor "${GITHUB_SHA}" origin/master
+      - name: Require a successful CI run for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          count="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${GITHUB_SHA}&status=success" --jq '.total_count')"
+          test "${count}" -gt 0
+
+  publish-images:
+    needs: verify
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: backend
+            dockerfile: infra/docker/backend.Dockerfile
+          - image: runtime
+            dockerfile: infra/docker/runtime.Dockerfile
+          - image: frontend
+            dockerfile: infra/docker/frontend.Dockerfile
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Define immutable image tag
+        shell: bash
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}/${{ matrix.image }}:${GITHUB_REF_NAME}" >> "${GITHUB_ENV}"
+      - name: Authenticate to GHCR
+        shell: bash
+        run: echo "${{ github.token }}" | docker login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+      - uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          load: true
+          push: false
+          tags: ${{ env.IMAGE }}
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE }}
+          version: v0.74.0
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          image: ${{ env.IMAGE }}
+          format: spdx-json
+          output-file: ${{ matrix.image }}.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Push and sign the immutable image
+        shell: bash
+        run: |
+          docker push "${IMAGE}"
+          digest_ref="$(docker inspect --format='{{index .RepoDigests 0}}' "${IMAGE}")"
+          test -n "${digest_ref}"
+          cosign sign --yes "${digest_ref}"
+          printf 'image=%s\ndigest=%s\nsource=%s\n' "${IMAGE}" "${digest_ref}" "${GITHUB_SHA}" > "${{ matrix.image }}.release.txt"
+          sha256sum "${{ matrix.image }}.spdx.json" "${{ matrix.image }}.release.txt" > "${{ matrix.image }}.sha256"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-${{ matrix.image }}
+          path: |
+            ${{ matrix.image }}.spdx.json
+            ${{ matrix.image }}.release.txt
+            ${{ matrix.image }}.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+  github-release:
+    needs: publish-images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+      - name: Publish checksummed release evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          prerelease=()
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then prerelease+=(--prerelease); fi
+          gh release create "${GITHUB_REF_NAME}" --verify-tag --generate-notes --title "MCPlica ${GITHUB_REF_NAME}" "${prerelease[@]}"
+          gh release upload "${GITHUB_REF_NAME}" release-assets/* --clobber

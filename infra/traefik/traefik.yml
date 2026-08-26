@@ -1,16 +1,25 @@
 api:
-  dashboard: true
-  insecure: true # local starter only; disable/publicly protect in production
+  dashboard: false
+  insecure: false
 
 entryPoints:
+  traefik:
+    address: ":8082"
   web:
     address: ":80"
+  websecure:
+    address: ":443"
 
 providers:
   docker:
     endpoint: "unix:///var/run/docker.sock"
     exposedByDefault: false
+    allowEmptyServices: false
+    watch: true
     network: mcplica-edge
+
+ping:
+  entryPoint: traefik
 
 log:
   level: INFO

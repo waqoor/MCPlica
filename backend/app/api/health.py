@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Request
+import asyncio
+from collections.abc import Awaitable
+
+from fastapi import APIRouter, Request, Response, status
 
 router = APIRouter(tags=["system"])
 
@@ -8,19 +11,43 @@ async def health() -> dict[str, str]:
     return {"status": "ok", "service": "mcplica-api"}
 
 
+async def _bounded_health(check: Awaitable[bool], timeout_seconds: float) -> bool:
+    try:
+        return await asyncio.wait_for(check, timeout=timeout_seconds)
+    except Exception:
+        return False
+
+
 @router.get("/ready")
-async def ready(request: Request) -> dict[str, object]:
-    database_ok = await request.app.state.database.health()
-    redis_ok = await request.app.state.redis.health()
-    # Milvus/OpenRouter are build-time dependencies and are reported but do not prevent API liveness.
-    milvus_ok = await request.app.state.milvus.health()
-    openrouter_ok = await request.app.state.openrouter.health()
-    ready_value = database_ok and redis_ok
+async def ready(request: Request, response: Response) -> dict[str, object]:
+    timeout = request.app.state.settings.readiness_timeout_seconds
+    (
+        database_ok,
+        redis_ok,
+        storage_ok,
+        queue_ok,
+        milvus_ok,
+        openrouter_ok,
+    ) = await asyncio.gather(
+        _bounded_health(request.app.state.database.health(), timeout),
+        _bounded_health(request.app.state.redis.health(), timeout),
+        _bounded_health(request.app.state.storage.health(), timeout),
+        _bounded_health(request.app.state.build_queue.health(), timeout),
+        _bounded_health(request.app.state.milvus.health(), timeout),
+        _bounded_health(request.app.state.openrouter.health(), timeout),
+    )
+    # OpenRouter and Milvus are builder dependencies; their outage must not disable
+    # control-plane access to existing projects or already-deployed runtimes.
+    ready_value = database_ok and redis_ok and storage_ok and queue_ok
+    if not ready_value:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     return {
         "ready": ready_value,
         "dependencies": {
             "postgres": database_ok,
             "redis": redis_ok,
+            "artifact_storage": storage_ok,
+            "build_queue": queue_ok,
             "milvus": milvus_ok,
             "openrouter": openrouter_ok,
         },

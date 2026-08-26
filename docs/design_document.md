@@ -1388,13 +1388,25 @@ A rollback creates a new Deployment row referencing a previous READY Build; hist
 6. create replacement container using pinned runtime image/digest;
 7. attach network and Traefik labels;
 8. start container;
-9. poll health/readiness with timeout;
+9. poll container readiness, then probe the Traefik edge route with the expected
+   immutable Build ID and Deployment ID;
 10. if healthy, make replacement authoritative and stop old container;
 11. if unhealthy, remove replacement and keep old healthy deployment intact;
 12. persist final state/audit event;
 13. release lock.
 
+During step 10 the candidate remains durably `HEALTHCHECK` with
+`health_status=activating`. The project references the candidate while every superseded
+`RUNNING`/`STOPPING` runtime is retired; only after that cleanup commits may the
+candidate become `RUNNING` and emit its running audit event. A worker retry resumes
+this activation boundary without reprovisioning the already healthy candidate.
+
 Never stop the currently healthy container before a replacement passes readiness unless Docker resource constraints make zero-downtime impossible and the user explicitly requested a stop-first deployment.
+
+Container readiness alone is insufficient for replacement. The edge probe must reach
+the candidate through its project hostname/network and receive `/readyz` evidence for
+the exact candidate Build and Deployment. This prevents Docker-provider propagation
+delay, or an older same-Build runtime, from being mistaken for the replacement.
 
 ---
 

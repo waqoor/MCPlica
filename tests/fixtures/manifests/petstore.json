@@ -1,10 +1,10 @@
 {
   "schema_version": "mcp-manifest/v1",
-  "manifest_id": "starter-petstore",
+  "manifest_id": "1111111111111111111111111111111111111111111111111111111111111111",
   "project": {"id": "fixture-project", "name": "Pet Store", "slug": "petstore"},
-  "runtime_compatibility": ">=0.1,<1.0",
+  "runtime_compatibility": ">=1.0,<2.0",
   "servers": [{"id": "main", "url": "https://petstore.example.com/api", "description": "Fixture upstream"}],
-  "auth_profiles": [{"id": "bearer", "type": "bearer", "secret_env": "MCP_UPSTREAM_BEARER_TOKEN"}],
+  "auth_profiles": [{"id": "bearer", "type": "bearer", "credential_ref": "bearer"}],
   "tools": [
     {
       "name": "get_pet",
@@ -37,6 +37,17 @@
     }
   ],
   "resources": [],
-  "security": {"inbound_auth_mode": "static_bearer", "allow_insecure_none_only_in_development": true},
-  "build": {"build_id": "fixture-build", "source_digest": "fixture", "created_at": "2026-08-24T00:00:00+00:00", "compiler_version": "0.1.0"}
+  "security": {
+    "inbound_auth_mode": "static_bearer",
+    "allowed_upstream_hosts": ["petstore.example.com"],
+    "allow_insecure_none_only_in_development": true
+  },
+  "build": {
+    "build_id": "fixture-build",
+    "source_version_ids": ["fixture-source-version"],
+    "source_digest": "2222222222222222222222222222222222222222222222222222222222222222",
+    "canonical_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+    "created_at": "2026-08-24T00:00:00+00:00",
+    "compiler_version": "0.1.0"
+  }
 }

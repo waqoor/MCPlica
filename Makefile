@@ -24,21 +24,22 @@ migrate:
 	cd backend && UV_PROJECT_ENVIRONMENT=.venv uv run alembic -c ../migrations/alembic.ini upgrade head
 
 test:
-	cd backend && UV_PROJECT_ENVIRONMENT=.venv uv run pytest
+	cd backend && UV_PROJECT_ENVIRONMENT=.venv uv run pytest tests ../packages/contracts/tests
 	cd mcp_runtime && UV_PROJECT_ENVIRONMENT=.venv uv run pytest
+	cd frontend && corepack enable && pnpm test:run
 
 lint:
-	cd backend && UV_PROJECT_ENVIRONMENT=.venv uv run ruff check app tests
+	cd backend && UV_PROJECT_ENVIRONMENT=.venv uv run ruff check app tests ../packages/contracts/src ../packages/contracts/tests
 	cd mcp_runtime && UV_PROJECT_ENVIRONMENT=.venv uv run ruff check app tests
 	cd frontend && corepack enable && pnpm lint
 
 typecheck:
-	cd backend && UV_PROJECT_ENVIRONMENT=.venv uv run pyright app
+	cd backend && UV_PROJECT_ENVIRONMENT=.venv uv run pyright app ../packages/contracts/src
 	cd mcp_runtime && UV_PROJECT_ENVIRONMENT=.venv uv run pyright app
 	cd frontend && corepack enable && pnpm typecheck
 
 format:
-	cd backend && UV_PROJECT_ENVIRONMENT=.venv uv run ruff format app tests
+	cd backend && UV_PROJECT_ENVIRONMENT=.venv uv run ruff format app tests ../packages/contracts/src ../packages/contracts/tests
 	cd mcp_runtime && UV_PROJECT_ENVIRONMENT=.venv uv run ruff format app tests
 	cd frontend && corepack enable && pnpm format
 

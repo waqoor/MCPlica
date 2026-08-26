@@ -1,0 +1,73 @@
+services:
+  api:
+    image: ${MCP_LICA_BACKEND_IMAGE:?Set MCP_LICA_BACKEND_IMAGE to an immutable release digest}
+    pull_policy: always
+    environment:
+      MCP_LICA_ENV: production
+      MCP_LICA_FRONTEND_ORIGIN: https://${MCP_LICA_UI_DOMAIN:?Set MCP_LICA_UI_DOMAIN}
+      MCP_LICA_MCP_DOMAIN: ${MCP_LICA_MCP_DOMAIN:?Set MCP_LICA_MCP_DOMAIN}
+      MCP_LICA_MCP_RUNTIME_IMAGE: ${MCP_LICA_MCP_RUNTIME_IMAGE:?Set MCP_LICA_MCP_RUNTIME_IMAGE to an immutable release digest}
+      MCP_LICA_TRAEFIK_ENTRYPOINT: websecure
+      MCP_LICA_TRAEFIK_TLS: "true"
+      MCP_LICA_TRAEFIK_CERT_RESOLVER: letsencrypt
+      MCP_LICA_RUNTIME_HOST_ROOT: ${MCP_LICA_RUNTIME_HOST_ROOT:?Set an absolute MCP_LICA_RUNTIME_HOST_ROOT}
+    labels:
+      traefik.http.routers.mcplica-api.rule: Host(`${MCP_LICA_API_DOMAIN:?Set MCP_LICA_API_DOMAIN}`)
+      traefik.http.routers.mcplica-api.entrypoints: websecure
+      traefik.http.routers.mcplica-api.tls: "true"
+      traefik.http.routers.mcplica-api.tls.certresolver: letsencrypt
+
+  builder-worker:
+    image: ${MCP_LICA_BACKEND_IMAGE:?Set MCP_LICA_BACKEND_IMAGE to an immutable release digest}
+    pull_policy: always
+    environment:
+      MCP_LICA_ENV: production
+      MCP_LICA_MCP_DOMAIN: ${MCP_LICA_MCP_DOMAIN:?Set MCP_LICA_MCP_DOMAIN}
+      MCP_LICA_MCP_RUNTIME_IMAGE: ${MCP_LICA_MCP_RUNTIME_IMAGE:?Set MCP_LICA_MCP_RUNTIME_IMAGE to an immutable release digest}
+
+  deployment-worker:
+    image: ${MCP_LICA_BACKEND_IMAGE:?Set MCP_LICA_BACKEND_IMAGE to an immutable release digest}
+    pull_policy: always
+    environment:
+      MCP_LICA_ENV: production
+      MCP_LICA_MCP_DOMAIN: ${MCP_LICA_MCP_DOMAIN:?Set MCP_LICA_MCP_DOMAIN}
+      MCP_LICA_MCP_RUNTIME_IMAGE: ${MCP_LICA_MCP_RUNTIME_IMAGE:?Set MCP_LICA_MCP_RUNTIME_IMAGE to an immutable release digest}
+      MCP_LICA_TRAEFIK_ENTRYPOINT: websecure
+      MCP_LICA_TRAEFIK_TLS: "true"
+      MCP_LICA_TRAEFIK_CERT_RESOLVER: letsencrypt
+      MCP_LICA_RUNTIME_HOST_ROOT: ${MCP_LICA_RUNTIME_HOST_ROOT:?Set an absolute MCP_LICA_RUNTIME_HOST_ROOT}
+
+  frontend:
+    image: ${MCP_LICA_FRONTEND_IMAGE:?Set MCP_LICA_FRONTEND_IMAGE to an immutable release digest}
+    pull_policy: always
+    labels:
+      traefik.http.routers.mcplica-ui.rule: Host(`${MCP_LICA_UI_DOMAIN:?Set MCP_LICA_UI_DOMAIN}`)
+      traefik.http.routers.mcplica-ui.entrypoints: websecure
+      traefik.http.routers.mcplica-ui.tls: "true"
+      traefik.http.routers.mcplica-ui.tls.certresolver: letsencrypt
+
+  traefik:
+    command:
+      - --api.dashboard=false
+      - --entrypoints.traefik.address=:8082
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --providers.docker.endpoint=unix:///var/run/docker.sock
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.allowemptyservices=false
+      - --providers.docker.network=mcplica-edge
+      - --ping=true
+      - --ping.entrypoint=traefik
+      - --certificatesresolvers.letsencrypt.acme.email=${MCP_LICA_ACME_EMAIL:?Set MCP_LICA_ACME_EMAIL}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.letsencrypt.acme.tlschallenge=true
+      - --log.level=INFO
+    ports:
+      - "443:443"
+    volumes:
+      - letsencrypt-data:/letsencrypt
+
+volumes:
+  letsencrypt-data:
