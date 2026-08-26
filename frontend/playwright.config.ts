@@ -1,6 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const liveBaseUrl = process.env.MCP_LICA_E2E_BASE_URL;
+const liveBaseUrl = process.env.E2E_BASE_URL;
 
 export default defineConfig({
   testDir: "./e2e",

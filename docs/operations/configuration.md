@@ -1,29 +1,32 @@
 # Configuration reference
 
-The control plane reads `MCP_LICA_*`; a generated MCP runtime reads `MCP_*`. Environment variables and mounted secret files are deployment inputs, while PostgreSQL remains the authority for projects, sources, builds, credentials, users, settings, audit records, and deployments.
+The control plane reads unprefixed installation variables such as `DATABASE_URL` and
+`OPENROUTER_API_KEY`; a generated MCP runtime reads `MCP_*`. Environment variables and
+mounted secret files are deployment inputs, while PostgreSQL remains the authority for
+projects, sources, builds, credentials, users, settings, audit records, and deployments.
 
 ## Control-plane essentials
 
 | Variable                                 | Purpose                                          | Production rule                                                         |
 | ---------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------- |
-| `MCP_LICA_ENV`                           | `development`, `test`, or `production`           | Must be `production`                                                    |
-| `MCP_LICA_API_DOMAIN`                    | Public control-plane API hostname                | Explicit non-local hostname                                             |
-| `MCP_LICA_FRONTEND_ORIGIN`               | Exact browser origin used by CORS/cookies        | HTTPS origin, no wildcard                                               |
-| `MCP_LICA_METRICS_BEARER_TOKEN`          | Bearer token protecting `/metrics`               | Required; at least 32 characters                                        |
-| `MCP_LICA_DATABASE_URL`                  | SQLAlchemy PostgreSQL URL                        | Dedicated least-privilege database account                              |
-| `MCP_LICA_REDIS_URL`                     | Cache and RQ connection                          | Private network; authentication/TLS when crossing hosts                 |
-| `MCP_LICA_BUILD_QUEUE_NAME`              | Builder-only RQ queue                            | Must differ from the deployment queue                                   |
-| `MCP_LICA_DEPLOYMENT_QUEUE_NAME`         | Docker-authoritative deployment RQ queue         | Must differ from the build queue                                        |
-| `MCP_LICA_SECRET_ENCRYPTION_KEY`         | URL-safe base64 encoded 32-byte AES-256-GCM key  | Required, backed up outside the database                                |
-| `MCP_LICA_SECRET_ENCRYPTION_KEY_VERSION` | Key identifier stored with ciphertext            | Change only through a planned re-encryption migration                   |
-| `MCP_LICA_AUTH_SIGNING_KEY`              | Control-plane access-token signing               | Required and distinct from every other key                              |
-| `MCP_LICA_REFRESH_TOKEN_PEPPER`          | Refresh-token verifier pepper                    | Required and distinct                                                   |
-| `MCP_LICA_BOOTSTRAP_SECRET`              | One-time first-admin authorization               | Remove after bootstrap                                                  |
-| `MCP_LICA_ARTIFACT_ROOT`                 | Immutable source/build artifact storage          | Persistent, access-controlled storage                                   |
-| `MCP_LICA_MCP_RUNTIME_IMAGE`             | Generic runtime image                            | Required as `registry/image@sha256:digest`                              |
-| `MCP_LICA_MCP_RUNTIME_PULL_POLICY`       | `never`, `missing`, or `always` image resolution | Production still requires a digest-pinned reference                     |
-| `MCP_LICA_RUNTIME_HOST_ROOT`             | Docker-daemon-visible per-project runtime files  | Required absolute host path, writable only by deployment-worker UID/GID |
-| `MCP_LICA_RUNTIME_WORKER_ROOT`           | Same bind mounted inside the deployment worker   | Required absolute worker path; defaults to `/runtime-host`              |
+| `ENV`                           | `development`, `test`, or `production`           | Must be `production`                                                    |
+| `API_DOMAIN`                    | Public control-plane API hostname                | Explicit non-local hostname                                             |
+| `FRONTEND_ORIGIN`               | Exact browser origin used by CORS/cookies        | HTTPS origin, no wildcard                                               |
+| `METRICS_BEARER_TOKEN`          | Bearer token protecting `/metrics`               | Required; at least 32 characters                                        |
+| `DATABASE_URL`                  | SQLAlchemy PostgreSQL URL                        | Dedicated least-privilege database account                              |
+| `REDIS_URL`                     | Cache and RQ connection                          | Private network; authentication/TLS when crossing hosts                 |
+| `BUILD_QUEUE_NAME`              | Builder-only RQ queue                            | Must differ from the deployment queue                                   |
+| `DEPLOYMENT_QUEUE_NAME`         | Docker-authoritative deployment RQ queue         | Must differ from the build queue                                        |
+| `SECRET_ENCRYPTION_KEY`         | URL-safe base64 encoded 32-byte AES-256-GCM key  | Required, backed up outside the database                                |
+| `SECRET_ENCRYPTION_KEY_VERSION` | Key identifier stored with ciphertext            | Change only through a planned re-encryption migration                   |
+| `AUTH_SIGNING_KEY`              | Control-plane access-token signing               | Required and distinct from every other key                              |
+| `REFRESH_TOKEN_PEPPER`          | Refresh-token verifier pepper                    | Required and distinct                                                   |
+| `BOOTSTRAP_SECRET`              | One-time first-admin authorization               | Remove after bootstrap                                                  |
+| `ARTIFACT_ROOT`                 | Immutable source/build artifact storage          | Persistent, access-controlled storage                                   |
+| `MCP_RUNTIME_IMAGE`             | Generic runtime image                            | Required as `registry/image@sha256:digest`                              |
+| `MCP_RUNTIME_PULL_POLICY`       | `never`, `missing`, or `always` image resolution | Production still requires a digest-pinned reference                     |
+| `RUNTIME_HOST_ROOT`             | Docker-daemon-visible per-project runtime files  | Required absolute host path, writable only by deployment-worker UID/GID |
+| `RUNTIME_WORKER_ROOT`           | Same bind mounted inside the deployment worker   | Required absolute worker path; defaults to `/runtime-host`              |
 
 Production startup rejects missing encryption/signing/pepper keys, an insecure frontend origin, local API/MCP domains, an absent or short metrics token, TLS-disabled generated routes, mutable runtime image tags, and relative runtime roots.
 
@@ -31,60 +34,60 @@ Production startup rejects missing encryption/signing/pepper keys, an insecure f
 
 | Variable                                        |  Default | Valid bound / behavior                                |
 | ----------------------------------------------- | -------: | ----------------------------------------------------- |
-| `MCP_LICA_DATABASE_POOL_SIZE`                   |       10 | 1–100                                                 |
-| `MCP_LICA_DATABASE_MAX_OVERFLOW`                |       20 | 0–200                                                 |
-| `MCP_LICA_READINESS_TIMEOUT_SECONDS`            |        5 | >0–30; total bound for concurrent dependency probes  |
-| `MCP_LICA_BUILD_JOB_TIMEOUT_SECONDS`            |     3600 | 60–86400                                              |
-| `MCP_LICA_BUILD_JOB_MAX_ATTEMPTS`               |        3 | 1–8 total attempts                                    |
-| `MCP_LICA_BUILD_CONCURRENCY`                    |        2 | 1–32                                                  |
-| `MCP_LICA_DEPLOYMENT_JOB_TIMEOUT_SECONDS`       |      900 | 60–7200                                               |
-| `MCP_LICA_DEPLOYMENT_JOB_MAX_ATTEMPTS`          |        3 | 1–8                                                   |
-| `MCP_LICA_UPLOAD_MAX_BYTES`                     | 20000000 | 1024–500000000                                        |
-| `MCP_LICA_DOCUMENT_MAX_BYTES`                   | 25000000 | 1024–500000000                                        |
-| `MCP_LICA_FETCH_MAX_BYTES`                      | 25000000 | 1024–500000000                                        |
-| `MCP_LICA_FETCH_MAX_REDIRECTS`                  |        3 | 0–10, policy checked at every hop                     |
-| `MCP_LICA_FETCH_TIMEOUT_SECONDS`                |       30 | >0–300 seconds per request phase                      |
-| `MCP_LICA_FETCH_MAX_ATTEMPTS`                   |        3 | 1–8; transient connection, timeout, 429, and 5xx only |
-| `MCP_LICA_DOCUMENTATION_MAX_CHUNKS_PER_PROJECT` |    10000 | 1–100000                                              |
-| `MCP_LICA_DOCUMENT_PARSE_MAX_CONCURRENCY`       |        4 | 1–32 concurrent document parsers per Build            |
-| `MCP_LICA_EMBEDDING_BATCH_SIZE`                 |       64 | 1–512 texts per provider call                         |
-| `MCP_LICA_MAX_OPERATIONS_PER_PROJECT`           |     1000 | 1–100000                                              |
-| `MCP_LICA_OPENROUTER_MAX_ATTEMPTS`              |        3 | 1–8 transient transport attempts                      |
-| `MCP_LICA_OPENROUTER_STRUCTURED_MAX_ATTEMPTS`   |        2 | 1–5 schema-conformance attempts                       |
-| `MCP_LICA_OPENROUTER_MAX_CONCURRENCY`           |        4 | 1–32                                                  |
-| `MCP_LICA_OPENROUTER_MAX_CONTEXT_CHARS`         |   120000 | 1000–1000000                                          |
-| `MCP_LICA_SEMANTIC_RETRIEVAL_TOP_K`             |        5 | 1–50 chunks per operation                             |
-| `MCP_LICA_RUNTIME_MANIFEST_MAX_BYTES`            | 10000000 | 1024–50000000                                         |
-| `MCP_LICA_RUNTIME_SECRET_BUNDLE_MAX_BYTES`       |  1000000 | 1024–10000000                                         |
+| `DATABASE_POOL_SIZE`                   |       10 | 1–100                                                 |
+| `DATABASE_MAX_OVERFLOW`                |       20 | 0–200                                                 |
+| `READINESS_TIMEOUT_SECONDS`            |        5 | >0–30; total bound for concurrent dependency probes  |
+| `BUILD_JOB_TIMEOUT_SECONDS`            |     3600 | 60–86400                                              |
+| `BUILD_JOB_MAX_ATTEMPTS`               |        3 | 1–8 total attempts                                    |
+| `BUILD_CONCURRENCY`                    |        2 | 1–32                                                  |
+| `DEPLOYMENT_JOB_TIMEOUT_SECONDS`       |      900 | 60–7200                                               |
+| `DEPLOYMENT_JOB_MAX_ATTEMPTS`          |        3 | 1–8                                                   |
+| `UPLOAD_MAX_BYTES`                     | 20000000 | 1024–500000000                                        |
+| `DOCUMENT_MAX_BYTES`                   | 25000000 | 1024–500000000                                        |
+| `FETCH_MAX_BYTES`                      | 25000000 | 1024–500000000                                        |
+| `FETCH_MAX_REDIRECTS`                  |        3 | 0–10, policy checked at every hop                     |
+| `FETCH_TIMEOUT_SECONDS`                |       30 | >0–300 seconds per request phase                      |
+| `FETCH_MAX_ATTEMPTS`                   |        3 | 1–8; transient connection, timeout, 429, and 5xx only |
+| `DOCUMENTATION_MAX_CHUNKS_PER_PROJECT` |    10000 | 1–100000                                              |
+| `DOCUMENT_PARSE_MAX_CONCURRENCY`       |        4 | 1–32 concurrent document parsers per Build            |
+| `EMBEDDING_BATCH_SIZE`                 |       64 | 1–512 texts per provider call                         |
+| `MAX_OPERATIONS_PER_PROJECT`           |     1000 | 1–100000                                              |
+| `OPENROUTER_MAX_ATTEMPTS`              |        3 | 1–8 transient transport attempts                      |
+| `OPENROUTER_STRUCTURED_MAX_ATTEMPTS`   |        2 | 1–5 schema-conformance attempts                       |
+| `OPENROUTER_MAX_CONCURRENCY`           |        4 | 1–32                                                  |
+| `OPENROUTER_MAX_CONTEXT_CHARS`         |   120000 | 1000–1000000                                          |
+| `SEMANTIC_RETRIEVAL_TOP_K`             |        5 | 1–50 chunks per operation                             |
+| `RUNTIME_MANIFEST_MAX_BYTES`            | 10000000 | 1024–50000000                                         |
+| `RUNTIME_SECRET_BUNDLE_MAX_BYTES`       |  1000000 | 1024–10000000                                         |
 
 Size limits are server-side safeguards. Raising a UI limit without changing the server does not increase capacity; raising a server limit requires memory, timeout, abuse, and storage review.
 
 ## Source and outbound network policy
 
-`MCP_LICA_ALLOW_HTTP_SOURCE_URLS` is false by default. `MCP_LICA_SOURCE_ALLOWED_HOSTS` is a comma-separated hostname allowlist for remote source ingestion. `MCP_LICA_SOURCE_ALLOWED_PRIVATE_CIDRS` is the exceptional private-address allowlist; keep it empty unless an operator has reviewed SSRF reachability.
+`ALLOW_HTTP_SOURCE_URLS` is false by default. `SOURCE_ALLOWED_HOSTS` is a comma-separated hostname allowlist for remote source ingestion. `SOURCE_ALLOWED_PRIVATE_CIDRS` is the exceptional private-address allowlist; keep it empty unless an operator has reviewed SSRF reachability.
 
-Runtime upstream access is independently controlled by manifest host evidence plus `MCP_LICA_RUNTIME_ALLOWED_PRIVATE_HOSTS` and development-only `MCP_LICA_RUNTIME_ALLOWED_DEVELOPMENT_HOSTS`. Builder allowlists do not grant runtime access. URL userinfo, unsafe schemes, DNS rebinding to denied addresses, and caller-selected destinations remain forbidden.
+Runtime upstream access is independently controlled by manifest host evidence plus `RUNTIME_ALLOWED_PRIVATE_HOSTS` and development-only `RUNTIME_ALLOWED_DEVELOPMENT_HOSTS`. Builder allowlists do not grant runtime access. URL userinfo, unsafe schemes, DNS rebinding to denied addresses, and caller-selected destinations remain forbidden.
 
 ## Build-time intelligence
 
-OpenRouter settings are `MCP_LICA_OPENROUTER_API_KEY`, `..._BASE_URL`, `..._ANALYSIS_MODEL`, `..._VALIDATION_MODEL`, and `..._EMBEDDING_MODEL`. The API key is builder-only and must never be included in generated runtime configuration. `MCP_LICA_MILVUS_URI`, token, and collection configure builder-side documentation retrieval; Milvus is not a runtime dependency.
+OpenRouter settings are `OPENROUTER_API_KEY`, `..._BASE_URL`, `..._ANALYSIS_MODEL`, `..._VALIDATION_MODEL`, and `..._EMBEDDING_MODEL`. The API key is builder-only and must never be included in generated runtime configuration. `MILVUS_URI`, token, and collection configure builder-side documentation retrieval; Milvus is not a runtime dependency. Compose limits the standalone Milvus container with `MILVUS_MEMORY_LIMIT` (default `8g`, the documented standalone minimum); raise it as index volume grows and ensure the Docker host has at least the configured capacity.
 
 ## Health, metrics, and logs
 
-`/api/v1/health` is a liveness probe. `/api/v1/ready` concurrently probes PostgreSQL, Redis, artifact storage, the Build queue, Milvus, and OpenRouter within `MCP_LICA_READINESS_TIMEOUT_SECONDS`; unavailable core persistence/queue dependencies return 503, while AI/vector outages are reported as degraded because existing control-plane data and deployed runtimes remain usable.
+`/api/v1/health` is a liveness probe. `/api/v1/ready` concurrently probes PostgreSQL, Redis, artifact storage, the Build queue, Milvus, and OpenRouter within `READINESS_TIMEOUT_SECONDS`; unavailable core persistence/queue dependencies return 503, while AI/vector outages are reported as degraded because existing control-plane data and deployed runtimes remain usable.
 
 Compose health checks cover PostgreSQL, Redis, etcd, MinIO, Milvus, API, both RQ
 workers, frontend, and Traefik. Each worker verifies its own hostname/queue registration
 through Redis; Traefik uses a private ping entrypoint. `runtime-init` is a one-shot gate
 and must exit successfully rather than remain running.
 
-`/metrics` exposes bounded-label Prometheus request, Build, stage, generated-operation, OpenRouter usage/cost/rate-limit, and Milvus client metrics. Configure `MCP_LICA_METRICS_BEARER_TOKEN`; it is mandatory in production. Multi-process API or worker deployments must set `PROMETHEUS_MULTIPROC_DIR` before process start and mount a clean, shared writable metrics directory according to the Prometheus Python client lifecycle. Production logs are structured JSON and include request/job correlation identifiers without secret values.
+`/metrics` exposes bounded-label Prometheus request, Build, stage, generated-operation, OpenRouter usage/cost/rate-limit, and Milvus client metrics. Configure `METRICS_BEARER_TOKEN`; it is mandatory in production. Multi-process API or worker deployments must set `PROMETHEUS_MULTIPROC_DIR` before process start and mount a clean, shared writable metrics directory according to the Prometheus Python client lifecycle. Production logs are structured JSON and include request/job correlation identifiers without secret values.
 
 ## Deployment and routing
 
-`MCP_LICA_MCP_DOMAIN` is the base for per-project hostnames. `MCP_LICA_TRAEFIK_NETWORK`, `..._CONTAINER_NAME`, `..._ENTRYPOINT`, `..._TLS`, and `..._CERT_RESOLVER` must match the active Traefik instance. Runtime limits default to UID/GID 10001, 512 MiB memory, 1 CPU, 256 PIDs, and 64 MiB tmpfs; tune `MCP_LICA_RUNTIME_*` only after load and abuse testing. The API and builder worker remain Docker-socket-free. Only the deployment worker consumes the deployment queue and receives the socket plus runtime-host mount.
+`MCP_DOMAIN` is the base for per-project hostnames. `TRAEFIK_NETWORK`, `..._CONTAINER_NAME`, `..._ENTRYPOINT`, `..._TLS`, and `..._CERT_RESOLVER` must match the active Traefik instance. Runtime limits default to UID/GID 10001, 512 MiB memory, 1 CPU, 256 PIDs, and 64 MiB tmpfs; tune `RUNTIME_*` only after load and abuse testing. The API and builder worker remain Docker-socket-free. Only the deployment worker consumes the deployment queue and receives the socket plus runtime-host mount.
 
-`MCP_LICA_BUILDERS_CAN_DEPLOY` defaults false. This is a server authorization policy, not a cosmetic UI toggle. Optional source/build retention settings must be paired with backup and audit requirements before enabling deletion.
+`BUILDERS_CAN_DEPLOY` defaults false. This is a server authorization policy, not a cosmetic UI toggle. Optional source/build retention settings must be paired with backup and audit requirements before enabling deletion.
 
 ## Generated runtime settings
 

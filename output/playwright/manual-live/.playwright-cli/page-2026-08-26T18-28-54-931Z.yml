@@ -1,0 +1,130 @@
+- generic [ref=f2e8]:
+  - link "Skip to main content" [ref=f2e9] [cursor=pointer]:
+    - /url: "#main-content"
+  - complementary [ref=f2e10]:
+    - generic [ref=f2e11]:
+      - link "MCPlica dashboard" [ref=f2e13] [cursor=pointer]:
+        - /url: /
+        - generic [ref=f2e14]: M
+        - generic [ref=f2e15]:
+          - generic [ref=f2e16]: MCPlica
+          - generic [ref=f2e17]: API → MCP control plane
+      - navigation "Primary" [ref=f2e18]:
+        - link "Dashboard" [ref=f2e19] [cursor=pointer]:
+          - /url: /
+        - link "Projects" [ref=f2e26] [cursor=pointer]:
+          - /url: /projects
+        - link "Builds" [ref=f2e43] [cursor=pointer]:
+          - /url: /builds
+        - link "Deployments" [ref=f2e51] [cursor=pointer]:
+          - /url: /deployments
+        - link "Activity" [ref=f2e60] [cursor=pointer]:
+          - /url: /activity
+        - link "Settings" [ref=f2e66] [cursor=pointer]:
+          - /url: /settings
+      - generic [ref=f2e73]:
+        - generic [ref=f2e74]:
+          - generic [ref=f2e75]: Control plane
+          - generic [ref=f2e76]: Ready
+        - paragraph [ref=f2e77]: MCPlica Test Admin
+        - paragraph [ref=f2e78]: admin@mcplica.dev
+  - generic [ref=f2e79]:
+    - banner [ref=f2e80]:
+      - generic [ref=f2e82]:
+        - paragraph [ref=f2e83]: MCPlica Test Admin
+        - paragraph [ref=f2e84]: admin access
+      - button "Sign out" [ref=f2e85] [cursor=pointer]
+    - main [ref=f2e91]:
+      - generic [ref=f2e92]:
+        - generic [ref=f2e93]:
+          - generic [ref=f2e94]:
+            - link "Projects" [ref=f2e95] [cursor=pointer]:
+              - /url: /projects
+            - generic [ref=f2e96]: /
+            - generic [ref=f2e97]: MCPlica final acceptance
+            - generic [ref=f2e98]: Enabled
+          - generic [ref=f2e99]:
+            - generic [ref=f2e100]:
+              - heading "MCPlica final acceptance" [level=1] [ref=f2e101]
+              - paragraph [ref=f2e102]: final-acceptance.mcp.localhost
+            - paragraph [ref=f2e103]: Repository-wide real workflow proof
+          - navigation "Project sections" [ref=f2e104]:
+            - generic [ref=f2e105]:
+              - link "Overview" [ref=f2e106] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b
+              - link "Sources" [active] [ref=f2e107] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/sources
+              - link "Operations" [ref=f2e108] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/tools
+              - link "Documentation" [ref=f2e109] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/documentation
+              - link "Builds" [ref=f2e110] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/builds
+              - link "Deployment" [ref=f2e111] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/deployment
+              - link "Credentials" [ref=f2e112] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/credentials
+              - link "Settings" [ref=f2e113] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/settings
+        - generic [ref=f2e153]:
+          - generic [ref=f2e154]:
+            - generic [ref=f2e155]:
+              - heading "Sources" [level=2] [ref=f2e156]
+              - paragraph [ref=f2e157]: Immutable versions preserve exactly what each build consumed.
+            - button "Add source" [ref=f2e158] [cursor=pointer]
+          - generic [ref=f2e164]:
+            - generic [ref=f2e165]:
+              - generic [ref=f2e167]:
+                - generic [ref=f2e168]:
+                  - heading "Acceptance OpenAPI" [level=2] [ref=f2e169]
+                  - generic [ref=f2e170]: openapi
+                  - generic [ref=f2e171]: upload
+                - paragraph [ref=f2e172]: Uploaded source
+              - generic [ref=f2e173]:
+                - generic [ref=f2e174]:
+                  - paragraph [ref=f2e175]: Detected
+                  - paragraph [ref=f2e176]: json
+                - generic [ref=f2e177]:
+                  - paragraph [ref=f2e178]: Operations
+                  - paragraph [ref=f2e179]: "5"
+                - generic [ref=f2e180]:
+                  - paragraph [ref=f2e181]: Size
+                  - paragraph [ref=f2e182]: 1.9 KB
+                - generic [ref=f2e183]:
+                  - paragraph [ref=f2e184]: SHA-256
+                  - paragraph [ref=f2e185]: 8a9d02d4cd…c3f278
+              - generic [ref=f2e186]:
+                - paragraph [ref=f2e187]: Declared servers
+                - code [ref=f2e189]: http://host.docker.internal:9009/api
+              - generic [ref=f2e190]:
+                - generic [ref=f2e191]:
+                  - text: Upload a new immutable version
+                  - button "Upload a new immutable version" [ref=f2e192]
+                  - paragraph [ref=f2e193]: Current version created Aug 26, 2026, 9:06 PM
+                - button "Add version" [disabled] [ref=f2e194]
+            - generic [ref=f2e199]:
+              - generic [ref=f2e201]:
+                - generic [ref=f2e202]:
+                  - heading "Widget operations guide" [level=2] [ref=f2e203]
+                  - generic [ref=f2e204]: documentation
+                  - generic [ref=f2e205]: upload
+                - paragraph [ref=f2e206]: Uploaded source
+              - generic [ref=f2e207]:
+                - generic [ref=f2e208]:
+                  - paragraph [ref=f2e209]: Detected
+                  - paragraph [ref=f2e210]: markdown
+                - generic [ref=f2e211]:
+                  - paragraph [ref=f2e212]: Indexed chunks
+                  - paragraph [ref=f2e213]: "1"
+                - generic [ref=f2e214]:
+                  - paragraph [ref=f2e215]: Size
+                  - paragraph [ref=f2e216]: 121 B
+                - generic [ref=f2e217]:
+                  - paragraph [ref=f2e218]: SHA-256
+                  - paragraph [ref=f2e219]: 549e340dc4…fddb40
+              - generic [ref=f2e220]:
+                - generic [ref=f2e221]:
+                  - text: Upload a new immutable version
+                  - button "Upload a new immutable version" [ref=f2e222]
+                  - paragraph [ref=f2e223]: Current version created Aug 26, 2026, 9:05 PM
+                - button "Add version" [disabled] [ref=f2e224]

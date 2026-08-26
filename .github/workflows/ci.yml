@@ -123,16 +123,16 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     env:
-      MCP_LICA_DATABASE_URL: postgresql+psycopg://mcplica:integration-postgres@127.0.0.1:5432/mcplica
-      MCP_LICA_POSTGRES_PASSWORD: compose-postgres
-      MCP_LICA_MINIO_ROOT_USER: compose-minio
-      MCP_LICA_MINIO_ROOT_PASSWORD: compose-minio-password
-      MCP_LICA_RUNTIME_HOST_ROOT: ${{ runner.temp }}/mcplica-runtime
-      MCP_LICA_RUN_DOCKER_INTEGRATION: "1"
-      MCP_LICA_TEST_RUNTIME_IMAGE: mcplica/runtime:test
-      MCP_LICA_TEST_RUNTIME_PULL_POLICY: never
-      MCP_LICA_TEST_RUNTIME_WORKER_ROOT: ${{ runner.temp }}/mcplica-runtime
-      MCP_LICA_TEST_RUNTIME_HOST_ROOT: ${{ runner.temp }}/mcplica-runtime
+      DATABASE_URL: postgresql+psycopg://mcplica:integration-postgres@127.0.0.1:5432/mcplica
+      POSTGRES_PASSWORD: compose-postgres
+      MINIO_ROOT_USER: compose-minio
+      MINIO_ROOT_PASSWORD: compose-minio-password
+      RUNTIME_HOST_ROOT: ${{ runner.temp }}/mcplica-runtime
+      RUN_DOCKER_INTEGRATION: "1"
+      TEST_RUNTIME_IMAGE: mcplica/runtime:test
+      TEST_RUNTIME_PULL_POLICY: never
+      TEST_RUNTIME_WORKER_ROOT: ${{ runner.temp }}/mcplica-runtime
+      TEST_RUNTIME_HOST_ROOT: ${{ runner.temp }}/mcplica-runtime
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
@@ -149,7 +149,7 @@ jobs:
       - run: docker build --file infra/docker/frontend.Dockerfile --tag mcplica/frontend:test .
       - name: Start the labeled edge provider
         run: |
-          mkdir -p "${MCP_LICA_RUNTIME_HOST_ROOT}"
+          mkdir -p "${RUNTIME_HOST_ROOT}"
           docker compose --env-file .env.example -f infra/compose.yaml up -d traefik
       - name: Exercise isolated runtime replacement and rollback
         run: >-

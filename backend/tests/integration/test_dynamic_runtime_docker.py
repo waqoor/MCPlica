@@ -56,20 +56,20 @@ def _deployment(
 async def test_two_projects_replacement_and_rollback_remain_isolated() -> None:
     """Exercise real Docker only when the CI/host explicitly supplies its mount mapping."""
 
-    if os.getenv("MCP_LICA_RUN_DOCKER_INTEGRATION") != "1":
-        pytest.skip("set MCP_LICA_RUN_DOCKER_INTEGRATION=1 to run Docker acceptance")
-    image = os.getenv("MCP_LICA_TEST_RUNTIME_IMAGE")
-    worker_base = os.getenv("MCP_LICA_TEST_RUNTIME_WORKER_ROOT")
-    host_base = os.getenv("MCP_LICA_TEST_RUNTIME_HOST_ROOT")
+    if os.getenv("RUN_DOCKER_INTEGRATION") != "1":
+        pytest.skip("set RUN_DOCKER_INTEGRATION=1 to run Docker acceptance")
+    image = os.getenv("TEST_RUNTIME_IMAGE")
+    worker_base = os.getenv("TEST_RUNTIME_WORKER_ROOT")
+    host_base = os.getenv("TEST_RUNTIME_HOST_ROOT")
     if not image or not worker_base or not host_base:
-        pytest.fail("Docker acceptance requires MCP_LICA_TEST_RUNTIME_IMAGE and both runtime roots")
+        pytest.fail("Docker acceptance requires TEST_RUNTIME_IMAGE and both runtime roots")
 
     suffix = f"pytest-{uuid4().hex}"
     worker_root = Path(worker_base).resolve() / suffix
     host_root = f"{host_base.rstrip('/\\')}/{suffix}"
-    raw_pull_policy = os.getenv("MCP_LICA_TEST_RUNTIME_PULL_POLICY", "never")
+    raw_pull_policy = os.getenv("TEST_RUNTIME_PULL_POLICY", "never")
     if raw_pull_policy not in {"never", "missing", "always"}:
-        pytest.fail("MCP_LICA_TEST_RUNTIME_PULL_POLICY is invalid")
+        pytest.fail("TEST_RUNTIME_PULL_POLICY is invalid")
     pull_policy = cast(Literal["never", "missing", "always"], raw_pull_policy)
     uid_reader = cast(Callable[[], int], getattr(os, "getuid", lambda: 10_001))
     gid_reader = cast(Callable[[], int], getattr(os, "getgid", lambda: 10_001))
@@ -77,14 +77,14 @@ async def test_two_projects_replacement_and_rollback_remain_isolated() -> None:
     runtime_gid = gid_reader()
     settings = Settings(
         env="test",
-        docker_base_url=os.getenv("MCP_LICA_DOCKER_BASE_URL", "unix:///var/run/docker.sock"),
+        docker_base_url=os.getenv("DOCKER_BASE_URL", "unix:///var/run/docker.sock"),
         mcp_runtime_image=image,
         mcp_runtime_pull_policy=pull_policy,
         runtime_worker_root=str(worker_root),
         runtime_host_root=host_root,
         runtime_uid=runtime_uid,
         runtime_gid=runtime_gid,
-        traefik_container_name=os.getenv("MCP_LICA_TRAEFIK_CONTAINER_NAME", "mcplica-traefik-1"),
+        traefik_container_name=os.getenv("TRAEFIK_CONTAINER_NAME", "mcplica-traefik-1"),
     )
     runtime_files = RuntimeFilesClient(
         str(worker_root),

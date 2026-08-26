@@ -151,8 +151,8 @@ async def run(
 
 def _arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--uri", default=os.environ.get("MCP_LICA_BENCHMARK_MILVUS_URI"))
-    parser.add_argument("--token", default=os.environ.get("MCP_LICA_BENCHMARK_MILVUS_TOKEN"))
+    parser.add_argument("--uri", default=os.environ.get("BENCHMARK_MILVUS_URI"))
+    parser.add_argument("--token", default=os.environ.get("BENCHMARK_MILVUS_TOKEN"))
     parser.add_argument("--chunks", type=int, default=10_000)
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--dimensions", type=int, default=16)
@@ -160,7 +160,7 @@ def _arguments() -> argparse.Namespace:
     parser.add_argument("--collection-base", default="mcplica_benchmark")
     arguments = parser.parse_args()
     if not arguments.uri:
-        parser.error("--uri or MCP_LICA_BENCHMARK_MILVUS_URI is required")
+        parser.error("--uri or BENCHMARK_MILVUS_URI is required")
     for field, lower, upper in (
         ("chunks", 1, 100_000),
         ("batch_size", 1, 2_000),

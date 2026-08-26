@@ -3,7 +3,7 @@ from typing import Any
 
 
 class MCPlicaError(Exception):
-    code = "MCP_LICA_ERROR"
+    code = "MCPLICA_ERROR"
     status_code = 400
 
     def __init__(self, message: str, *, details: Mapping[str, Any] | None = None) -> None:

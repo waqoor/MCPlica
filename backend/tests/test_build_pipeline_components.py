@@ -235,8 +235,8 @@ async def test_export_is_deterministic_protocol_compatible_and_contains_required
             "validation-report.json",
         ]
         compose = archive.read("compose.example.yaml").decode()
-        assert "MCP_LICA_RUNTIME_IMAGE" in compose
-        assert "MCP_LICA_SECRET_BUNDLE_HOST_PATH" in compose
+        assert "RUNTIME_IMAGE" in compose
+        assert "SECRET_BUNDLE_HOST_PATH" in compose
         assert "plaintext-secret-marker" not in compose
         parsed_compose = yaml.safe_load(compose)
         service = parsed_compose["services"]["inventory-mcp"]

@@ -12,7 +12,7 @@ import {
 import { useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { z } from "zod";
+import { z } from "@/lib/schemas";
 import { buildApi } from "@/api/builds";
 import type { McpAccessToken, SourceKind } from "@/api/contracts";
 import { credentialApi, credentialSecretFor } from "@/api/credentials";

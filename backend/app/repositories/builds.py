@@ -131,6 +131,20 @@ class BuildRepository:
         )
         return _to_domain(model) if model else None
 
+    async def latest_for_source_version(
+        self,
+        session: AsyncSession,
+        source_version_id: UUID,
+    ) -> BuildRecord | None:
+        model = await session.scalar(
+            select(Build)
+            .join(BuildSourceVersion, BuildSourceVersion.build_id == Build.id)
+            .where(BuildSourceVersion.source_version_id == source_version_id)
+            .order_by(Build.sequence.desc())
+            .limit(1)
+        )
+        return _to_domain(model) if model else None
+
     async def list_all(
         self,
         session: AsyncSession,

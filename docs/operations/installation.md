@@ -33,7 +33,7 @@ python -c "import secrets; print(secrets.token_urlsafe(64))"
 python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
-Place the first output in `MCP_LICA_AUTH_SIGNING_KEY`, the second in `MCP_LICA_REFRESH_TOKEN_PEPPER`, and the third temporarily in `MCP_LICA_BOOTSTRAP_SECRET`. Set separate PostgreSQL and MinIO credentials and put the PostgreSQL value into both `MCP_LICA_POSTGRES_PASSWORD` and the password portion of `MCP_LICA_DATABASE_URL`. Never reuse one generated value for another purpose.
+Place the first output in `AUTH_SIGNING_KEY`, the second in `REFRESH_TOKEN_PEPPER`, and the third temporarily in `BOOTSTRAP_SECRET`. Set separate PostgreSQL and MinIO credentials and put the PostgreSQL value into both `POSTGRES_PASSWORD` and the password portion of `DATABASE_URL`. Never reuse one generated value for another purpose.
 
 Review every setting against `configuration.md`; `.env.example` is a shape, not a production secret store.
 
@@ -46,7 +46,7 @@ docker compose --env-file .env -f infra/compose.yaml exec api alembic -c ../migr
 docker compose --env-file .env -f infra/compose.yaml exec api python -m app.cli.bootstrap_admin --email admin@example.com --display-name "MCPlica Admin"
 ```
 
-The bootstrap command prompts for the administrator password and bootstrap secret; neither belongs on the command line. It only creates the first user. Remove `MCP_LICA_BOOTSTRAP_SECRET` from `.env` and recreate the API and both workers after successful bootstrap.
+The bootstrap command prompts for the administrator password and bootstrap secret; neither belongs on the command line. It only creates the first user. Remove `BOOTSTRAP_SECRET` from `.env` and recreate the API and both workers after successful bootstrap.
 
 ```powershell
 docker compose --env-file .env -f infra/compose.yaml up -d --force-recreate api builder-worker deployment-worker
@@ -68,7 +68,7 @@ control plane from degraded build intelligence. PostgreSQL, Redis, Milvus, etcd,
 MinIO remain only on the internal builder network; the base Compose file intentionally
 publishes no host ports for them.
 
-The builder worker consumes only `MCP_LICA_BUILD_QUEUE_NAME` and has no Docker socket. The deployment worker consumes only `MCP_LICA_DEPLOYMENT_QUEUE_NAME`; it is the sole application service with the writable Docker boundary and runtime-host mount. Keep those queue names distinct.
+The builder worker consumes only `BUILD_QUEUE_NAME` and has no Docker socket. The deployment worker consumes only `DEPLOYMENT_QUEUE_NAME`; it is the sole application service with the writable Docker boundary and runtime-host mount. Keep those queue names distinct.
 
 ## Host development
 

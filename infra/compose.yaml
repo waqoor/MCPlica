@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: mcplica
       POSTGRES_USER: mcplica
-      POSTGRES_PASSWORD: ${MCP_LICA_POSTGRES_PASSWORD:?Set MCP_LICA_POSTGRES_PASSWORD in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     volumes:
       # PostgreSQL 18 stores clusters below a version-specific subdirectory.
       # Mount the parent so upgrades and pg_upgrade --link stay within one volume.
@@ -52,8 +52,8 @@ services:
     container_name: milvus-minio
     image: minio/minio:RELEASE.2024-05-28T17-19-04Z@sha256:391d1d45fdbe79944cb6de9337b073864bb9ee38c4c24280bfb39572e925af08
     environment:
-      MINIO_ROOT_USER: ${MCP_LICA_MINIO_ROOT_USER:?Set MCP_LICA_MINIO_ROOT_USER in .env}
-      MINIO_ROOT_PASSWORD: ${MCP_LICA_MINIO_ROOT_PASSWORD:?Set MCP_LICA_MINIO_ROOT_PASSWORD in .env}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
     volumes:
       - minio-data:/minio_data
     command: minio server /minio_data --console-address ":9001"
@@ -68,11 +68,15 @@ services:
     container_name: milvus-standalone
     image: milvusdb/milvus:v3.0.0@sha256:49371c30af46b1013e4d3e0b980e691d81376d69cdbe1b372725baf1d7255862
     command: ["milvus", "run", "standalone"]
+    # Milvus probes the container cgroup limit when sizing internal resources.
+    # Keep the default at its documented standalone minimum while allowing
+    # operators to raise it for larger indexes.
+    mem_limit: ${MILVUS_MEMORY_LIMIT:-8g}
     environment:
       ETCD_ENDPOINTS: etcd:2379
       MINIO_ADDRESS: minio:9000
-      MINIO_ACCESS_KEY_ID: ${MCP_LICA_MINIO_ROOT_USER:?Set MCP_LICA_MINIO_ROOT_USER in .env}
-      MINIO_SECRET_ACCESS_KEY: ${MCP_LICA_MINIO_ROOT_PASSWORD:?Set MCP_LICA_MINIO_ROOT_PASSWORD in .env}
+      MINIO_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
+      MINIO_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
     volumes:
       - milvus-data:/var/lib/milvus
     healthcheck:
@@ -89,7 +93,7 @@ services:
     networks: [builder]
 
   api:
-    image: ${MCP_LICA_BACKEND_IMAGE:-mcplica-api:local}
+    image: ${BACKEND_IMAGE:-mcplica-api:local}
     build:
       context: ..
       dockerfile: infra/docker/backend.Dockerfile
@@ -97,13 +101,13 @@ services:
       - path: ../.env
         required: false
     environment:
-      MCP_LICA_REDIS_URL: redis://redis:6379/0
-      MCP_LICA_MILVUS_URI: http://milvus:19530
-      MCP_LICA_ARTIFACT_ROOT: /data/artifacts
+      REDIS_URL: redis://redis:6379/0
+      MILVUS_URI: http://milvus:19530
+      ARTIFACT_ROOT: /data/artifacts
     volumes:
       - artifacts:/data/artifacts
     ports:
-      - "127.0.0.1:${MCP_LICA_API_PORT:-8000}:8000"
+      - "127.0.0.1:${API_PORT:-8000}:8000"
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777
@@ -136,14 +140,14 @@ services:
       traefik.http.services.mcplica-api.loadbalancer.server.port: "8000"
 
   builder-worker:
-    image: ${MCP_LICA_BACKEND_IMAGE:-mcplica-api:local}
+    image: ${BACKEND_IMAGE:-mcplica-api:local}
     env_file:
       - path: ../.env
         required: false
     environment:
-      MCP_LICA_REDIS_URL: redis://redis:6379/0
-      MCP_LICA_MILVUS_URI: http://milvus:19530
-      MCP_LICA_ARTIFACT_ROOT: /data/artifacts
+      REDIS_URL: redis://redis:6379/0
+      MILVUS_URI: http://milvus:19530
+      ARTIFACT_ROOT: /data/artifacts
     command:
       [
         "rq",
@@ -151,7 +155,7 @@ services:
         "--with-scheduler",
         "--url",
         "redis://redis:6379/0",
-        "${MCP_LICA_BUILD_QUEUE_NAME:-mcplica-builds}",
+        "${BUILD_QUEUE_NAME:-mcplica-builds}",
       ]
     volumes:
       - artifacts:/data/artifacts
@@ -168,7 +172,7 @@ services:
         - -c
         - >-
           import os, socket; from redis import Redis; from rq import Worker;
-          queue = os.getenv('MCP_LICA_BUILD_QUEUE_NAME', 'mcplica-builds');
+          queue = os.getenv('BUILD_QUEUE_NAME', 'mcplica-builds');
           workers = Worker.all(connection=Redis.from_url('redis://redis:6379/0'));
           raise SystemExit(0 if any(worker.hostname == socket.gethostname() and
           queue in [item.name for item in worker.queues] for worker in workers) else 1)
@@ -186,18 +190,18 @@ services:
     networks: [builder, egress]
 
   runtime-init:
-    image: ${MCP_LICA_BACKEND_IMAGE:-mcplica-api:local}
+    image: ${BACKEND_IMAGE:-mcplica-api:local}
     user: "0:0"
     entrypoint: ["/bin/sh", "-ec"]
     command:
       - >-
-        chown ${MCP_LICA_RUNTIME_UID:-10001}:${MCP_LICA_RUNTIME_GID:-10001}
-        ${MCP_LICA_RUNTIME_WORKER_ROOT:-/runtime-host} &&
-        chmod 0700 ${MCP_LICA_RUNTIME_WORKER_ROOT:-/runtime-host}
+        chown ${RUNTIME_UID:-10001}:${RUNTIME_GID:-10001}
+        ${RUNTIME_WORKER_ROOT:-/runtime-host} &&
+        chmod 0700 ${RUNTIME_WORKER_ROOT:-/runtime-host}
     volumes:
       - type: bind
-        source: ${MCP_LICA_RUNTIME_HOST_ROOT:?Set an absolute Docker host runtime path}
-        target: ${MCP_LICA_RUNTIME_WORKER_ROOT:-/runtime-host}
+        source: ${RUNTIME_HOST_ROOT:?Set an absolute Docker host runtime path}
+        target: ${RUNTIME_WORKER_ROOT:-/runtime-host}
     network_mode: none
     read_only: true
     cap_drop: [ALL]
@@ -207,13 +211,13 @@ services:
     restart: "no"
 
   deployment-worker:
-    image: ${MCP_LICA_BACKEND_IMAGE:-mcplica-api:local}
+    image: ${BACKEND_IMAGE:-mcplica-api:local}
     env_file:
       - path: ../.env
         required: false
     environment:
-      MCP_LICA_REDIS_URL: redis://redis:6379/0
-      MCP_LICA_ARTIFACT_ROOT: /data/artifacts
+      REDIS_URL: redis://redis:6379/0
+      ARTIFACT_ROOT: /data/artifacts
     command:
       [
         "rq",
@@ -221,7 +225,7 @@ services:
         "--with-scheduler",
         "--url",
         "redis://redis:6379/0",
-        "${MCP_LICA_DEPLOYMENT_QUEUE_NAME:-mcplica-deployments}",
+        "${DEPLOYMENT_QUEUE_NAME:-mcplica-deployments}",
       ]
     volumes:
       - artifacts:/data/artifacts
@@ -229,10 +233,10 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       # Write through a private worker path; Docker receives the daemon-visible source path.
       - type: bind
-        source: ${MCP_LICA_RUNTIME_HOST_ROOT:?Set an absolute Docker host runtime path}
-        target: ${MCP_LICA_RUNTIME_WORKER_ROOT:-/runtime-host}
+        source: ${RUNTIME_HOST_ROOT:?Set an absolute Docker host runtime path}
+        target: ${RUNTIME_WORKER_ROOT:-/runtime-host}
     group_add:
-      - "${MCP_LICA_DOCKER_GID:-0}"
+      - "${DOCKER_GID:-0}"
     read_only: true
     tmpfs:
       - /tmp:size=128m,mode=1777
@@ -246,7 +250,7 @@ services:
         - -c
         - >-
           import os, socket; from redis import Redis; from rq import Worker;
-          queue = os.getenv('MCP_LICA_DEPLOYMENT_QUEUE_NAME', 'mcplica-deployments');
+          queue = os.getenv('DEPLOYMENT_QUEUE_NAME', 'mcplica-deployments');
           workers = Worker.all(connection=Redis.from_url('redis://redis:6379/0'));
           raise SystemExit(0 if any(worker.hostname == socket.gethostname() and
           queue in [item.name for item in worker.queues] for worker in workers) else 1)
@@ -268,7 +272,7 @@ services:
       context: ..
       dockerfile: infra/docker/frontend.Dockerfile
     ports:
-      - "127.0.0.1:${MCP_LICA_FRONTEND_PORT:-8080}:8080"
+      - "127.0.0.1:${FRONTEND_PORT:-8080}:8080"
     read_only: true
     tmpfs:
       - /tmp:size=16m,mode=1777
@@ -302,8 +306,8 @@ services:
     image: traefik:v3.7.11@sha256:5203c3f39ca70de6790d964624e042463ffbd57715bc82be155cf224c0dd5144
     command: ["--configFile=/etc/traefik/traefik.yml"]
     ports:
-      - "${MCP_LICA_EDGE_PORT:-80}:80"
-      - "127.0.0.1:${MCP_LICA_EDGE_TLS_PORT:-8443}:443"
+      - "${EDGE_PORT:-80}:80"
+      - "127.0.0.1:${EDGE_TLS_PORT:-8443}:443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro

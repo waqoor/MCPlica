@@ -784,16 +784,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--api-base",
-        default=os.getenv("MCP_LICA_E2E_API_BASE", "http://127.0.0.1:8000/api/v1"),
+        default=os.getenv("E2E_API_BASE", "http://127.0.0.1:8000/api/v1"),
     )
     parser.add_argument(
         "--email",
-        default=os.getenv("MCP_LICA_E2E_ADMIN_EMAIL", "admin@mcplica.dev"),
+        default=os.getenv("E2E_ADMIN_EMAIL", "admin@mcplica.dev"),
     )
     args = parser.parse_args()
-    password = os.getenv("MCP_LICA_E2E_ADMIN_PASSWORD")
+    password = os.getenv("E2E_ADMIN_PASSWORD")
     if not password:
-        raise SystemExit("MCP_LICA_E2E_ADMIN_PASSWORD is required")
+        raise SystemExit("E2E_ADMIN_PASSWORD is required")
     result = asyncio.run(run(api_base=args.api_base, email=args.email, password=password))
     print(json.dumps(result, sort_keys=True, indent=2), flush=True)
 

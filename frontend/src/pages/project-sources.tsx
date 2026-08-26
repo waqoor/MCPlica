@@ -163,8 +163,14 @@ function SourceCard({
             value={latest.detected_format ?? latest.media_type}
           />
           <Fact
-            label="Operations"
-            value={latest.operation_count?.toString() ?? "Pending parse"}
+            label={
+              source.kind === "documentation" ? "Indexed chunks" : "Operations"
+            }
+            value={
+              source.kind === "documentation"
+                ? (latest.indexed_chunk_count?.toString() ?? "Pending index")
+                : (latest.operation_count?.toString() ?? "Pending parse")
+            }
           />
           <Fact label="Size" value={formatBytes(latest.byte_size)} />
           <Fact

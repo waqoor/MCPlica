@@ -1,27 +1,43 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 from uuid import UUID
 
 from mcp_contracts.json_types import JsonObject
+from pydantic import TypeAdapter
 
 from app.clients.database import DatabaseClient
 from app.clients.http import HttpClient
 from app.clients.storage import AsyncReadable
 from app.core.exceptions import ConflictError, InvalidStateError, NotFoundError, SourceParseError
 from app.core.network_policy import UrlPolicy
+from app.domain.builds import BuildStatus
+from app.domain.indexing import IndexGenerationStatus
 from app.domain.sources import (
     ProjectSourceRecord,
+    SourceIssueRecord,
     SourceKind,
     SourceOrigin,
+    SourceVersionMetadataRecord,
     SourceVersionRecord,
 )
+from app.parsers.documentation import DocumentChunk
 from app.parsers.structured import parse_json_or_yaml
 from app.providers.storage import ArtifactStorage
 from app.repositories.audit import AuditRepository
+from app.repositories.builds import BuildRepository
+from app.repositories.canonical import CanonicalRepository
+from app.repositories.indexing import IndexGenerationRepository
 from app.repositories.projects import ProjectRepository
 from app.repositories.sources import SourceRepository
 from app.services.settings import OperationalSettingsProvider
+
+_DOCUMENT_CHUNKS = TypeAdapter(list[DocumentChunk])
+_PARSE_ERROR_CODES = frozenset(
+    {"SOURCE_PARSE_ERROR", "REFERENCE_RESOLUTION_ERROR", "CANONICALIZATION_ERROR"}
+)
+_PREVIEW_CHAR_LIMIT = 20_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +95,9 @@ class SourceService:
         database: DatabaseClient,
         sources: SourceRepository,
         projects: ProjectRepository,
+        builds: BuildRepository,
+        snapshots: CanonicalRepository,
+        generations: IndexGenerationRepository,
         audit: AuditRepository,
         storage: ArtifactStorage,
         http: HttpClient,
@@ -93,6 +112,9 @@ class SourceService:
         self._database = database
         self._sources = sources
         self._projects = projects
+        self._builds = builds
+        self._snapshots = snapshots
+        self._generations = generations
         self._audit = audit
         self._storage = storage
         self._http = http
@@ -271,6 +293,127 @@ class SourceService:
             if version is None:
                 raise NotFoundError("Source version was not found")
             return version
+
+    async def metadata(self, version_id: UUID) -> SourceVersionMetadataRecord:
+        async with self._database.session_scope() as session:
+            version = await self._sources.get_version(session, version_id)
+            if version is None:
+                raise NotFoundError("Source version was not found")
+            source = await self._sources.get_source(session, version.source_id)
+            if source is None:
+                raise NotFoundError("Source was not found")
+            build = await self._builds.latest_for_source_version(session, version.id)
+            snapshot = (
+                await self._snapshots.get(session, build.canonical_snapshot_id)
+                if build is not None and build.canonical_snapshot_id is not None
+                else None
+            )
+            generation = (
+                await self._generations.get_for_build(session, build.id)
+                if build is not None
+                else None
+            )
+            config = (
+                await self._builds.get_build_config(session, build.id)
+                if build is not None
+                else None
+            )
+
+        errors: list[SourceIssueRecord] = []
+        parse_status: Literal["pending", "valid", "invalid"] = "pending"
+        spec_version: str | None = None
+        operation_count: int | None = None
+        servers: list[str] = []
+        auth_schemes: list[str] = []
+        preview_markdown: str | None = None
+        indexed_chunk_count: int | None = None
+
+        if source.kind is SourceKind.DOCUMENTATION:
+            if generation is not None:
+                if generation.status is IndexGenerationStatus.READY:
+                    parse_status = "valid"
+                    if generation.chunk_manifest_storage_key is None:
+                        raise InvalidStateError("Ready index generation has no chunk manifest")
+                    manifest = await self._storage.get(
+                        generation.chunk_manifest_storage_key,
+                        max_bytes=(
+                            config.artifact_max_bytes
+                            if config is not None
+                            else max(self._document_max_bytes, self._fetch_max_bytes)
+                        ),
+                    )
+                    chunks = [
+                        chunk
+                        for chunk in _DOCUMENT_CHUNKS.validate_json(manifest)
+                        if chunk.source_version_id == version.id
+                    ]
+                    indexed_chunk_count = len(chunks)
+                    preview = "\n\n".join(chunk.text for chunk in chunks)
+                    if preview:
+                        preview_markdown = preview[:_PREVIEW_CHAR_LIMIT]
+                        if len(preview) > _PREVIEW_CHAR_LIMIT:
+                            preview_markdown += "\n\n[Preview truncated]"
+                elif generation.status is IndexGenerationStatus.FAILED:
+                    parse_status = "invalid"
+                    errors.append(
+                        SourceIssueRecord(
+                            code=(
+                                build.error_code
+                                if build is not None and build.error_code
+                                else "INDEXING_ERROR"
+                            ),
+                            severity="error",
+                            message=generation.error_summary or "Documentation indexing failed",
+                        )
+                    )
+        elif snapshot is not None:
+            canonical = snapshot.canonical
+            parse_status = "valid"
+            spec_version = canonical.source_format
+            operation_count = sum(
+                operation.provenance.operation.source_version_id == version.id
+                for operation in canonical.operations
+            )
+            servers = [
+                str(server.url)
+                for server in canonical.servers
+                if server.source_ref.source_version_id == version.id
+            ]
+            auth_schemes = sorted(
+                name
+                for name, scheme in canonical.security_schemes.items()
+                if scheme.source_ref.source_version_id == version.id
+            )
+        elif (
+            build is not None
+            and build.status is BuildStatus.FAILED
+            and build.error_code in _PARSE_ERROR_CODES
+        ):
+            parse_status = "invalid"
+            errors.append(
+                SourceIssueRecord(
+                    code=build.error_code,
+                    severity="error",
+                    message=build.error_summary or "Source parsing failed",
+                )
+            )
+
+        return SourceVersionMetadataRecord(
+            version=version,
+            parse_status=parse_status,
+            spec_version=spec_version,
+            operation_count=operation_count,
+            servers=servers,
+            auth_schemes=auth_schemes,
+            errors=errors,
+            preview_markdown=preview_markdown,
+            indexed_chunk_count=indexed_chunk_count,
+            embedding_model=generation.embedding_model if generation is not None else None,
+            embedding_dimensions=generation.dimensions if generation is not None else None,
+            index_status=generation.status if generation is not None else None,
+            metadata_build_id=build.id if build is not None else None,
+            index_generation_id=generation.id if generation is not None else None,
+        )
 
     async def read_version(self, version_id: UUID) -> tuple[SourceVersionRecord, bytes]:
         version = await self.get_version(version_id)

@@ -1,0 +1,60 @@
+- generic [ref=f2e8]:
+  - link "Skip to main content" [ref=f2e9] [cursor=pointer]:
+    - /url: "#main-content"
+  - complementary [ref=f2e10]:
+    - generic [ref=f2e11]:
+      - link "MCPlica dashboard" [ref=f2e13] [cursor=pointer]:
+        - /url: /
+        - generic [ref=f2e14]: M
+        - generic [ref=f2e15]:
+          - generic [ref=f2e16]: MCPlica
+          - generic [ref=f2e17]: API → MCP control plane
+      - navigation "Primary" [ref=f2e18]:
+        - link "Dashboard" [ref=f2e19] [cursor=pointer]:
+          - /url: /
+        - link "Projects" [ref=f2e26] [cursor=pointer]:
+          - /url: /projects
+        - link "Builds" [ref=f2e43] [cursor=pointer]:
+          - /url: /builds
+        - link "Deployments" [ref=f2e51] [cursor=pointer]:
+          - /url: /deployments
+        - link "Activity" [ref=f2e60] [cursor=pointer]:
+          - /url: /activity
+        - link "Settings" [ref=f2e66] [cursor=pointer]:
+          - /url: /settings
+      - generic [ref=f2e73]:
+        - generic [ref=f2e74]:
+          - generic [ref=f2e75]: Control plane
+          - generic [ref=f2e76]: Ready
+        - paragraph [ref=f2e77]: MCPlica Test Admin
+        - paragraph [ref=f2e78]: admin@mcplica.dev
+  - generic [ref=f2e79]:
+    - banner [ref=f2e80]:
+      - generic [ref=f2e82]:
+        - paragraph [ref=f2e83]: MCPlica Test Admin
+        - paragraph [ref=f2e84]: admin access
+      - button "Sign out" [ref=f2e85] [cursor=pointer]
+    - main [ref=f2e91]:
+      - generic [ref=f2e1415]:
+        - generic [ref=f2e1416]:
+          - generic [ref=f2e1417]:
+            - paragraph [ref=f2e1418]: Settings
+            - heading "Users and roles" [level=1] [ref=f2e1419]
+            - paragraph [ref=f2e1420]: Installation-level identities only. There is no public registration, organization membership, or SaaS tenancy model.
+          - button "Create user" [ref=f2e1422] [cursor=pointer]
+        - generic [ref=f2e1427]:
+          - generic [ref=f2e1428]:
+            - generic [ref=f2e1429]:
+              - paragraph [ref=f2e1430]: MCPlica Test Admin
+              - paragraph [ref=f2e1431]: admin@mcplica.dev
+            - generic [ref=f2e1432]: Active
+          - generic [ref=f2e1433]:
+            - generic [ref=f2e1434]:
+              - text: Role
+              - combobox "Role" [ref=f2e1436]:
+                - option "Admin" [selected]
+                - option "Builder"
+            - generic [ref=f2e1437]:
+              - paragraph [ref=f2e1438]: Last sign in
+              - paragraph [ref=f2e1439]: Aug 26, 2026, 9:28 PM
+          - button "Disable access" [ref=f2e1440] [cursor=pointer]

@@ -28,6 +28,12 @@ function versions(projectId: string, sourceId: string, signal?: AbortSignal) {
   );
 }
 
+function versionMetadata(versionId: string, signal?: AbortSignal) {
+  return api<SourceVersion>(`/api/v1/source-versions/${versionId}/metadata`, {
+    signal,
+  });
+}
+
 async function hydrateSourceVersions(
   projectId: string,
   sources: ProjectSource[],
@@ -40,9 +46,12 @@ async function hydrateSourceVersions(
       const index = nextIndex++;
       const source = sources[index];
       const sourceVersions = await versions(projectId, source.id, signal);
+      const latestVersion = sourceVersions[0]
+        ? await versionMetadata(sourceVersions[0].id, signal)
+        : null;
       hydrated[index] = {
         ...source,
-        latest_version: sourceVersions[0] ?? null,
+        latest_version: latestVersion,
         version_count: sourceVersions.length,
       };
     }
@@ -116,8 +125,5 @@ export const sourceApi = {
       },
     ),
   versions,
-  versionMetadata: (versionId: string, signal?: AbortSignal) =>
-    api<SourceVersion>(`/api/v1/source-versions/${versionId}/metadata`, {
-      signal,
-    }),
+  versionMetadata,
 };

@@ -66,6 +66,17 @@ export function ProjectDocumentationPage() {
                 >
                   {source.latest_version?.parse_status ?? "registered"}
                 </Badge>
+                <Badge
+                  tone={
+                    source.latest_version?.index_status === "failed"
+                      ? "danger"
+                      : source.latest_version?.index_status === "ready"
+                        ? "success"
+                        : "warning"
+                  }
+                >
+                  {source.latest_version?.index_status ?? "not indexed"}
+                </Badge>
               </div>
               <p className="mt-1 text-xs text-muted">
                 {source.origin_type === "url"
@@ -75,11 +86,23 @@ export function ProjectDocumentationPage() {
             </div>
             <FileText aria-hidden="true" className="size-5 text-info" />
           </CardHeader>
-          <dl className="grid gap-3 sm:grid-cols-3">
+          <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <div>
               <dt className="text-xs text-muted">Indexed chunks</dt>
               <dd className="mt-1 text-sm text-foreground">
                 {source.latest_version?.indexed_chunk_count ?? "Pending index"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted">Embedding model</dt>
+              <dd className="mt-1 break-all text-sm text-foreground">
+                {source.latest_version?.embedding_model ?? "Not indexed"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted">Dimensions</dt>
+              <dd className="mt-1 text-sm text-foreground">
+                {source.latest_version?.embedding_dimensions ?? "—"}
               </dd>
             </div>
             <div>

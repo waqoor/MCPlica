@@ -1,0 +1,168 @@
+- generic [ref=f2e8]:
+  - link "Skip to main content" [ref=f2e9] [cursor=pointer]:
+    - /url: "#main-content"
+  - complementary [ref=f2e10]:
+    - generic [ref=f2e11]:
+      - link "MCPlica dashboard" [ref=f2e13] [cursor=pointer]:
+        - /url: /
+        - generic [ref=f2e14]: M
+        - generic [ref=f2e15]:
+          - generic [ref=f2e16]: MCPlica
+          - generic [ref=f2e17]: API → MCP control plane
+      - navigation "Primary" [ref=f2e18]:
+        - link "Dashboard" [ref=f2e19] [cursor=pointer]:
+          - /url: /
+        - link "Projects" [ref=f2e26] [cursor=pointer]:
+          - /url: /projects
+        - link "Builds" [ref=f2e43] [cursor=pointer]:
+          - /url: /builds
+        - link "Deployments" [ref=f2e51] [cursor=pointer]:
+          - /url: /deployments
+        - link "Activity" [ref=f2e60] [cursor=pointer]:
+          - /url: /activity
+        - link "Settings" [ref=f2e66] [cursor=pointer]:
+          - /url: /settings
+      - generic [ref=f2e73]:
+        - generic [ref=f2e74]:
+          - generic [ref=f2e75]: Control plane
+          - generic [ref=f2e76]: Ready
+        - paragraph [ref=f2e77]: MCPlica Test Admin
+        - paragraph [ref=f2e78]: admin@mcplica.dev
+  - generic [ref=f2e79]:
+    - banner [ref=f2e80]:
+      - generic [ref=f2e82]:
+        - paragraph [ref=f2e83]: MCPlica Test Admin
+        - paragraph [ref=f2e84]: admin access
+      - button "Sign out" [ref=f2e85] [cursor=pointer]
+    - main [ref=f2e91]:
+      - generic [ref=f2e92]:
+        - generic [ref=f2e93]:
+          - generic [ref=f2e94]:
+            - link "Projects" [ref=f2e95] [cursor=pointer]:
+              - /url: /projects
+            - generic [ref=f2e96]: /
+            - generic [ref=f2e97]: MCPlica final acceptance
+            - generic [ref=f2e98]: Enabled
+          - generic [ref=f2e99]:
+            - generic [ref=f2e100]:
+              - heading "MCPlica final acceptance" [level=1] [ref=f2e101]
+              - paragraph [ref=f2e102]: final-acceptance.mcp.localhost
+            - paragraph [ref=f2e103]: Repository-wide real workflow proof
+          - navigation "Project sections" [ref=f2e104]:
+            - generic [ref=f2e105]:
+              - link "Overview" [ref=f2e106] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b
+              - link "Sources" [ref=f2e107] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/sources
+              - link "Operations" [ref=f2e108] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/tools
+              - link "Documentation" [ref=f2e109] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/documentation
+              - link "Builds" [ref=f2e110] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/builds
+              - link "Deployment" [active] [ref=f2e111] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/deployment
+              - link "Credentials" [ref=f2e112] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/credentials
+              - link "Settings" [ref=f2e113] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/settings
+        - generic [ref=f2e417]:
+          - generic [ref=f2e418]:
+            - heading "Deployment and MCP access" [level=2] [ref=f2e419]
+            - paragraph [ref=f2e420]: Runtime lifecycle, endpoint authentication, and build selection remain explicit and independently auditable.
+          - generic [ref=f2e421]:
+            - generic [ref=f2e422]:
+              - generic [ref=f2e423]:
+                - generic [ref=f2e424]:
+                  - heading "Current runtime" [level=2] [ref=f2e425]
+                  - paragraph [ref=f2e426]: Health-before-switch protects the active build during replacement.
+                - generic [ref=f2e427]: Running
+              - generic [ref=f2e428]:
+                - generic [ref=f2e429]:
+                  - term [ref=f2e430]: Endpoint
+                  - definition [ref=f2e431]: http://final-acceptance.mcp.localhost/mcp
+                - generic [ref=f2e432]:
+                  - term [ref=f2e433]: Health
+                  - definition [ref=f2e434]:
+                    - generic [ref=f2e435]: Healthy
+                - generic [ref=f2e436]:
+                  - term [ref=f2e437]: Build
+                  - definition [ref=f2e438]: "#e234a9ee-99d4-4f69-bee9-af5f340294a5"
+                - generic [ref=f2e439]:
+                  - term [ref=f2e440]: Image
+                  - definition [ref=f2e441]: sha256:7e919e58ac55f4c1ae06d21fba42c2fea28f39eeae97f1cc0860feada373073e
+                - generic [ref=f2e442]:
+                  - term [ref=f2e443]: Manifest
+                  - definition [ref=f2e444]: 2a59c37bb8…1bba34
+              - generic [ref=f2e445]:
+                - button "Restart" [ref=f2e446] [cursor=pointer]
+                - button "Stop" [ref=f2e452] [cursor=pointer]
+                - button "Copy endpoint" [ref=f2e455] [cursor=pointer]
+            - generic [ref=f2e459]:
+              - generic [ref=f2e461]:
+                - heading "Deploy a READY build" [level=2] [ref=f2e462]
+                - paragraph [ref=f2e463]: A failed build can never replace a healthy deployment.
+              - generic [ref=f2e467]:
+                - text: Build
+                - combobox "Build" [ref=f2e469]:
+                  - 'option "Build #2 · Aug 26, 2026, 9:06 PM" [selected]'
+                  - 'option "Build #1 · Aug 26, 2026, 9:05 PM"'
+              - generic [ref=f2e470]:
+                - button "Deploy replacement" [ref=f2e471] [cursor=pointer]
+                - generic [ref=f2e472]: Ready
+          - generic [ref=f2e473]:
+            - generic [ref=f2e474]:
+              - generic [ref=f2e475]:
+                - heading "MCP inbound access" [level=2] [ref=f2e476]
+                - paragraph [ref=f2e477]: Saved token values are never redisplayed. Rotate instead of revealing.
+              - generic [ref=f2e478]: Configured
+            - generic [ref=f2e480]:
+              - text: Authentication mode
+              - combobox "Authentication mode" [ref=f2e482]:
+                - option "Static bearer" [selected]
+                - option "External OAuth/OIDC"
+            - button "Save auth mode" [ref=f2e483] [cursor=pointer]
+            - generic [ref=f2e484]:
+              - generic [ref=f2e485]:
+                - generic [ref=f2e486]:
+                  - generic [ref=f2e487]: Token name
+                  - textbox "Token name" [ref=f2e488]: Primary MCP client
+                - button "Create token" [ref=f2e489] [cursor=pointer]
+              - generic [ref=f2e491]:
+                - generic [ref=f2e492]:
+                  - paragraph [ref=f2e493]: Final acceptance MCP client
+                  - paragraph [ref=f2e494]: mcp_lK-kEv3a… · rotated Aug 26, 2026, 9:05 PM
+                - button "Revoke Final acceptance MCP client" [ref=f2e495] [cursor=pointer]
+          - generic [ref=f2e502]:
+            - generic [ref=f2e504]:
+              - heading "Deployment history" [level=2] [ref=f2e505]
+              - paragraph [ref=f2e506]: Rollback creates a new deployment and never mutates historical builds.
+            - table [ref=f2e508]:
+              - rowgroup [ref=f2e509]:
+                - row [ref=f2e510]:
+                  - columnheader "Created" [ref=f2e511]
+                  - columnheader "Build" [ref=f2e512]
+                  - columnheader "Status" [ref=f2e513]
+                  - columnheader "Health" [ref=f2e514]
+                  - columnheader "Actions" [ref=f2e515]
+              - rowgroup [ref=f2e517]:
+                - row [ref=f2e518]:
+                  - cell "Aug 26, 2026, 9:06 PM" [ref=f2e519]
+                  - cell "#e234a9ee" [ref=f2e520]
+                  - cell "Running" [ref=f2e521]
+                  - cell "Healthy" [ref=f2e523]
+                  - cell [ref=f2e525]
+                - row [ref=f2e526]:
+                  - cell "Aug 26, 2026, 9:06 PM" [ref=f2e527]
+                  - cell "#399a2e5b" [ref=f2e528]
+                  - cell "Stopped" [ref=f2e529]
+                  - cell "Stopped" [ref=f2e531]
+                  - cell [ref=f2e533]:
+                    - button "Rollback" [ref=f2e534] [cursor=pointer]
+                - row [ref=f2e538]:
+                  - cell "Aug 26, 2026, 9:05 PM" [ref=f2e539]
+                  - cell "#e234a9ee" [ref=f2e540]
+                  - cell "Stopped" [ref=f2e541]
+                  - cell "Stopped" [ref=f2e543]
+                  - cell [ref=f2e545]:
+                    - button "Rollback" [ref=f2e546] [cursor=pointer]
