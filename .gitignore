@@ -14,6 +14,8 @@ mcp_runtime/.venv/
 # Node
 frontend/node_modules/
 frontend/dist/
+frontend/playwright-report/
+frontend/test-results/
 *.tsbuildinfo
 
 # Environment / secrets
@@ -22,8 +24,8 @@ frontend/dist/
 !.env.example
 *.pem
 *.key
-secrets/
-runtime-secrets/
+/secrets/
+/runtime-secrets/
 
 # IDE/OS
 .vscode/

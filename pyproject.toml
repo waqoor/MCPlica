@@ -13,6 +13,9 @@ target-version = "py313"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
 [tool.pyright]
 pythonVersion = "3.13"
 typeCheckingMode = "strict"
@@ -20,3 +23,4 @@ reportMissingTypeStubs = false
 
 [tool.pytest.ini_options]
 addopts = "-q"
+asyncio_mode = "auto"

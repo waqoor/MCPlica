@@ -1,0 +1,38 @@
+name: Feature proposal
+description: Propose a scoped change within MCPlica's product boundaries.
+title: "proposal: "
+labels: [enhancement, needs-design]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the operator or contributor problem without prescribing an architecture.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome and acceptance behavior
+    validations:
+      required: true
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Boundary impact
+      description: Explain effects on deterministic compilation, runtime isolation, secrets, network policy, and backward compatibility.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope confirmation
+      options:
+        - label: This proposal does not add chat, agents, HITL, SaaS tenancy, billing, or entitlements.
+          required: true
+        - label: This proposal does not introduce a parallel compiler, runtime, persistence, or API version path.
+          required: true

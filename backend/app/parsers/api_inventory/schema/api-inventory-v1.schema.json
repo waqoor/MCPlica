@@ -1,0 +1,530 @@
+{
+  "$defs": {
+    "HttpMethod": {
+      "enum": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "title": "HttpMethod",
+      "type": "string"
+    },
+    "InventoryOperation": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "method": {
+          "$ref": "#/$defs/HttpMethod"
+        },
+        "operation_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Operation Id"
+        },
+        "parameters": {
+          "items": {
+            "$ref": "#/$defs/InventoryParameter"
+          },
+          "title": "Parameters",
+          "type": "array"
+        },
+        "path": {
+          "pattern": "^/",
+          "title": "Path",
+          "type": "string"
+        },
+        "request_body": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InventoryRequestBody"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "responses": {
+          "additionalProperties": {
+            "$ref": "#/$defs/InventoryResponse"
+          },
+          "minProperties": 1,
+          "title": "Responses",
+          "type": "object"
+        },
+        "security": {
+          "items": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "minProperties": 0,
+            "type": "object"
+          },
+          "title": "Security",
+          "type": "array"
+        },
+        "server_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Server Id"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Summary"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        }
+      },
+      "required": [
+        "method",
+        "path",
+        "responses"
+      ],
+      "title": "InventoryOperation",
+      "type": "object"
+    },
+    "InventoryParameter": {
+      "additionalProperties": false,
+      "properties": {
+        "allow_reserved": {
+          "default": false,
+          "title": "Allow Reserved",
+          "type": "boolean"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "explode": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Explode"
+        },
+        "in": {
+          "$ref": "#/$defs/ParameterLocation"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "schema": {
+          "$ref": "#/$defs/JsonObject"
+        },
+        "style": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Style"
+        }
+      },
+      "required": [
+        "name",
+        "in",
+        "schema"
+      ],
+      "title": "InventoryParameter",
+      "type": "object"
+    },
+    "InventoryRequestBody": {
+      "additionalProperties": false,
+      "properties": {
+        "content_type": {
+          "default": "application/json",
+          "title": "Content Type",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "schema": {
+          "$ref": "#/$defs/JsonObject"
+        }
+      },
+      "required": [
+        "schema"
+      ],
+      "title": "InventoryRequestBody",
+      "type": "object"
+    },
+    "InventoryResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "content_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content Type"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "schema": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JsonObject"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "InventoryResponse",
+      "type": "object"
+    },
+    "InventorySecurityScheme": {
+      "additionalProperties": false,
+      "properties": {
+        "location": {
+          "anyOf": [
+            {
+              "enum": [
+                "header",
+                "query",
+                "cookie"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Location"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "scheme": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scheme"
+        },
+        "scopes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Scopes",
+          "type": "array"
+        },
+        "token_url": {
+          "anyOf": [
+            {
+              "format": "uri",
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Token Url"
+        },
+        "type": {
+          "$ref": "#/$defs/SecuritySchemeType"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "InventorySecurityScheme",
+      "type": "object"
+    },
+    "InventoryServer": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "id": {
+          "maxLength": 120,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9._-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "url": {
+          "format": "uri",
+          "minLength": 1,
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "url"
+      ],
+      "title": "InventoryServer",
+      "type": "object"
+    },
+    "JsonObject": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "type": "object"
+    },
+    "JsonScalar": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "JsonValue": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/JsonScalar"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "array"
+        },
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "ParameterLocation": {
+      "enum": [
+        "path",
+        "query",
+        "header",
+        "cookie"
+      ],
+      "title": "ParameterLocation",
+      "type": "string"
+    },
+    "SecuritySchemeType": {
+      "enum": [
+        "http_bearer",
+        "http_basic",
+        "api_key",
+        "oauth2_client_credentials",
+        "static_headers",
+        "unsupported"
+      ],
+      "title": "SecuritySchemeType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    },
+    "name": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "operations": {
+      "items": {
+        "$ref": "#/$defs/InventoryOperation"
+      },
+      "minItems": 1,
+      "title": "Operations",
+      "type": "array"
+    },
+    "schema": {
+      "const": "api-inventory/v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schemas": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonObject"
+      },
+      "title": "Schemas",
+      "type": "object"
+    },
+    "security_schemes": {
+      "additionalProperties": {
+        "$ref": "#/$defs/InventorySecurityScheme"
+      },
+      "title": "Security Schemes",
+      "type": "object"
+    },
+    "servers": {
+      "items": {
+        "$ref": "#/$defs/InventoryServer"
+      },
+      "title": "Servers",
+      "type": "array"
+    },
+    "version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Version"
+    }
+  },
+  "required": [
+    "schema",
+    "name",
+    "operations"
+  ],
+  "title": "ApiInventory",
+  "type": "object"
+}

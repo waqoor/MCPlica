@@ -786,7 +786,13 @@ Only the deployment worker/runtime-manager process receives the minimal Docker A
 ### Serving Plane
 
 - A runtime failing startup/manifest validation must remain unhealthy and must not receive production traffic.
-- Deployment replacement uses health-before-switch semantics where feasible.
+- Deployment replacement uses health-before-switch semantics where feasible. Both the
+  candidate container and its Traefik edge route must report the exact expected Build
+  and Deployment identity before active references change or the previous runtime stops.
+- A verified replacement remains durably `HEALTHCHECK/activating` while superseded
+  runtimes retire. It becomes `RUNNING` and emits its final audit event only after no
+  previous runtime remains `RUNNING` or `STOPPING`; retries resume this boundary rather
+  than provisioning a parallel candidate.
 - Rollback redeploys a previously validated immutable build.
 - Runtime API errors are mapped to MCP-readable error results without leaking credentials or internal traces.
 

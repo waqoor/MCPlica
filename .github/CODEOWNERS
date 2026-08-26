@@ -1,0 +1,13 @@
+# Default review ownership
+* @yazeedhasan97
+
+# Security, release, governance, and legal controls
+/.github/ @yazeedhasan97
+/SECURITY.md @yazeedhasan97
+/GOVERNANCE.md @yazeedhasan97
+/CLA.md @yazeedhasan97
+/LICENSE @yazeedhasan97
+/TRADEMARKS.md @yazeedhasan97
+/infra/ @yazeedhasan97
+/migrations/ @yazeedhasan97
+/packages/contracts/ @yazeedhasan97

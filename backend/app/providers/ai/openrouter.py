@@ -1,22 +1,66 @@
+import hashlib
 import json
-from typing import Any
+import time
+from typing import cast
+
+from mcp_contracts.json_types import JsonObject, JsonValue
+from pydantic import BaseModel
+from pydantic import ValidationError as PydanticValidationError
 
 from app.clients.ai import OpenRouterClient
-from app.providers.ai.base import AIProvider
+from app.core.canonical_json import canonical_json_bytes
+from app.core.exceptions import AIAnalysisError, ClientResponseError
+from app.observability import observe_openrouter_usage
+from app.providers.ai.base import (
+    AIModelInfo,
+    AIProvider,
+    EmbeddingBatch,
+    StructuredGeneration,
+)
+
+
+def _usage(payload: JsonObject) -> JsonObject | None:
+    value = payload.get("usage")
+    return cast(JsonObject, value) if isinstance(value, dict) else None
+
+
+def _structured_content(payload: JsonObject) -> object:
+    choices = payload.get("choices")
+    if not isinstance(choices, list) or not choices:
+        raise ValueError("OpenRouter response has no choices")
+    choice = choices[0]
+    if not isinstance(choice, dict):
+        raise ValueError("OpenRouter choice is malformed")
+    message = choice.get("message")
+    if not isinstance(message, dict) or "content" not in message:
+        raise ValueError("OpenRouter choice message is malformed")
+    raw_content = message["content"]
+    if isinstance(raw_content, dict):
+        return raw_content
+    if not isinstance(raw_content, str):
+        raise ValueError("OpenRouter structured content must be JSON text or an object")
+    return cast(object, json.loads(raw_content))
+
+
+def _string_values(value: JsonValue | None) -> frozenset[str]:
+    if not isinstance(value, list):
+        return frozenset()
+    return frozenset(item for item in value if isinstance(item, str))
 
 
 class OpenRouterProvider(AIProvider):
-    def __init__(self, client: OpenRouterClient) -> None:
-        self.client = client
+    def __init__(self, client: OpenRouterClient, *, structured_attempts: int = 2) -> None:
+        self._client = client
+        self._structured_attempts = structured_attempts
 
-    async def structured_generate(
+    async def structured_generate[ResponseModel: BaseModel](
         self,
         *,
         model: str,
         messages: list[dict[str, str]],
+        response_model: type[ResponseModel],
         schema_name: str,
-        schema: dict[str, Any],
-    ) -> dict[str, Any]:
+    ) -> StructuredGeneration[ResponseModel]:
         payload = {
             "model": model,
             "messages": messages,
@@ -25,12 +69,103 @@ class OpenRouterProvider(AIProvider):
                 "json_schema": {
                     "name": schema_name,
                     "strict": True,
-                    "schema": schema,
+                    "schema": response_model.model_json_schema(),
                 },
             },
         }
-        response = await self.client.chat_completion(payload)
-        content = response["choices"][0]["message"]["content"]
-        if isinstance(content, dict):
-            return content
-        return json.loads(content)
+        last_error: Exception | None = None
+        for _ in range(self._structured_attempts):
+            started = time.perf_counter()
+            response = await self._client.chat_completion(payload)
+            latency_ms = round((time.perf_counter() - started) * 1000)
+            try:
+                value = response_model.model_validate(_structured_content(response))
+            except (
+                KeyError,
+                IndexError,
+                TypeError,
+                ValueError,
+                PydanticValidationError,
+            ) as exc:
+                last_error = exc
+                continue
+            serialized = canonical_json_bytes(value)
+            usage = _usage(response)
+            observe_openrouter_usage(usage)
+            cost = {"cost": usage["cost"]} if usage and "cost" in usage else None
+            return StructuredGeneration(
+                value=value,
+                model=str(response.get("model") or model),
+                response_sha256=hashlib.sha256(serialized).hexdigest(),
+                usage=usage,
+                cost=cost,
+                latency_ms=latency_ms,
+            )
+        raise AIAnalysisError(
+            "OpenRouter returned invalid structured output after bounded retries"
+        ) from last_error
+
+    async def embed(self, *, model: str, texts: list[str]) -> EmbeddingBatch:
+        if not texts:
+            raise ValueError("At least one text is required for embedding")
+        response = await self._client.embeddings({"model": model, "input": texts})
+        raw_data = response.get("data")
+        if not isinstance(raw_data, list) or len(raw_data) != len(texts):
+            raise ClientResponseError("OpenRouter embedding count does not match input count")
+        ordered: list[tuple[int, list[float]]] = []
+        for fallback_index, item in enumerate(cast(list[JsonValue], raw_data)):
+            if not isinstance(item, dict):
+                raise ClientResponseError("OpenRouter returned malformed embeddings")
+            raw_vector = item.get("embedding")
+            if not isinstance(raw_vector, list):
+                raise ClientResponseError("OpenRouter returned malformed embeddings")
+            try:
+                vector = [
+                    float(value)
+                    for value in cast(list[JsonValue], raw_vector)
+                    if isinstance(value, int | float) and not isinstance(value, bool)
+                ]
+                if len(vector) != len(raw_vector):
+                    raise ValueError("embedding contains a non-numeric value")
+                raw_index = item.get("index", fallback_index)
+                if not isinstance(raw_index, int) or isinstance(raw_index, bool):
+                    raise ValueError("embedding index is not an integer")
+                index = raw_index
+            except (TypeError, ValueError) as exc:
+                raise ClientResponseError("OpenRouter returned malformed embeddings") from exc
+            if not vector:
+                raise ClientResponseError("OpenRouter returned an empty embedding")
+            ordered.append((index, vector))
+        ordered.sort(key=lambda item: item[0])
+        vectors = [item[1] for item in ordered]
+        dimensions = len(vectors[0])
+        if any(len(vector) != dimensions for vector in vectors):
+            raise ClientResponseError("OpenRouter returned inconsistent embedding dimensions")
+        usage = _usage(response)
+        observe_openrouter_usage(usage)
+        return EmbeddingBatch(
+            vectors=vectors,
+            model=str(response.get("model") or model),
+            dimensions=dimensions,
+            usage=usage,
+        )
+
+    async def list_models(self) -> list[AIModelInfo]:
+        result: list[AIModelInfo] = []
+        for raw in await self._client.models():
+            model_id = raw.get("id")
+            if not isinstance(model_id, str) or not model_id:
+                continue
+            architecture = raw.get("architecture")
+            architecture = cast(JsonObject, architecture) if isinstance(architecture, dict) else {}
+            result.append(
+                AIModelInfo(
+                    id=model_id,
+                    name=str(raw.get("name") or model_id),
+                    supported_parameters=_string_values(raw.get("supported_parameters")),
+                    input_modalities=_string_values(architecture.get("input_modalities")),
+                    output_modalities=_string_values(architecture.get("output_modalities")),
+                    raw=raw,
+                )
+            )
+        return result
