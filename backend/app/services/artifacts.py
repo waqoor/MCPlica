@@ -205,7 +205,7 @@ def _compose_example(project_slug: str, manifest_sha256: str) -> str:
     return (
         "services:\n"
         f"  {project_slug}-mcp:\n"
-        "    image: ${MCP_LICA_RUNTIME_IMAGE:?Set an immutable runtime image digest}\n"
+        "    image: ${RUNTIME_IMAGE:?Set an immutable runtime image digest}\n"
         '    user: "10001:10001"\n'
         "    init: true\n"
         "    restart: unless-stopped\n"
@@ -228,7 +228,7 @@ def _compose_example(project_slug: str, manifest_sha256: str) -> str:
         '      MCP_REQUIRE_SECURE_SECRET_PERMISSIONS: "true"\n'
         "    volumes:\n"
         "      - ./manifest.json:/runtime/manifest.json:ro\n"
-        "      - ${MCP_LICA_SECRET_BUNDLE_HOST_PATH:?Set the secret bundle host path}:"
+        "      - ${SECRET_BUNDLE_HOST_PATH:?Set the secret bundle host path}:"
         "/run/secrets/mcplica-runtime.json:ro\n"
         "    tmpfs:\n"
         "      - /tmp:size=64m,mode=1777\n"

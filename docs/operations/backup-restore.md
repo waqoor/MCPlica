@@ -6,7 +6,7 @@ A recoverable MCPlica backup is a consistent set containing PostgreSQL, the arti
 
 - PostgreSQL is authoritative and must be backed up with point-in-time recovery or frequent encrypted dumps.
 - `artifacts` contains immutable source/build evidence and must be backed up with hashes and access controls.
-- `MCP_LICA_RUNTIME_HOST_ROOT` contains per-project manifest/secret mounts used by deployed runtimes. Treat it as secret material and back it up encrypted.
+- `RUNTIME_HOST_ROOT` contains per-project manifest/secret mounts used by deployed runtimes. Treat it as secret material and back it up encrypted.
 - The control-plane encryption key and key version belong in a separate secret manager/escrow, never inside the database dump.
 - Redis queues/cache are disposable. Stop mutations and drain or cancel jobs; do not treat Redis restoration as authoritative recovery.
 - Milvus, MinIO, and etcd hold builder-side indexes. Back them up consistently when rapid recovery matters, or rebuild them from authoritative documentation artifacts after restore.

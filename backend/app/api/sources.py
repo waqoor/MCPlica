@@ -5,7 +5,13 @@ from fastapi import APIRouter, Depends, File, Request, UploadFile, status
 
 from app.api.deps import BuilderPrincipal, CsrfProtection, services
 from app.container import ServiceContainer
-from app.schemas.source import SourceCreate, SourceRead, SourceVersionRead
+from app.domain.sources import SourceVersionMetadataRecord
+from app.schemas.source import (
+    SourceCreate,
+    SourceRead,
+    SourceVersionMetadataRead,
+    SourceVersionRead,
+)
 
 router = APIRouter(tags=["sources"])
 
@@ -13,6 +19,13 @@ router = APIRouter(tags=["sources"])
 def _version_read(result: object, *, deduplicated: bool = False) -> SourceVersionRead:
     return SourceVersionRead.model_validate(result).model_copy(
         update={"deduplicated": deduplicated}
+    )
+
+
+def _metadata_read(result: SourceVersionMetadataRecord) -> SourceVersionMetadataRead:
+    return SourceVersionMetadataRead(
+        **SourceVersionRead.model_validate(result.version).model_dump(),
+        **result.model_dump(exclude={"version"}),
     )
 
 
@@ -112,10 +125,13 @@ async def list_source_versions(
     ]
 
 
-@router.get("/source-versions/{version_id}/metadata", response_model=SourceVersionRead)
+@router.get(
+    "/source-versions/{version_id}/metadata",
+    response_model=SourceVersionMetadataRead,
+)
 async def source_version_metadata(
     version_id: UUID,
     _principal: BuilderPrincipal,
     container: Annotated[ServiceContainer, Depends(services)],
-) -> SourceVersionRead:
-    return _version_read(await container.sources.get_version(version_id))
+) -> SourceVersionMetadataRead:
+    return _metadata_read(await container.sources.metadata(version_id))

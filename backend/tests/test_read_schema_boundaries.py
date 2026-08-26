@@ -4,16 +4,19 @@ from uuid import uuid4
 from app.domain.auth import UserAccount, UserRole
 from app.domain.builds import BuildRecord, BuildStatus, BuildTrigger
 from app.domain.credentials import CredentialRecord, CredentialScheme
+from app.domain.indexing import IndexGenerationStatus
 from app.domain.sources import (
     ProjectSourceRecord,
+    SourceIssueRecord,
     SourceKind,
     SourceOrigin,
+    SourceVersionMetadataRecord,
     SourceVersionRecord,
 )
 from app.schemas.auth import UserRead
 from app.schemas.build import BuildRead
 from app.schemas.credential import CredentialRead
-from app.schemas.source import SourceRead, SourceVersionRead
+from app.schemas.source import SourceRead, SourceVersionMetadataRead, SourceVersionRead
 
 
 def test_read_schemas_accept_domain_records_without_exposing_internal_fields() -> None:
@@ -98,6 +101,30 @@ def test_read_schemas_accept_domain_records_without_exposing_internal_fields() -
     assert SourceRead.model_validate(source).id == source_id
     assert SourceVersionRead.model_validate(version).id == version.id
     assert "storage_key" not in SourceVersionRead.model_validate(version).model_dump()
+    metadata_record = SourceVersionMetadataRecord(
+        version=version,
+        parse_status="valid",
+        spec_version="openapi-3.1",
+        operation_count=2,
+        servers=["https://api.example.test/"],
+        auth_schemes=["bearerAuth"],
+        errors=[
+            SourceIssueRecord(
+                code="SOURCE_WARNING",
+                severity="warning",
+                message="Example warning",
+            )
+        ],
+        index_status=IndexGenerationStatus.READY,
+        metadata_build_id=build.id,
+    )
+    metadata = SourceVersionMetadataRead(
+        **SourceVersionRead.model_validate(version).model_dump(),
+        **metadata_record.model_dump(exclude={"version"}),
+    )
+    assert metadata.operation_count == 2
+    assert metadata.index_status is IndexGenerationStatus.READY
+    assert "storage_key" not in metadata.model_dump()
     assert CredentialRead.model_validate(credential).id == credential.id
     assert "key_version" not in CredentialRead.model_validate(credential).model_dump()
     assert UserRead.model_validate(user).id == user_id

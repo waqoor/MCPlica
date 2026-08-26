@@ -14,7 +14,7 @@ Point them to the Traefik host. Permit inbound TCP 80 only for HTTPS redirection
 
 ## Required production values
 
-Set `MCP_LICA_UI_DOMAIN`, `MCP_LICA_API_DOMAIN`, `MCP_LICA_MCP_DOMAIN`, and `MCP_LICA_ACME_EMAIL`. Set backend, frontend, and runtime images to the exact `image@sha256:digest` values in a verified GitHub release. Set `MCP_LICA_RUNTIME_HOST_ROOT` to a dedicated absolute Docker-host directory and keep `MCP_LICA_RUNTIME_WORKER_ROOT=/runtime-host`:
+Set `UI_DOMAIN`, `API_DOMAIN`, `MCP_DOMAIN`, and `ACME_EMAIL`. Set backend, frontend, and runtime images to the exact `image@sha256:digest` values in a verified GitHub release. Set `RUNTIME_HOST_ROOT` to a dedicated absolute Docker-host directory and keep `RUNTIME_WORKER_ROOT=/runtime-host`:
 
 ```bash
 sudo install -d -o 10001 -g 10001 -m 0750 /var/lib/mcplica/runtime

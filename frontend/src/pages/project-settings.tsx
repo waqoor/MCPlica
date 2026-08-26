@@ -4,7 +4,7 @@ import { Save, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
-import { z } from "zod";
+import { z } from "@/lib/schemas";
 import { projectApi } from "@/api/projects";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";

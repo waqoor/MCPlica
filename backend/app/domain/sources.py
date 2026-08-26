@@ -1,8 +1,11 @@
 from datetime import datetime
 from enum import StrEnum
+from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.domain.indexing import IndexGenerationStatus
 
 
 class SourceKind(StrEnum):
@@ -50,3 +53,31 @@ class BoundSourceVersionRecord(BaseModel):
 
     source: ProjectSourceRecord
     version: SourceVersionRecord
+
+
+class SourceIssueRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    code: str
+    severity: Literal["error", "warning"]
+    message: str
+    location: str | None = None
+
+
+class SourceVersionMetadataRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    version: SourceVersionRecord
+    parse_status: Literal["pending", "valid", "invalid"]
+    spec_version: str | None = None
+    operation_count: int | None = None
+    servers: list[str] = Field(default_factory=lambda: list[str]())
+    auth_schemes: list[str] = Field(default_factory=lambda: list[str]())
+    errors: list[SourceIssueRecord] = Field(default_factory=lambda: list[SourceIssueRecord]())
+    preview_markdown: str | None = None
+    indexed_chunk_count: int | None = None
+    embedding_model: str | None = None
+    embedding_dimensions: int | None = None
+    index_status: IndexGenerationStatus | None = None
+    metadata_build_id: UUID | None = None
+    index_generation_id: UUID | None = None

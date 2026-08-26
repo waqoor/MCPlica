@@ -53,7 +53,9 @@ export type SourceVersion = {
   indexed_chunk_count?: number | null;
   embedding_model?: string | null;
   embedding_dimensions?: number | null;
-  index_status?: string | null;
+  index_status?: "building" | "ready" | "failed" | null;
+  metadata_build_id?: UUID | null;
+  index_generation_id?: UUID | null;
 };
 
 export type SourceIssue = {

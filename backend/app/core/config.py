@@ -45,7 +45,7 @@ def _runtime_path_is_root(value: str) -> bool:
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_prefix="MCP_LICA_",
+        env_prefix="",
         env_file="../.env",
         env_file_encoding="utf-8",
         extra="ignore",

@@ -18,7 +18,7 @@ from app.services.users import UserService
 async def _bootstrap(email: str, display_name: str, supplied_secret: str, password: str) -> None:
     settings = get_settings()
     if settings.bootstrap_secret is None:
-        raise RuntimeError("MCP_LICA_BOOTSTRAP_SECRET must be configured")
+        raise RuntimeError("BOOTSTRAP_SECRET must be configured")
     database = DatabaseClient(
         settings.database_url,
         pool_size=settings.database_pool_size,

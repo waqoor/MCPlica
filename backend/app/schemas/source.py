@@ -1,8 +1,10 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.domain.indexing import IndexGenerationStatus
 from app.domain.sources import SourceKind, SourceOrigin
 
 
@@ -59,3 +61,28 @@ class SourceVersionRead(BaseModel):
     created_by: UUID
     created_at: datetime
     deduplicated: bool = False
+
+
+class SourceIssueRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+    severity: Literal["error", "warning"]
+    message: str
+    location: str | None = None
+
+
+class SourceVersionMetadataRead(SourceVersionRead):
+    parse_status: Literal["pending", "valid", "invalid"]
+    spec_version: str | None
+    operation_count: int | None
+    servers: list[str]
+    auth_schemes: list[str]
+    errors: list[SourceIssueRead]
+    preview_markdown: str | None
+    indexed_chunk_count: int | None
+    embedding_model: str | None
+    embedding_dimensions: int | None
+    index_status: IndexGenerationStatus | None
+    metadata_build_id: UUID | None
+    index_generation_id: UUID | None

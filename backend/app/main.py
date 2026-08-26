@@ -38,6 +38,7 @@ from app.repositories.builds import BuildAIRunRepository, BuildRepository
 from app.repositories.canonical import CanonicalRepository
 from app.repositories.credentials import CredentialRepository
 from app.repositories.deployments import DeploymentRepository
+from app.repositories.indexing import IndexGenerationRepository
 from app.repositories.mcp_access import MCPAccessRepository
 from app.repositories.projects import ProjectRepository
 from app.repositories.settings import SettingsRepository
@@ -158,6 +159,7 @@ def create_app(settings_override: Settings | None = None) -> FastAPI:
         builds = BuildRepository()
         ai_runs = BuildAIRunRepository()
         snapshots = CanonicalRepository()
+        generations = IndexGenerationRepository()
         credentials = CredentialRepository()
         validation = ValidationRepository()
         deployments = DeploymentRepository()
@@ -210,6 +212,9 @@ def create_app(settings_override: Settings | None = None) -> FastAPI:
                 database,
                 sources,
                 projects,
+                builds,
+                snapshots,
+                generations,
                 audit,
                 artifact_storage,
                 http,

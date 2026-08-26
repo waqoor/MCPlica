@@ -3,7 +3,7 @@ import { ArrowRight, LockKeyhole } from "lucide-react";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
-import { z } from "zod";
+import { z } from "@/lib/schemas";
 import { useAuth } from "@/auth/use-auth";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,9 @@ export function LoginPage() {
 
   useEffect(() => {
     document.title = "Sign in · MCPlica";
+    return () => {
+      document.title = "MCPlica control plane";
+    };
   }, []);
 
   if (user) return <Navigate replace to="/" />;
