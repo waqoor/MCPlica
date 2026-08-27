@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import os
 import stat
 from pathlib import Path
@@ -10,6 +12,7 @@ def load_secret_bundle(
     *,
     max_bytes: int = 1_000_000,
     require_secure_permissions: bool = True,
+    expected_sha256: str | None = None,
 ) -> RuntimeSecretBundle:
     bundle_path = Path(path)
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
@@ -27,4 +30,8 @@ def load_secret_bundle(
         payload = handle.read(max_bytes + 1)
     if len(payload) > max_bytes:
         raise ValueError("runtime secret bundle exceeds configured size limit")
+    if expected_sha256 is not None:
+        expected = expected_sha256.removeprefix("sha256:").lower()
+        if not expected or not hmac.compare_digest(hashlib.sha256(payload).hexdigest(), expected):
+            raise ValueError("runtime deployment authentication overlay hash mismatch")
     return RuntimeSecretBundle.model_validate_json(payload)

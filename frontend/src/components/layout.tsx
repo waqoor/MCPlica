@@ -9,28 +9,32 @@ import {
   Menu,
   Rocket,
   Settings,
-  X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { systemApi } from "@/api/system";
+import { useCapabilities } from "@/auth/capabilities";
 import { useAuth } from "@/auth/use-auth";
 import { cn } from "@/lib/utils";
+import { useMediaQuery } from "@/lib/use-media-query";
 import { BrandLogo } from "./brand-logo";
+import { ErrorNotice } from "./error-notice";
 import { HealthBadge } from "./status-badge";
 import { Button } from "./ui/button";
+import { Dialog } from "./ui/dialog";
 
 const links = [
   { to: "/", label: "Dashboard", icon: Gauge, end: true },
   { to: "/projects", label: "Projects", icon: Boxes },
   { to: "/builds", label: "Builds", icon: Hammer },
   { to: "/deployments", label: "Deployments", icon: Rocket },
-  { to: "/activity", label: "Activity", icon: Activity },
+  { to: "/activity", label: "Activity", icon: Activity, adminOnly: true },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { user } = useAuth();
+  const capabilities = useCapabilities();
   const readiness = useQuery({
     queryKey: ["system", "readiness"],
     queryFn: ({ signal }) => systemApi.readiness(signal),
@@ -62,32 +66,34 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         aria-label="Primary"
         className="flex-1 space-y-1 overflow-y-auto px-3 py-4"
       >
-        {links.map(({ to, label, icon: Icon, end }) => (
-          <NavLink
-            className={({ isActive }) =>
-              cn(
-                "group flex min-h-11 items-center gap-3 rounded-md border border-transparent px-3 text-sm font-medium text-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-                "hover:bg-panel-hover hover:text-foreground",
-                isActive &&
-                  "nav-active border-border bg-panel-raised text-foreground",
-              )
-            }
-            end={end}
-            key={to}
-            onClick={onNavigate}
-            to={to}
-          >
-            <Icon
-              aria-hidden="true"
-              className="size-4 shrink-0 text-muted transition group-aria-[current=page]:text-accent"
-            />
-            <span>{label}</span>
-            <ChevronRight
-              aria-hidden="true"
-              className="ml-auto size-3.5 opacity-0 transition group-hover:opacity-60 group-aria-[current=page]:opacity-100"
-            />
-          </NavLink>
-        ))}
+        {links
+          .filter((link) => !link.adminOnly || capabilities.canViewAudit)
+          .map(({ to, label, icon: Icon, end }) => (
+            <NavLink
+              className={({ isActive }) =>
+                cn(
+                  "group flex min-h-11 items-center gap-3 rounded-md border border-transparent px-3 text-sm font-medium text-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                  "hover:bg-panel-hover hover:text-foreground",
+                  isActive &&
+                    "nav-active border-border bg-panel-raised text-foreground",
+                )
+              }
+              end={end}
+              key={to}
+              onClick={onNavigate}
+              to={to}
+            >
+              <Icon
+                aria-hidden="true"
+                className="size-4 shrink-0 text-muted transition group-aria-[current=page]:text-accent"
+              />
+              <span>{label}</span>
+              <ChevronRight
+                aria-hidden="true"
+                className="ml-auto size-3.5 opacity-0 transition group-hover:opacity-60 group-aria-[current=page]:opacity-100"
+              />
+            </NavLink>
+          ))}
       </nav>
 
       <div className="border-t border-border p-4">
@@ -110,8 +116,9 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
 export function Layout() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const { user, logout } = useAuth();
+  const { user, logout, logoutError, isLoggingOut } = useAuth();
   const location = useLocation();
+  const desktop = useMediaQuery("(min-width: 1024px)");
 
   useEffect(() => setMenuOpen(false), [location.pathname]);
 
@@ -120,57 +127,49 @@ export function Layout() {
       <a className="skip-link" href="#main-content">
         Skip to main content
       </a>
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-border bg-canvas/92 backdrop-blur-xl lg:block">
-        <Sidebar />
-      </aside>
-
-      {menuOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <button
-            aria-label="Close navigation"
-            className="absolute inset-0 cursor-default bg-scrim/68"
-            onClick={() => setMenuOpen(false)}
-            type="button"
-          />
-          <aside className="relative h-full w-[min(19rem,88vw)] border-r border-border bg-canvas shadow-dialog">
-            <Button
-              aria-label="Close navigation"
-              className="absolute right-3 top-3 z-10"
-              onClick={() => setMenuOpen(false)}
-              size="icon"
-              variant="ghost"
-            >
-              <X aria-hidden="true" className="size-5" />
-            </Button>
-            <Sidebar onNavigate={() => setMenuOpen(false)} />
-          </aside>
-        </div>
+      {desktop && (
+        <aside className="fixed inset-y-0 left-0 z-30 w-64 border-r border-border bg-canvas/92 backdrop-blur-xl">
+          <Sidebar />
+        </aside>
       )}
 
-      <div className="lg:pl-64">
+      <Dialog
+        description="Primary application navigation"
+        onClose={() => setMenuOpen(false)}
+        open={menuOpen}
+        title="Navigation"
+        variant="sheet"
+      >
+        <Sidebar onNavigate={() => setMenuOpen(false)} />
+      </Dialog>
+
+      <div className={desktop ? "pl-64" : undefined}>
         <header className="sticky top-0 z-20 flex min-h-16 items-center justify-between border-b border-border bg-canvas/82 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
-            <Button
-              aria-label="Open navigation"
-              className="lg:hidden"
-              onClick={() => setMenuOpen(true)}
-              size="icon"
-              variant="ghost"
-            >
-              <Menu aria-hidden="true" className="size-5" />
-            </Button>
-            <NavLink
-              aria-label="MCPlica dashboard"
-              className="-m-1.5 rounded-lg p-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:hidden"
-              to="/"
-            >
-              <BrandLogo
-                alt=""
-                className="h-8 w-[3.25rem]"
-                loading="eager"
-                variant="compact"
-              />
-            </NavLink>
+            {!desktop && (
+              <>
+                <Button
+                  aria-label="Open navigation"
+                  onClick={() => setMenuOpen(true)}
+                  size="icon"
+                  variant="ghost"
+                >
+                  <Menu aria-hidden="true" className="size-5" />
+                </Button>
+                <NavLink
+                  aria-label="MCPlica dashboard"
+                  className="-m-1.5 rounded-lg p-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  to="/"
+                >
+                  <BrandLogo
+                    alt=""
+                    className="h-8 w-[3.25rem]"
+                    loading="eager"
+                    variant="compact"
+                  />
+                </NavLink>
+              </>
+            )}
             <div className="hidden sm:block">
               <p className="text-sm font-medium text-foreground">
                 {user?.display_name}
@@ -182,7 +181,8 @@ export function Layout() {
           </div>
           <Button
             aria-label="Sign out"
-            onClick={() => void logout()}
+            disabled={isLoggingOut}
+            onClick={() => void logout().catch(() => undefined)}
             size="sm"
             variant="ghost"
           >
@@ -190,6 +190,16 @@ export function Layout() {
             <span className="hidden sm:inline">Sign out</span>
           </Button>
         </header>
+        {logoutError && (
+          <div className="px-4 pt-4 sm:px-6 lg:px-8">
+            <ErrorNotice
+              error={logoutError}
+              nextStep="Your server session remains active. Retry sign out before leaving this device."
+              onRetry={() => void logout().catch(() => undefined)}
+              title="Sign out was not confirmed"
+            />
+          </div>
+        )}
         <main
           className="mx-auto w-full max-w-[100rem] p-4 sm:p-6 lg:p-8"
           id="main-content"

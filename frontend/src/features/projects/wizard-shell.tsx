@@ -1,6 +1,7 @@
-import { Check, Circle } from "lucide-react";
+import { AlertTriangle, Check, Circle } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
+import type { JourneyStep } from "@/api/contracts";
 import { BrandLogo } from "@/components/brand-logo";
 import { cn } from "@/lib/utils";
 import { wizardSteps } from "./wizard-steps";
@@ -9,11 +10,13 @@ export function WizardShell({
   step,
   projectId,
   buildId,
+  steps,
   children,
 }: {
   step: number;
   projectId?: string | null;
   buildId?: string | null;
+  steps?: readonly JourneyStep[];
   children: ReactNode;
 }) {
   return (
@@ -70,7 +73,11 @@ export function WizardShell({
             <ol className="grid grid-cols-2 gap-1 sm:grid-cols-5 lg:grid-cols-1">
               {wizardSteps.map((label, index) => {
                 const number = index + 1;
-                const complete = number < step;
+                const authoritative = steps?.find(
+                  (candidate) => candidate.number === number,
+                );
+                const complete = authoritative?.state === "complete";
+                const stale = authoritative?.state === "stale";
                 const current = number === step;
                 const params = new URLSearchParams({ step: String(number) });
                 if (projectId) params.set("project", projectId);
@@ -83,6 +90,7 @@ export function WizardShell({
                         ? "border-accent/50 bg-accent/10 text-foreground"
                         : "border-transparent text-muted",
                       complete && "text-foreground",
+                      stale && "border-warning/30 text-warning-soft",
                     )}
                   >
                     <span
@@ -95,7 +103,9 @@ export function WizardShell({
                             : "border-border-strong",
                       )}
                     >
-                      {complete ? (
+                      {stale ? (
+                        <AlertTriangle aria-hidden="true" className="size-3" />
+                      ) : complete ? (
                         <Check aria-hidden="true" className="size-3" />
                       ) : current ? (
                         <Circle
@@ -106,12 +116,16 @@ export function WizardShell({
                         number
                       )}
                     </span>
-                    <span>{label}</span>
+                    <span>
+                      {label}
+                      {stale && <span className="sr-only"> (stale)</span>}
+                    </span>
                   </span>
                 );
                 return (
                   <li key={label}>
-                    {number <= step && (number === 1 || projectId) ? (
+                    {(authoritative?.state !== "locked" || current) &&
+                    (number === 1 || projectId) ? (
                       <Link
                         aria-current={current ? "step" : undefined}
                         className="block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"

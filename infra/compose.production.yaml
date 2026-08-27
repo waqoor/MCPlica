@@ -1,6 +1,13 @@
 services:
+  migrate:
+    image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE to an immutable release digest}
+    pull_policy: always
+    environment:
+      ENV: production
+
   api:
     image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE to an immutable release digest}
+    build: !reset null
     pull_policy: always
     environment:
       ENV: production
@@ -25,6 +32,13 @@ services:
       MCP_DOMAIN: ${MCP_DOMAIN:?Set MCP_DOMAIN}
       MCP_RUNTIME_IMAGE: ${MCP_RUNTIME_IMAGE:?Set MCP_RUNTIME_IMAGE to an immutable release digest}
 
+  runtime-validator:
+    image: ${MCP_RUNTIME_IMAGE:?Set MCP_RUNTIME_IMAGE to an immutable release digest}
+    build: !reset null
+    pull_policy: always
+    environment:
+      MCP_RUNTIME_VERSION: ${MCP_RUNTIME_VERSION:?Set MCP_RUNTIME_VERSION}
+
   deployment-worker:
     image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE to an immutable release digest}
     pull_policy: always
@@ -39,6 +53,7 @@ services:
 
   frontend:
     image: ${FRONTEND_IMAGE:?Set FRONTEND_IMAGE to an immutable release digest}
+    build: !reset null
     pull_policy: always
     labels:
       traefik.http.routers.mcplica-ui.rule: Host(`${UI_DOMAIN:?Set UI_DOMAIN}`)

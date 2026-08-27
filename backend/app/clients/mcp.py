@@ -1,23 +1,26 @@
 import asyncio
+import hashlib
 import ipaddress
 import socket
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Sequence
 from dataclasses import dataclass
-from typing import TypedDict, cast
+from typing import NotRequired, TypedDict, cast
 from urllib.parse import urlsplit, urlunsplit
 
 import httpx2
 from mcp import Client
 from mcp.client.streamable_http import streamable_http_client
-from mcp.types import ListResourcesResult, ListToolsResult, Resource, Tool
+from mcp.types import Resource, Tool
 from mcp_contracts import MCPManifest
-from pydantic import ValidationError as PydanticValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from app.clients.base import AsyncClient
 from app.core.exceptions import ProtocolValidationError
 
 AddressResolver = Callable[[str, int], Awaitable[Iterable[str]]]
 _MAX_RESOLVED_ADDRESSES = 32
+_MAX_INSPECTION_ITEMS = 100_000
+_MAX_INSPECTION_RESPONSE_BYTES = 50_000_000
 
 
 async def _system_resolver(hostname: str, port: int) -> Iterable[str]:
@@ -107,6 +110,42 @@ class MCPInspection(TypedDict):
     tools: list[str]
     resource_count: int
     resources: list[str]
+    runtime_version: NotRequired[str]
+    manifest_sha256: NotRequired[str]
+    exercised_tool_count: NotRequired[int]
+    exercised_tools: NotRequired[list[str]]
+    request_mapping_count: NotRequired[int]
+
+
+class _RuntimeCandidateInspection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    runtime_version: str = Field(min_length=1, max_length=64)
+    protocol_version: str = Field(min_length=1, max_length=64)
+    manifest_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    tool_count: int = Field(ge=0, le=_MAX_INSPECTION_ITEMS)
+    tools: list[str] = Field(max_length=_MAX_INSPECTION_ITEMS)
+    resource_count: int = Field(ge=0, le=_MAX_INSPECTION_ITEMS)
+    resources: list[str] = Field(max_length=_MAX_INSPECTION_ITEMS)
+    exercised_tool_count: int = Field(ge=0, le=_MAX_INSPECTION_ITEMS)
+    exercised_tools: list[str] = Field(max_length=_MAX_INSPECTION_ITEMS)
+    request_mapping_count: int = Field(ge=0, le=_MAX_INSPECTION_ITEMS)
+
+    @model_validator(mode="after")
+    def counts_match_payloads(self) -> "_RuntimeCandidateInspection":
+        if self.tool_count != len(self.tools) or len(set(self.tools)) != len(self.tools):
+            raise ValueError("runtime validator returned an invalid tool listing")
+        if self.resource_count != len(self.resources) or len(set(self.resources)) != len(
+            self.resources
+        ):
+            raise ValueError("runtime validator returned an invalid resource listing")
+        if self.exercised_tool_count != len(self.exercised_tools) or not set(
+            self.exercised_tools
+        ) <= set(self.tools):
+            raise ValueError("runtime validator returned invalid exercise evidence")
+        if self.request_mapping_count != self.exercised_tool_count:
+            raise ValueError("runtime validator returned inconsistent mapping evidence")
+        return self
 
 
 class MCPValidationClient(AsyncClient):
@@ -116,20 +155,31 @@ class MCPValidationClient(AsyncClient):
         self,
         endpoint: str | None = None,
         *,
+        validator_endpoint: str | None = None,
         bearer_token: str | None = None,
         timeout_seconds: float = 30.0,
         max_pages: int = 100,
-        max_items: int = 10_000,
-        max_response_bytes: int = 10_000_000,
+        max_items: int = _MAX_INSPECTION_ITEMS,
+        max_response_bytes: int = _MAX_INSPECTION_RESPONSE_BYTES,
         allowed_hosts: frozenset[str] = frozenset(),
         allow_insecure_http: bool = False,
         resolver: AddressResolver = _system_resolver,
+        validator_transport: httpx2.AsyncBaseTransport | None = None,
     ) -> None:
         if timeout_seconds <= 0:
             raise ValueError("MCP timeout must be positive")
-        if max_pages < 1 or max_items < 1 or not 1_024 <= max_response_bytes <= 50_000_000:
-            raise ValueError("MCP inspection bounds must be positive")
+        if (
+            max_pages < 1
+            or not 1 <= max_items <= _MAX_INSPECTION_ITEMS
+            or not 1_024 <= max_response_bytes <= _MAX_INSPECTION_RESPONSE_BYTES
+        ):
+            raise ValueError("MCP inspection bounds are outside supported limits")
         self._endpoint = endpoint
+        self._validator_endpoint = (
+            self._validate_validator_endpoint(validator_endpoint)
+            if validator_endpoint is not None
+            else None
+        )
         self._bearer_token = self._validate_token(bearer_token)
         self._timeout_seconds = timeout_seconds
         self._max_pages = max_pages
@@ -138,6 +188,7 @@ class MCPValidationClient(AsyncClient):
         self._allowed_hosts = frozenset(self._normalize_hostname(host) for host in allowed_hosts)
         self._allow_insecure_http = allow_insecure_http
         self._resolver = resolver
+        self._validator_transport = validator_transport
 
     async def health(self) -> bool:
         if self._endpoint is None:
@@ -210,86 +261,75 @@ class MCPValidationClient(AsyncClient):
                 "MCP endpoint did not complete protocol validation"
             ) from exc
 
-    async def inspect_manifest(self, manifest: MCPManifest) -> MCPInspection:
-        """Round-trip generated list payloads using the official MCP models.
+    async def inspect_manifest(
+        self,
+        manifest: MCPManifest,
+        *,
+        runtime_version: str,
+    ) -> MCPInspection:
+        """Execute a candidate through the separately pinned generic-runtime validator."""
 
-        Build validation happens before a runtime exists. This catches SDK-level
-        protocol incompatibilities without introducing another manifest model or
-        pretending that an endpoint has already been deployed.
-        """
-
-        enabled_tools = manifest.enabled_tools()
+        if self._validator_endpoint is None:
+            raise ProtocolValidationError("Pinned generic-runtime validation is not configured")
+        payload = manifest.model_dump_json(by_alias=True).encode("utf-8")
+        expected_sha256 = hashlib.sha256(payload).hexdigest()
         try:
-            if len({tool.name for tool in enabled_tools}) != len(enabled_tools):
-                raise ValueError("duplicate tool names")
-            if len({str(resource.uri) for resource in manifest.resources}) != len(
-                manifest.resources
-            ):
-                raise ValueError("duplicate resource URIs")
-            tools = [
-                Tool.model_validate(
-                    {
-                        "name": tool.name,
-                        "title": tool.title,
-                        "description": tool.description,
-                        "inputSchema": tool.input_schema,
-                        "outputSchema": tool.output_schema,
-                    }
-                )
-                for tool in enabled_tools
-            ]
-            resources = [
-                Resource.model_validate(
-                    {
-                        "name": resource.name,
-                        "title": resource.name,
-                        "uri": resource.uri,
-                        "description": resource.description,
-                        "mimeType": resource.mime_type,
-                        "size": len(resource.content.encode("utf-8")),
-                    }
-                )
-                for resource in manifest.resources
-            ]
-            tool_result = ListToolsResult(tools=tools)
-            resource_result = ListResourcesResult(resources=resources)
-            decoded_tools = ListToolsResult.model_validate_json(tool_result.model_dump_json())
-            decoded_resources = ListResourcesResult.model_validate_json(
-                resource_result.model_dump_json()
-            )
-            for source, decoded in zip(enabled_tools, decoded_tools.tools, strict=True):
-                if (
-                    source.name != decoded.name
-                    or source.title != decoded.title
-                    or source.description != decoded.description
-                    or source.input_schema != decoded.input_schema
-                    or source.output_schema != decoded.output_schema
-                ):
-                    raise ValueError("tool contract changed during MCP serialization")
-            for source, decoded in zip(
-                manifest.resources,
-                decoded_resources.resources,
-                strict=True,
-            ):
-                if (
-                    source.name != decoded.name
-                    or str(source.uri) != str(decoded.uri)
-                    or source.description != decoded.description
-                    or source.mime_type != decoded.mime_type
-                    or len(source.content.encode("utf-8")) != decoded.size
-                ):
-                    raise ValueError("resource contract changed during MCP serialization")
-        except (PydanticValidationError, TypeError, ValueError) as exc:
+            async with asyncio.timeout(self._timeout_seconds):
+                async with httpx2.AsyncClient(
+                    follow_redirects=False,
+                    timeout=httpx2.Timeout(self._timeout_seconds),
+                    trust_env=False,
+                    transport=(
+                        self._validator_transport
+                        or _BoundedHttpTransport(max_bytes=self._max_response_bytes)
+                    ),
+                ) as http:
+                    response = await http.post(
+                        self._validator_endpoint,
+                        content=payload,
+                        headers={"Content-Type": "application/json"},
+                    )
+                    body = await response.aread()
+        except TimeoutError as exc:
+            raise ProtocolValidationError("Pinned generic-runtime validation timed out") from exc
+        except (httpx2.HTTPError, httpx2.StreamError) as exc:
             raise ProtocolValidationError(
-                "Generated manifest is incompatible with the pinned MCP SDK"
+                "Pinned generic-runtime validator could not be reached"
             ) from exc
-        return {
-            "protocol_version": None,
-            "tool_count": len(decoded_tools.tools),
-            "tools": [tool.name for tool in decoded_tools.tools],
-            "resource_count": len(decoded_resources.resources),
-            "resources": [str(resource.uri) for resource in decoded_resources.resources],
-        }
+        if response.status_code != 200:
+            raise ProtocolValidationError("Pinned generic runtime rejected the generated manifest")
+        try:
+            inspected = _RuntimeCandidateInspection.model_validate_json(body)
+        except ValidationError as exc:
+            raise ProtocolValidationError(
+                "Pinned generic-runtime validator returned invalid evidence"
+            ) from exc
+        if (
+            inspected.tool_count > self._max_items
+            or inspected.resource_count > self._max_items
+            or inspected.exercised_tool_count > self._max_items
+        ):
+            raise ProtocolValidationError(
+                "Pinned generic-runtime validator exceeded its configured item limit"
+            )
+        enabled_names = [tool.name for tool in manifest.enabled_tools()]
+        resource_uris = [str(resource.uri) for resource in manifest.resources]
+        if inspected.runtime_version != runtime_version:
+            raise ProtocolValidationError("Pinned generic-runtime version does not match the build")
+        if inspected.manifest_sha256 != expected_sha256:
+            raise ProtocolValidationError(
+                "Pinned generic runtime validated different manifest bytes"
+            )
+        if inspected.tools != enabled_names or inspected.resources != resource_uris:
+            raise ProtocolValidationError("Pinned generic-runtime listing changed the manifest")
+        if (
+            inspected.exercised_tool_count != len(enabled_names)
+            or inspected.exercised_tools != enabled_names
+        ):
+            raise ProtocolValidationError(
+                "Pinned generic runtime did not exercise every enabled request mapping"
+            )
+        return cast(MCPInspection, inspected.model_dump(mode="python"))
 
     async def _list_tools(self, client: Client) -> list[Tool]:
         values: list[Tool] = []
@@ -416,6 +456,27 @@ class MCPValidationClient(AsyncClient):
             authority=authority,
             hostname=hostname,
         )
+
+    @staticmethod
+    def _validate_validator_endpoint(value: str) -> str:
+        if not value or len(value) > 2_048 or any(character in value for character in "\r\n\x00"):
+            raise ValueError("runtime validator endpoint is invalid")
+        parsed = urlsplit(value)
+        try:
+            _ = parsed.port
+        except ValueError as exc:
+            raise ValueError("runtime validator endpoint is invalid") from exc
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.path != "/validate"
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError("runtime validator endpoint must be an HTTP(S) /validate URL")
+        return value
 
     @staticmethod
     def _normalize_hostname(value: str) -> str:

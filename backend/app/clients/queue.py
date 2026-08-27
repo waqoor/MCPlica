@@ -30,18 +30,11 @@ class DeploymentQueueClient(AsyncClient):
         except Exception:
             return False
 
-    async def enqueue_deploy(self, deployment_id: UUID) -> None:
+    async def enqueue_runtime_command(self, command_id: UUID, dispatch_attempt: int) -> None:
         await self._enqueue(
-            "app.jobs.deploy.run_deployment_job",
-            deployment_id,
-            job_id=f"mcplica-deploy-{deployment_id}",
-        )
-
-    async def enqueue_stop(self, deployment_id: UUID) -> None:
-        await self._enqueue(
-            "app.jobs.deploy.run_stop_deployment_job",
-            deployment_id,
-            job_id=f"mcplica-stop-{deployment_id}",
+            "app.jobs.deploy.run_runtime_command_job",
+            command_id,
+            job_id=f"mcplica-runtime-command-{command_id}-{dispatch_attempt}",
         )
 
     async def _enqueue(self, function: str, deployment_id: UUID, *, job_id: str) -> None:

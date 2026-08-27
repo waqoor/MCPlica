@@ -12,6 +12,7 @@ from mcp_contracts import (
     ParameterMapping,
     RequestBodyMapping,
     RequestMapping,
+    ResponseDefinition,
     RuntimeSecretBundle,
     ServerDefinition,
     UpstreamCredential,
@@ -67,6 +68,16 @@ def _tool(
         title=name,
         description=f"Acceptance mapping for {method.value}",
         input_schema=input_schema,
+        output_schema={
+            "type": "object",
+            "required": ["status", "contentType", "body"],
+            "properties": {
+                "status": {"type": "integer"},
+                "contentType": {"type": "string"},
+                "body": {},
+            },
+        },
+        responses=[ResponseDefinition(status_code="200", media_type="application/json")],
         operation_key=f"operation_{name}",
         request_mapping=RequestMapping(
             server_ref="main",
@@ -164,6 +175,20 @@ async def test_executor_maps_all_required_methods_and_body_encodings() -> None:
                 ),
             ],
         ),
+        _tool(
+            "trace_item",
+            HttpMethod.TRACE,
+            path="/items/{item_id}",
+            properties={"item_id": {"type": "string"}},
+            parameters=[
+                ParameterMapping(
+                    tool_field="item_id",
+                    source_name="item_id",
+                    target=ParameterTarget.PATH,
+                    required=True,
+                )
+            ],
+        ),
     ]
     fixture = _fixture()
     manifest = fixture.model_copy(
@@ -202,10 +227,18 @@ async def test_executor_maps_all_required_methods_and_body_encodings() -> None:
             },
         )
         await executor.execute("delete_item", {"item_id": "item-1", "trace": "trace-1"})
+        await executor.execute("trace_item", {"item_id": "item-2"})
     finally:
         await executor.close()
 
-    assert [request.method for request in requests] == ["GET", "POST", "PUT", "PATCH", "DELETE"]
+    assert [request.method for request in requests] == [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+        "TRACE",
+    ]
     assert str(requests[0].url).endswith("/api/items/a%2Fb?tag=new")
     assert json.loads(requests[1].content) == {"name": "Ada"}
     assert requests[2].headers["content-type"] == "application/x-www-form-urlencoded"
@@ -214,3 +247,4 @@ async def test_executor_maps_all_required_methods_and_body_encodings() -> None:
     assert b"document.txt" in requests[3].content
     assert b"document" in requests[3].content
     assert requests[4].headers["x-trace-id"] == "trace-1"
+    assert requests[5].url.path == "/api/items/item-2"

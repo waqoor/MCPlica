@@ -1,4 +1,4 @@
-import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Clipboard,
   KeyRound,
@@ -8,12 +8,21 @@ import {
   Square,
   Trash2,
 } from "lucide-react";
-import { useMemo, useState } from "react";
-import type { Deployment, McpAccessToken, McpAuthMode } from "@/api/contracts";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import type {
+  Build,
+  Deployment,
+  DeploymentPage,
+  McpAccessConfig,
+  McpAccessToken,
+  McpAuthMode,
+} from "@/api/contracts";
 import { deploymentApi } from "@/api/deployments";
 import { buildApi } from "@/api/builds";
-import { settingsApi } from "@/api/settings";
-import { useAuth } from "@/auth/use-auth";
+import { useCapabilities } from "@/auth/capabilities";
+import { MutationError } from "@/components/error-notice";
+import { OneTimeSecretDialog } from "@/components/one-time-secret-dialog";
 import { QueryError, QueryPending } from "@/components/query-state";
 import {
   BuildStatusBadge,
@@ -27,57 +36,109 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { FieldError, FieldHelp, Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { useProject } from "@/features/projects/project-context";
 import { formatDate, shortenHash } from "@/lib/format";
-import { buildCanDeploy, canDeploy } from "@/lib/lifecycle";
+import {
+  hasRollbackCapability,
+  resolveDeploymentState,
+} from "@/lib/deployment-state";
+import { buildCanDeploy } from "@/lib/lifecycle";
+import {
+  buildMcpAuthModePayload,
+  OIDC_SIGNING_ALGORITHMS,
+} from "@/lib/mcp-access-form";
+import {
+  mcpTokenLifecycle,
+  tokenExpirationToIso,
+} from "@/lib/mcp-token-lifecycle";
 
 export function ProjectDeploymentPage() {
   const project = useProject();
-  const { user } = useAuth();
+  const capabilities = useCapabilities();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const rawDeploymentPage = Number(searchParams.get("deployment_page") ?? "1");
+  const deploymentPage =
+    Number.isInteger(rawDeploymentPage) && rawDeploymentPage > 0
+      ? rawDeploymentPage
+      : 1;
   const [oneTimeToken, setOneTimeToken] = useState<McpAccessToken | null>(null);
-  const [selectedBuild, setSelectedBuild] = useState("");
   const [confirm, setConfirm] = useState<{
     action: "stop" | "restart" | "rollback" | "revoke";
     item: Deployment | McpAccessToken;
   } | null>(null);
-  const [builds, deployments, access, settings] = useQueries({
-    queries: [
-      {
-        queryKey: ["projects", project.id, "builds"],
-        queryFn: ({ signal }: { signal: AbortSignal }) =>
-          buildApi.list(project.id, signal),
-      },
-      {
-        queryKey: ["projects", project.id, "deployments"],
-        queryFn: ({ signal }: { signal: AbortSignal }) =>
-          deploymentApi.list(project.id, signal),
-        refetchInterval: 5_000,
-      },
-      {
-        queryKey: ["projects", project.id, "mcp-access"],
-        queryFn: ({ signal }: { signal: AbortSignal }) =>
-          deploymentApi.access(project.id, signal),
-      },
-      {
-        queryKey: ["settings"],
-        queryFn: ({ signal }: { signal: AbortSignal }) =>
-          settingsApi.get(signal),
-        retry: false,
-      },
+  const builds = useQuery<readonly Build[]>({
+    queryKey: ["projects", project.id, "builds"],
+    queryFn: ({ signal }) => buildApi.list(project.id, signal),
+  });
+  const deployments = useQuery<DeploymentPage>({
+    queryKey: ["projects", project.id, "deployments", { deploymentPage }],
+    queryFn: ({ signal }) =>
+      deploymentApi.listPage(
+        project.id,
+        { page: deploymentPage, page_size: 25 },
+        signal,
+      ),
+    refetchInterval: (query) => (query.state.data?.has_active ? 5_000 : false),
+  });
+  const access = useQuery<McpAccessConfig>({
+    queryKey: [
+      "projects",
+      project.id,
+      "mcp-access",
+      capabilities.canManageMcpAccess ? "admin" : "status",
     ],
+    queryFn: ({ signal }) =>
+      capabilities.canManageMcpAccess
+        ? deploymentApi.access(project.id, signal)
+        : deploymentApi.accessStatus(project.id, signal),
+    refetchInterval: (query) =>
+      query.state.data?.runtime_effect_state === "pending" ||
+      query.state.data?.tokens?.some(
+        (token) => token.runtime_effect_state === "pending",
+      )
+        ? 5_000
+        : false,
+  });
+  const activeDeployment = useQuery<Deployment>({
+    queryKey: ["deployments", project.active_deployment_id],
+    queryFn: ({ signal }) =>
+      deploymentApi.get(project.active_deployment_id!, signal),
+    enabled: Boolean(project.active_deployment_id),
+    refetchInterval: (query) =>
+      query.state.data &&
+      ["PENDING", "DEPLOYING", "HEALTHCHECK", "STOPPING"].includes(
+        query.state.data.status,
+      )
+        ? 5_000
+        : false,
   });
   const readyBuilds = useMemo(
     () => builds.data?.filter((build) => build.status === "READY") ?? [],
     [builds.data],
   );
-  const buildId = selectedBuild || readyBuilds[0]?.id || "";
-  const permitted = canDeploy(
-    user,
-    settings.data?.builders_can_deploy ?? false,
-  );
+  const buildSequence = (id: string) =>
+    builds.data?.find((build) => build.id === id)?.sequence;
+  const buildLabel = (id: string) => {
+    const sequence = buildSequence(id);
+    return sequence === undefined ? "Build unavailable" : `Build #${sequence}`;
+  };
+  const requestedBuildId = searchParams.get("build") ?? "";
+  const buildId =
+    readyBuilds.find((build) => build.id === requestedBuildId)?.id ??
+    readyBuilds[0]?.id ??
+    "";
+
+  useEffect(() => {
+    if (!builds.data || requestedBuildId === buildId) return;
+    const next = new URLSearchParams(searchParams);
+    if (buildId) next.set("build", buildId);
+    else next.delete("build");
+    setSearchParams(next, { replace: true });
+  }, [buildId, builds.data, requestedBuildId, searchParams, setSearchParams]);
+  const permitted = capabilities.canDeploy;
   const invalidate = () =>
     Promise.all([
       queryClient.invalidateQueries({
@@ -85,6 +146,12 @@ export function ProjectDeploymentPage() {
       }),
       queryClient.invalidateQueries({
         queryKey: ["projects", project.id, "mcp-access"],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ["projects", project.id],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ["deployments"],
       }),
     ]);
   const deploy = useMutation({
@@ -107,7 +174,12 @@ export function ProjectDeploymentPage() {
     mutationFn: (id: string) => deploymentApi.revokeToken(project.id, id),
     onSuccess: invalidate,
   });
-  const latest = deployments.data?.[0];
+  const { active, newestCandidate: candidate } =
+    resolveDeploymentState<Deployment>(
+      project.active_deployment_id,
+      deployments.data?.items,
+      activeDeployment.data,
+    );
   const actionError =
     deploy.error ??
     stop.error ??
@@ -115,7 +187,12 @@ export function ProjectDeploymentPage() {
     rollback.error ??
     revokeToken.error;
 
-  if (builds.isPending || deployments.isPending || access.isPending)
+  if (
+    builds.isPending ||
+    deployments.isPending ||
+    access.isPending ||
+    (project.active_deployment_id && activeDeployment.isPending)
+  )
     return <QueryPending label="Loading deployment state" />;
   if (builds.error)
     return (
@@ -131,6 +208,13 @@ export function ProjectDeploymentPage() {
   if (access.error)
     return (
       <QueryError error={access.error} onRetry={() => void access.refetch()} />
+    );
+  if (activeDeployment.error)
+    return (
+      <QueryError
+        error={activeDeployment.error}
+        onRetry={() => void activeDeployment.refetch()}
+      />
     );
 
   function confirmAction() {
@@ -169,37 +253,34 @@ export function ProjectDeploymentPage() {
                 replacement.
               </p>
             </div>
-            {latest ? (
-              <DeploymentStatusBadge status={latest.status} />
+            {active ? (
+              <DeploymentStatusBadge status={active.status} />
             ) : (
               <Badge>Not deployed</Badge>
             )}
           </CardHeader>
-          {latest ? (
+          {active ? (
             <dl className="space-y-3 text-sm">
               <Fact
                 label="Endpoint"
-                value={latest.endpoint_url ?? `https://${latest.hostname}/mcp`}
+                value={active.endpoint_url ?? `https://${active.hostname}/mcp`}
                 mono
               />
               <Fact
                 label="Health"
                 value={
-                  <HealthBadge status={latest.health_status ?? latest.status} />
+                  <HealthBadge status={active.health_status ?? active.status} />
                 }
               />
-              <Fact
-                label="Build"
-                value={`#${latest.build_sequence ?? latest.build_id}`}
-              />
+              <Fact label="Build" value={buildLabel(active.build_id)} />
               <Fact
                 label="Image"
-                value={latest.image_digest ?? latest.image_ref}
+                value={active.image_digest ?? active.image_ref}
                 mono
               />
               <Fact
                 label="Manifest"
-                value={shortenHash(latest.manifest_sha256)}
+                value={shortenHash(active.manifest_sha256)}
                 mono
               />
             </dl>
@@ -210,11 +291,11 @@ export function ProjectDeploymentPage() {
               title="No active runtime"
             />
           )}
-          {latest && (
+          {active && (
             <div className="mt-5 flex flex-wrap gap-2 border-t border-border pt-4">
               <Button
-                disabled={!permitted || latest.status === "STOPPED"}
-                onClick={() => setConfirm({ action: "restart", item: latest })}
+                disabled={!permitted || active.status !== "running"}
+                onClick={() => setConfirm({ action: "restart", item: active })}
                 size="sm"
                 variant="outline"
               >
@@ -222,18 +303,18 @@ export function ProjectDeploymentPage() {
                 Restart
               </Button>
               <Button
-                disabled={!permitted || latest.status === "STOPPED"}
-                onClick={() => setConfirm({ action: "stop", item: latest })}
+                disabled={!permitted || active.status !== "running"}
+                onClick={() => setConfirm({ action: "stop", item: active })}
                 size="sm"
                 variant="destructive"
               >
                 <Square aria-hidden="true" className="size-4" />
                 Stop
               </Button>
-              {latest.endpoint_url && (
+              {active.endpoint_url && (
                 <Button
                   onClick={() =>
-                    void navigator.clipboard.writeText(latest.endpoint_url!)
+                    void navigator.clipboard.writeText(active.endpoint_url!)
                   }
                   size="sm"
                   variant="ghost"
@@ -260,7 +341,11 @@ export function ProjectDeploymentPage() {
             <Select
               disabled={!readyBuilds.length}
               id="deploy-build"
-              onChange={(event) => setSelectedBuild(event.target.value)}
+              onChange={(event) => {
+                const next = new URLSearchParams(searchParams);
+                next.set("build", event.target.value);
+                setSearchParams(next);
+              }}
               value={buildId}
             >
               {readyBuilds.length ? (
@@ -288,7 +373,7 @@ export function ProjectDeploymentPage() {
             >
               {deploy.isPending
                 ? "Starting replacement…"
-                : latest
+                : active
                   ? "Deploy replacement"
                   : "Deploy runtime"}
             </Button>
@@ -310,15 +395,25 @@ export function ProjectDeploymentPage() {
           )}
         </Card>
       </div>
-      <AccessConfiguration
-        access={access.data}
-        onChanged={invalidate}
-        onToken={setOneTimeToken}
-        oneTimeToken={oneTimeToken}
-        projectId={project.id}
-        onRevoke={(token) => setConfirm({ action: "revoke", item: token })}
-      />
-      {actionError && <Alert tone="danger">{actionError.message}</Alert>}
+      {candidate && (
+        <Alert title="Newest deployment candidate" tone="info">
+          {buildLabel(candidate.build_id)} is {candidate.status.toLowerCase()}.
+          It is shown separately because the project still identifies{" "}
+          {active ? `deployment ${active.id}` : "no deployment"} as active.
+        </Alert>
+      )}
+      {capabilities.canManageMcpAccess ? (
+        <AccessConfiguration
+          access={access.data}
+          onChanged={invalidate}
+          onToken={setOneTimeToken}
+          projectId={project.id}
+          onRevoke={(token) => setConfirm({ action: "revoke", item: token })}
+        />
+      ) : (
+        <AccessStatus access={access.data} />
+      )}
+      {actionError && <MutationError error={actionError} />}
       <Card>
         <CardHeader>
           <div>
@@ -329,7 +424,7 @@ export function ProjectDeploymentPage() {
             </p>
           </div>
         </CardHeader>
-        {deployments.data.length ? (
+        {deployments.data.items.length ? (
           <div className="max-w-full overflow-x-auto">
             <table className="w-full min-w-[46rem] text-left">
               <thead className="font-mono text-[0.64rem] uppercase tracking-[0.1em] text-muted">
@@ -344,15 +439,13 @@ export function ProjectDeploymentPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {deployments.data.map((deployment) => (
+                {deployments.data.items.map((deployment) => (
                   <tr key={deployment.id}>
                     <td className="py-3 text-sm text-muted">
                       {formatDate(deployment.created_at)}
                     </td>
                     <td className="py-3 text-sm text-foreground">
-                      #
-                      {deployment.build_sequence ??
-                        deployment.build_id.slice(0, 8)}
+                      {buildLabel(deployment.build_id)}
                     </td>
                     <td className="py-3">
                       <DeploymentStatusBadge status={deployment.status} />
@@ -361,28 +454,64 @@ export function ProjectDeploymentPage() {
                       <HealthBadge status={deployment.health_status} />
                     </td>
                     <td className="py-3 text-right">
-                      {deployment.id !== latest?.id &&
-                        deployment.status !== "FAILED" && (
-                          <Button
-                            disabled={!permitted}
-                            onClick={() =>
-                              setConfirm({
-                                action: "rollback",
-                                item: deployment,
-                              })
-                            }
-                            size="sm"
-                            variant="ghost"
-                          >
-                            <RotateCcw aria-hidden="true" className="size-4" />
-                            Rollback
-                          </Button>
-                        )}
+                      {deployment.id === active?.id ? (
+                        <Badge tone="success">Active runtime</Badge>
+                      ) : hasRollbackCapability(deployment) ? (
+                        <Button
+                          disabled={!permitted}
+                          onClick={() =>
+                            setConfirm({
+                              action: "rollback",
+                              item: deployment,
+                            })
+                          }
+                          size="sm"
+                          variant="ghost"
+                        >
+                          <RotateCcw aria-hidden="true" className="size-4" />
+                          Rollback
+                        </Button>
+                      ) : deployment.id === candidate?.id ? (
+                        <Badge>Newest candidate</Badge>
+                      ) : null}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            {deployments.data.total > deployments.data.page_size && (
+              <div className="mt-4 flex items-center justify-between">
+                <Button
+                  disabled={deploymentPage === 1}
+                  onClick={() => {
+                    const next = new URLSearchParams(searchParams);
+                    next.set("deployment_page", String(deploymentPage - 1));
+                    setSearchParams(next);
+                  }}
+                  variant="outline"
+                >
+                  Previous
+                </Button>
+                <span className="text-xs text-muted">
+                  Page {deployments.data.page} · {deployments.data.total}{" "}
+                  deployments
+                </span>
+                <Button
+                  disabled={
+                    deploymentPage * deployments.data.page_size >=
+                    deployments.data.total
+                  }
+                  onClick={() => {
+                    const next = new URLSearchParams(searchParams);
+                    next.set("deployment_page", String(deploymentPage + 1));
+                    setSearchParams(next);
+                  }}
+                  variant="outline"
+                >
+                  Next
+                </Button>
+              </div>
+            )}
           </div>
         ) : (
           <p className="text-sm text-muted">
@@ -390,6 +519,10 @@ export function ProjectDeploymentPage() {
           </p>
         )}
       </Card>
+      <OneTimeSecretDialog
+        onAcknowledged={() => setOneTimeToken(null)}
+        secret={oneTimeToken?.token ?? null}
+      />
       <Dialog
         description="This lifecycle change is durable and creates an audit event."
         onClose={() => setConfirm(null)}
@@ -426,17 +559,72 @@ export function ProjectDeploymentPage() {
   );
 }
 
+function AccessStatus({
+  access,
+}: {
+  access: Awaited<ReturnType<typeof deploymentApi.accessStatus>>;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <div>
+          <CardTitle>MCP inbound access</CardTitle>
+          <p className="mt-1 text-xs text-muted">
+            Builders can inspect deployment readiness without receiving token
+            inventory or verifier details.
+          </p>
+        </div>
+        <Badge
+          tone={
+            access.runtime_effect_state === "failed"
+              ? "danger"
+              : access.runtime_effect_state === "pending"
+                ? "warning"
+                : access.configured
+                  ? "success"
+                  : "warning"
+          }
+        >
+          {access.runtime_effect_state === "failed"
+            ? "Runtime update failed"
+            : access.runtime_effect_state === "pending"
+              ? "Runtime update pending"
+              : access.configured
+                ? "Ready"
+                : "Administrator action required"}
+        </Badge>
+      </CardHeader>
+      <Alert
+        tone={
+          access.runtime_effect_state === "failed"
+            ? "danger"
+            : access.configured && access.runtime_effect_state === "effective"
+              ? "info"
+              : "warning"
+        }
+      >
+        {access.runtime_effect_state === "failed"
+          ? `The latest inbound-auth runtime transition failed${access.runtime_error_code ? ` (${access.runtime_error_code})` : ""}. Ask an administrator to remediate it before deployment.`
+          : access.runtime_effect_state === "pending"
+            ? "The saved inbound-auth change is still pending at the runtime boundary. The previous authorization remains authoritative."
+            : access.configured
+              ? "Inbound MCP access is configured. Secret values and verifier details remain administrator-only."
+              : (access.remediation ??
+                "Ask an administrator to configure inbound MCP access.")}
+      </Alert>
+    </Card>
+  );
+}
+
 function AccessConfiguration({
   access,
   projectId,
-  oneTimeToken,
   onToken,
   onChanged,
   onRevoke,
 }: {
   access: Awaited<ReturnType<typeof deploymentApi.access>>;
   projectId: string;
-  oneTimeToken: McpAccessToken | null;
   onToken: (token: McpAccessToken) => void;
   onChanged: () => Promise<unknown>;
   onRevoke: (token: McpAccessToken) => void;
@@ -445,25 +633,53 @@ function AccessConfiguration({
   const [issuer, setIssuer] = useState(access.issuer_url ?? "");
   const [audiences, setAudiences] = useState(access.audiences.join(", "));
   const [scopes, setScopes] = useState(access.required_scopes.join(", "));
+  const [jwksUrl, setJwksUrl] = useState(access.jwks_url ?? "");
+  const [algorithms, setAlgorithms] = useState(
+    access.allowed_algorithms.join(", "),
+  );
   const [tokenName, setTokenName] = useState("Primary MCP client");
+  const [tokenExpiry, setTokenExpiry] = useState("");
+  const [overlapSeconds, setOverlapSeconds] = useState(300);
+  const authPayload = buildMcpAuthModePayload({
+    mode,
+    issuerUrl: issuer,
+    audiences,
+    requiredScopes: scopes,
+    jwksUrl,
+    allowedAlgorithms: algorithms,
+  });
+  const authIssue = authPayload.success
+    ? null
+    : (authPayload.error.issues[0]?.message ?? "Complete the OIDC settings.");
+  const tokenExpiration = tokenExpirationToIso(tokenExpiry);
+  const rotationValid =
+    Number.isInteger(overlapSeconds) &&
+    overlapSeconds >= 0 &&
+    overlapSeconds <= 900;
   const configure = useMutation({
-    mutationFn: () =>
-      deploymentApi.setAuthMode(projectId, {
-        mode,
-        issuer_url: issuer || undefined,
-        audiences: audiences
-          .split(",")
-          .map((value) => value.trim())
-          .filter(Boolean),
-        required_scopes: scopes
-          .split(",")
-          .map((value) => value.trim())
-          .filter(Boolean),
-      }),
+    mutationFn: () => {
+      if (!authPayload.success)
+        throw new Error(authIssue ?? "Invalid settings");
+      return deploymentApi.setAuthMode(projectId, authPayload.data);
+    },
     onSuccess: onChanged,
   });
   const create = useMutation({
-    mutationFn: () => deploymentApi.createToken(projectId, { name: tokenName }),
+    mutationFn: () =>
+      deploymentApi.createToken(projectId, {
+        name: tokenName.trim(),
+        expires_at: tokenExpiration.value,
+      }),
+    onSuccess: (token) => {
+      onToken(token);
+      void onChanged();
+    },
+  });
+  const rotate = useMutation({
+    mutationFn: (token: McpAccessToken) => {
+      if (!rotationValid) throw new Error("Rotation overlap is invalid");
+      return deploymentApi.rotateToken(projectId, token.id, overlapSeconds);
+    },
     onSuccess: (token) => {
       onToken(token);
       void onChanged();
@@ -479,10 +695,36 @@ function AccessConfiguration({
             revealing.
           </p>
         </div>
-        <Badge tone={access.configured ? "success" : "warning"}>
-          {access.configured ? "Configured" : "Required"}
+        <Badge
+          tone={
+            access.runtime_effect_state === "failed"
+              ? "danger"
+              : access.runtime_effect_state === "pending"
+                ? "warning"
+                : access.configured
+                  ? "success"
+                  : "warning"
+          }
+        >
+          {access.runtime_effect_state === "failed"
+            ? "Runtime update failed"
+            : access.runtime_effect_state === "pending"
+              ? "Runtime update pending"
+              : access.configured
+                ? "Configured"
+                : "Required"}
         </Badge>
       </CardHeader>
+      {access.runtime_effect_state !== "effective" && (
+        <Alert
+          className="mb-4"
+          tone={access.runtime_effect_state === "failed" ? "danger" : "warning"}
+        >
+          {access.runtime_effect_state === "failed"
+            ? `The inbound-auth runtime transition failed${access.runtime_error_code ? ` (${access.runtime_error_code})` : ""}. The prior runtime authorization remains effective until remediation succeeds.`
+            : "The inbound-auth setting is persisted, but it is not effective until runtime replacement or shutdown completes."}
+        </Alert>
+      )}
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="auth-mode">Authentication mode</Label>
@@ -503,6 +745,12 @@ function AccessConfiguration({
             <div className="space-y-2">
               <Label htmlFor="issuer-url">Issuer URL</Label>
               <Input
+                aria-invalid={
+                  !authPayload.success &&
+                  authPayload.error.issues.some(
+                    (issue) => issue.path[0] === "issuer_url",
+                  )
+                }
                 id="issuer-url"
                 onChange={(event) => setIssuer(event.target.value)}
                 type="url"
@@ -512,6 +760,12 @@ function AccessConfiguration({
             <div className="space-y-2">
               <Label htmlFor="audiences">Audiences</Label>
               <Input
+                aria-invalid={
+                  !authPayload.success &&
+                  authPayload.error.issues.some(
+                    (issue) => issue.path[0] === "audiences",
+                  )
+                }
                 id="audiences"
                 onChange={(event) => setAudiences(event.target.value)}
                 placeholder="api://mcplica"
@@ -526,15 +780,59 @@ function AccessConfiguration({
                 placeholder="mcp:invoke"
                 value={scopes}
               />
+              <FieldHelp>
+                Comma-separated. Leave blank if no scope is required.
+              </FieldHelp>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="jwks-url">JWKS URL (optional)</Label>
+              <Input
+                aria-invalid={
+                  !authPayload.success &&
+                  authPayload.error.issues.some(
+                    (issue) => issue.path[0] === "jwks_url",
+                  )
+                }
+                id="jwks-url"
+                onChange={(event) => setJwksUrl(event.target.value)}
+                placeholder="https://issuer.example/.well-known/jwks.json"
+                type="url"
+                value={jwksUrl}
+              />
+              <FieldHelp>
+                Leave blank to use OIDC discovery from the issuer.
+              </FieldHelp>
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="allowed-algorithms">
+                Allowed signing algorithms (optional)
+              </Label>
+              <Input
+                aria-invalid={
+                  !authPayload.success &&
+                  authPayload.error.issues.some(
+                    (issue) => issue.path[0] === "allowed_algorithms",
+                  )
+                }
+                id="allowed-algorithms"
+                onChange={(event) => setAlgorithms(event.target.value)}
+                placeholder="RS256, ES256"
+                value={algorithms}
+              />
+              <FieldHelp>
+                Comma-separated allowlist: {OIDC_SIGNING_ALGORITHMS.join(", ")}.
+                Blank uses the server default.
+              </FieldHelp>
             </div>
           </>
         )}
       </div>
+      {mode === "external_oauth_oidc" && authIssue && (
+        <FieldError className="mt-3">{authIssue}</FieldError>
+      )}
       <Button
         className="mt-4"
-        disabled={
-          configure.isPending || (mode === "external_oauth_oidc" && !issuer)
-        }
+        disabled={configure.isPending || !authPayload.success}
         onClick={() => configure.mutate()}
         variant="outline"
       >
@@ -542,84 +840,200 @@ function AccessConfiguration({
       </Button>
       {mode === "static_bearer" && (
         <div className="mt-6 border-t border-border pt-5">
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <div className="flex-1">
-              <Label className="sr-only" htmlFor="access-token-name">
-                Token name
-              </Label>
+          <form
+            className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
+            onSubmit={(event) => {
+              event.preventDefault();
+              create.mutate();
+            }}
+          >
+            <div className="space-y-2">
+              <Label htmlFor="access-token-name">Token name</Label>
               <Input
                 id="access-token-name"
                 onChange={(event) => setTokenName(event.target.value)}
                 value={tokenName}
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="access-token-expiry">Expires (optional)</Label>
+              <Input
+                aria-invalid={Boolean(tokenExpiration.error)}
+                id="access-token-expiry"
+                onChange={(event) => setTokenExpiry(event.target.value)}
+                type="datetime-local"
+                value={tokenExpiry}
+              />
+            </div>
             <Button
-              disabled={!tokenName.trim() || create.isPending}
-              onClick={() => create.mutate()}
+              disabled={
+                !tokenName.trim() ||
+                Boolean(tokenExpiration.error) ||
+                create.isPending
+              }
+              type="submit"
             >
               Create token
             </Button>
+            {tokenExpiration.error && (
+              <FieldError className="sm:col-span-3">
+                {tokenExpiration.error}
+              </FieldError>
+            )}
+          </form>
+          <div className="mt-5 max-w-sm space-y-2">
+            <Label htmlFor="rotation-overlap">Rotation overlap (seconds)</Label>
+            <Input
+              aria-invalid={!rotationValid}
+              id="rotation-overlap"
+              max={900}
+              min={0}
+              onChange={(event) =>
+                setOverlapSeconds(event.currentTarget.valueAsNumber)
+              }
+              type="number"
+              value={Number.isNaN(overlapSeconds) ? "" : overlapSeconds}
+            />
+            <FieldHelp>
+              The replaced token remains valid for this interval while clients
+              switch. Use 0 for immediate revocation; maximum 900 seconds.
+            </FieldHelp>
+            {!rotationValid && (
+              <FieldError>Enter a whole number from 0 through 900.</FieldError>
+            )}
           </div>
-          {oneTimeToken?.token && (
-            <Alert className="mt-4" title="Copy this token now" tone="warning">
-              <p>
-                It is shown once. Store it in the external MCP client's secret
-                manager.
-              </p>
-              <div className="mt-3 flex gap-2">
-                <code className="min-w-0 flex-1 overflow-x-auto rounded bg-canvas p-2 font-mono text-xs text-foreground">
-                  {oneTimeToken.token}
-                </code>
-                <Button
-                  aria-label="Copy token"
-                  onClick={() =>
-                    void navigator.clipboard.writeText(oneTimeToken.token!)
-                  }
-                  size="icon"
-                  variant="outline"
-                >
-                  <Clipboard aria-hidden="true" className="size-4" />
-                </Button>
-              </div>
-            </Alert>
-          )}
           <div className="mt-4 space-y-2">
-            {access.tokens
-              ?.filter((token) => !token.revoked_at)
-              .map((token) => (
-                <div
-                  className="flex items-center justify-between rounded-md border border-border bg-input px-3 py-2"
+            {access.tokens?.length ? (
+              access.tokens.map((token) => (
+                <AccessTokenRow
                   key={token.id}
-                >
-                  <div>
-                    <p className="text-sm text-foreground">{token.name}</p>
-                    <p className="font-mono text-xs text-muted">
-                      {token.token_prefix}… · rotated{" "}
-                      {formatDate(token.created_at)}
-                    </p>
-                  </div>
-                  <Button
-                    aria-label={`Revoke ${token.name}`}
-                    onClick={() => onRevoke(token)}
-                    size="icon"
-                    variant="ghost"
-                  >
-                    <Trash2
-                      aria-hidden="true"
-                      className="size-4 text-danger-soft"
-                    />
-                  </Button>
-                </div>
-              ))}
+                  onRevoke={onRevoke}
+                  onRotate={(candidate) => rotate.mutate(candidate)}
+                  rotationDisabled={!rotationValid || rotate.isPending}
+                  token={token}
+                />
+              ))
+            ) : (
+              <p className="text-sm text-muted">
+                No static bearer tokens have been issued.
+              </p>
+            )}
           </div>
         </div>
       )}
-      {(configure.error || create.error) && (
-        <Alert className="mt-4" tone="danger">
-          {configure.error?.message ?? create.error?.message}
-        </Alert>
+      {(configure.error || create.error || rotate.error) && (
+        <MutationError
+          error={configure.error ?? create.error ?? rotate.error}
+        />
       )}
     </Card>
+  );
+}
+
+function AccessTokenRow({
+  token,
+  rotationDisabled,
+  onRotate,
+  onRevoke,
+}: {
+  readonly token: McpAccessToken;
+  readonly rotationDisabled: boolean;
+  readonly onRotate: (token: McpAccessToken) => void;
+  readonly onRevoke: (token: McpAccessToken) => void;
+}) {
+  const lifecycle = mcpTokenLifecycle(token);
+  const lifecycleLabel =
+    lifecycle === "active"
+      ? "Active"
+      : lifecycle === "expired"
+        ? "Expired"
+        : "Revoked";
+  const runtimeMessage =
+    token.runtime_effect_state === "effective"
+      ? null
+      : token.runtime_effect_state === "failed"
+        ? `Runtime update failed${token.runtime_error_code ? ` (${token.runtime_error_code})` : ""}`
+        : "Runtime update pending";
+  return (
+    <div className="rounded-md border border-border bg-input p-3">
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-medium text-foreground">{token.name}</p>
+            <Badge
+              tone={
+                lifecycle === "active"
+                  ? "success"
+                  : lifecycle === "expired"
+                    ? "warning"
+                    : "neutral"
+              }
+            >
+              {lifecycleLabel}
+            </Badge>
+          </div>
+          <p className="mt-1 break-all font-mono text-xs text-muted">
+            {token.token_prefix}…
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {lifecycle === "active" && (
+            <Button
+              aria-label={`Rotate ${token.name}`}
+              disabled={rotationDisabled}
+              onClick={() => onRotate(token)}
+              size="sm"
+              variant="outline"
+            >
+              <RefreshCw aria-hidden="true" className="size-4" />
+              Rotate
+            </Button>
+          )}
+          {lifecycle !== "revoked" && (
+            <Button
+              aria-label={`Revoke ${token.name}`}
+              onClick={() => onRevoke(token)}
+              size="sm"
+              variant="ghost"
+            >
+              <Trash2 aria-hidden="true" className="size-4 text-danger-soft" />
+              Revoke
+            </Button>
+          )}
+        </div>
+      </div>
+      <dl className="mt-3 grid gap-2 border-t border-border pt-3 text-xs sm:grid-cols-3">
+        <div>
+          <dt className="text-muted">Created</dt>
+          <dd className="mt-1 text-foreground">
+            {formatDate(token.created_at)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted">Expires</dt>
+          <dd className="mt-1 text-foreground">
+            {formatDate(token.expires_at)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted">Last used</dt>
+          <dd className="mt-1 text-foreground">
+            {formatDate(token.last_used_at)}
+          </dd>
+        </div>
+      </dl>
+      {runtimeMessage && (
+        <p
+          className={
+            token.runtime_effect_state === "failed"
+              ? "mt-3 text-xs text-danger-soft"
+              : "mt-3 text-xs text-warning-soft"
+          }
+        >
+          {runtimeMessage}
+        </p>
+      )}
+    </div>
   );
 }
 

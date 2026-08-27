@@ -20,7 +20,11 @@ from app.clients.docker import (
 )
 from app.clients.runtime_files import RuntimeFilesClient, RuntimeMounts
 from app.core.config import Settings
-from app.core.exceptions import DockerOperationError, SecretMaterializationError
+from app.core.exceptions import (
+    DockerOperationError,
+    RuntimeHealthError,
+    SecretMaterializationError,
+)
 from app.domain.deployments import DeploymentRecord, DeploymentStatus
 from app.services.deployment.runtime_manager import RuntimeManager
 from app.services.deployment.service import is_retryable_deployment_error
@@ -96,6 +100,7 @@ async def test_runtime_files_are_bounded_immutable_and_host_mapped(tmp_path: Pat
     assert mounts == RuntimeMounts(
         f"/srv/mcplica/runtime/{deployment_id}/manifest.json",
         f"/srv/mcplica/runtime/{deployment_id}/runtime-secrets.json",
+        hashlib.sha256(_secret_bundle().serialize_for_secret_mount()).hexdigest(),
     )
     manifest_path = worker_root / str(deployment_id) / "manifest.json"
     secret_path = worker_root / str(deployment_id) / "runtime-secrets.json"
@@ -146,6 +151,9 @@ class _RecordingDocker:
         self.spec: RuntimeContainerSpec | None = None
         self.network_cleanup: tuple[str, str, str] | None = None
         self.route_probe: tuple[str, str, str, str, str, bool] | None = None
+        self.inspect_result: ContainerInfo | None = ContainerInfo(
+            "container-1", "runtime", "running", "healthy", "sha256:runtime"
+        )
 
     async def ensure_network(self, name: str, *, project_id: str, edge_container_name: str) -> None:
         self.events.append("network")
@@ -167,6 +175,12 @@ class _RecordingDocker:
     async def start_container(self, name: str) -> ContainerInfo:
         self.events.append("start")
         return ContainerInfo("container-1", name, "running", "starting", "")
+
+    async def inspect_container(self, name: str) -> ContainerInfo | None:
+        result = self.inspect_result
+        if result is None:
+            return None
+        return ContainerInfo(result.id, name, result.status, result.health, result.image_id)
 
     async def wait_until_healthy(
         self,
@@ -230,7 +244,7 @@ async def test_runtime_manager_builds_hardened_project_scoped_spec_and_waits_for
     deployment = _deployment()
     provisioned = await manager.provision(
         deployment,
-        RuntimeMounts("/host/manifest.json", "/host/runtime-secrets.json"),
+        RuntimeMounts("/host/manifest.json", "/host/runtime-secrets.json", "3" * 64),
     )
 
     assert docker.events == [
@@ -244,6 +258,9 @@ async def test_runtime_manager_builds_hardened_project_scoped_spec_and_waits_for
     ]
     assert provisioned.health_status == "healthy"
     assert provisioned.image_digest == "sha256:runtime"
+    assert provisioned.activation_proof.container_id == provisioned.container_id
+    assert provisioned.activation_proof.image_digest == provisioned.image_digest
+    assert provisioned.activation_proof.deployment_id == deployment.id
     assert docker.spec is not None
     assert docker.spec.network == deployment.network_name
     assert docker.spec.user == f"{settings.runtime_uid}:{settings.runtime_gid}"
@@ -279,6 +296,51 @@ async def test_runtime_manager_builds_hardened_project_scoped_spec_and_waits_for
         str(deployment.project_id),
         settings.traefik_container_name,
     )
+
+
+@pytest.mark.asyncio
+async def test_activation_retry_revalidates_exact_candidate_before_cleanup() -> None:
+    docker = _RecordingDocker()
+    settings = Settings(env="test")
+    manager = RuntimeManager(docker, settings)
+    deployment = _deployment().model_copy(
+        update={"container_id": "container-1", "image_digest": "sha256:runtime"}
+    )
+
+    proof = await manager.revalidate_activation_candidate(deployment)
+    assert proof.deployment_id == deployment.id
+    assert proof.container_id == "container-1"
+    assert docker.route_probe is not None
+    assert docker.route_probe[3:5] == (str(deployment.build_id), str(deployment.id))
+
+    docker.inspect_result = ContainerInfo(
+        "replacement-container", "runtime", "running", "healthy", "sha256:runtime"
+    )
+    with pytest.raises(RuntimeHealthError, match="identity changed"):
+        await manager.revalidate_activation_candidate(deployment)
+
+    docker.inspect_result = None
+    with pytest.raises(RuntimeHealthError, match="no longer exists"):
+        await manager.revalidate_activation_candidate(deployment)
+
+
+@pytest.mark.asyncio
+async def test_activation_predecessor_is_restarted_and_edge_proved_before_restore() -> None:
+    docker = _RecordingDocker()
+    docker.inspect_result = ContainerInfo(
+        "container-1", "runtime", "exited", None, "sha256:runtime"
+    )
+    manager = RuntimeManager(docker, Settings(env="test"))
+    deployment = _deployment().model_copy(
+        update={"container_id": "container-1", "image_digest": "sha256:runtime"}
+    )
+
+    proof = await manager.restore_activation_predecessor(deployment)
+
+    assert proof.deployment_id == deployment.id
+    assert docker.events == ["start", "healthy", "route"]
+    assert docker.route_probe is not None
+    assert docker.route_probe[3:5] == (str(deployment.build_id), str(deployment.id))
 
 
 def _existing_container_attrs(spec: RuntimeContainerSpec) -> dict[str, object]:

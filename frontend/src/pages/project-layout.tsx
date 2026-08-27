@@ -12,6 +12,8 @@ export function ProjectLayout() {
     queryKey: ["projects", projectId],
     queryFn: ({ signal }) => projectApi.get(projectId!, signal),
     enabled: Boolean(projectId),
+    refetchInterval: (query) =>
+      query.state.data?.runtime_effect_state === "pending" ? 2_000 : false,
   });
 
   if (project.isPending) return <QueryPending label="Loading project" />;
@@ -36,9 +38,23 @@ export function ProjectLayout() {
             <span>{project.data.name}</span>
             <Badge
               className="ml-1"
-              tone={project.data.is_enabled ? "success" : "neutral"}
+              tone={
+                project.data.runtime_effect_state === "failed"
+                  ? "danger"
+                  : project.data.runtime_effect_state === "pending"
+                    ? "warning"
+                    : project.data.is_enabled
+                      ? "success"
+                      : "neutral"
+              }
             >
-              {project.data.is_enabled ? "Enabled" : "Disabled"}
+              {project.data.runtime_effect_state === "failed"
+                ? "Runtime transition failed"
+                : project.data.runtime_effect_state === "pending"
+                  ? "Runtime transition pending"
+                  : project.data.is_enabled
+                    ? "Enabled"
+                    : "Disabled"}
             </Badge>
           </div>
           <div className="mb-5 flex flex-col justify-between gap-2 sm:flex-row sm:items-end">

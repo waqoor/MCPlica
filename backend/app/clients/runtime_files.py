@@ -17,6 +17,7 @@ from app.core.exceptions import SecretMaterializationError
 class RuntimeMounts:
     manifest_path: str
     secret_bundle_path: str
+    auth_overlay_sha256: str
 
 
 class RuntimeFilesClient(AsyncClient):
@@ -104,6 +105,7 @@ class RuntimeFilesClient(AsyncClient):
         if len(manifest_bytes) > self._max_manifest_bytes:
             raise SecretMaterializationError("Runtime manifest exceeds its configured limit")
         secret_bytes = secret_bundle.serialize_for_secret_mount()
+        auth_overlay_sha256 = hashlib.sha256(secret_bytes).hexdigest()
         if len(secret_bytes) > self._max_secret_bundle_bytes:
             raise SecretMaterializationError("Runtime secret bundle exceeds its configured limit")
         if hashlib.sha256(manifest_bytes).hexdigest() != manifest_sha256:
@@ -124,6 +126,7 @@ class RuntimeFilesClient(AsyncClient):
         return RuntimeMounts(
             f"{host_directory}/manifest.json",
             f"{host_directory}/runtime-secrets.json",
+            auth_overlay_sha256,
         )
 
     def _write_exact(self, destination: Path, value: bytes, *, mode: int) -> None:

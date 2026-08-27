@@ -58,6 +58,7 @@ def _config(*, include_documentation: bool = False) -> BuildConfiguration:
         runtime_timeout_ms=30_000,
         runtime_max_request_bytes=10_000,
         runtime_max_response_bytes=10_000,
+        runtime_manifest_max_bytes=10_000,
         artifact_max_bytes=100_000,
     )
 

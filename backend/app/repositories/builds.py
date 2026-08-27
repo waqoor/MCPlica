@@ -4,7 +4,7 @@ from uuid import UUID
 
 from mcp_contracts.json_types import JsonObject
 from pydantic import TypeAdapter
-from sqlalchemy import CursorResult, func, select, update
+from sqlalchemy import CursorResult, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, InvalidStateError
@@ -18,18 +18,33 @@ from app.domain.builds import (
     next_status,
 )
 from app.models.build import Build, BuildAIRun, BuildSourceVersion
+from app.models.indexing import DocumentIndexGeneration
 from app.models.project import Project
+from app.repositories.cleanup import lock_object_reference
 
 _JSON_OBJECT: TypeAdapter[JsonObject] = TypeAdapter(JsonObject)
 
 
+def _release_admission_values(now: datetime) -> dict[str, object | None]:
+    return {
+        "admission_token": None,
+        "admission_enqueued_at": None,
+        "admission_heartbeat_at": None,
+        "admission_lease_expires_at": None,
+        "admission_released_at": now,
+    }
+
+
 def _to_domain(model: Build) -> BuildRecord:
+    config = BuildConfiguration.model_validate(model.build_config_json)
     return BuildRecord(
         id=model.id,
         project_id=model.project_id,
         sequence=model.sequence,
         status=model.status,
+        pipeline_stage=model.pipeline_stage,
         trigger=model.trigger,
+        executable_configuration_sha256=(config.executable_configuration_sha256),
         canonical_snapshot_id=model.canonical_snapshot_id,
         previous_build_id=model.previous_build_id,
         compiler_version=model.compiler_version,
@@ -51,6 +66,16 @@ def _to_domain(model: Build) -> BuildRecord:
         created_at=model.created_at,
         started_at=model.started_at,
         completed_at=model.completed_at,
+        cancellation_requested_at=model.cancellation_requested_at,
+        cancellation_requested_by=model.cancellation_requested_by,
+        cancellation_acknowledged_at=model.cancellation_acknowledged_at,
+        admission_token=model.admission_token,
+        admission_acquired_at=model.admission_acquired_at,
+        admission_enqueued_at=model.admission_enqueued_at,
+        admission_heartbeat_at=model.admission_heartbeat_at,
+        admission_lease_expires_at=model.admission_lease_expires_at,
+        admission_released_at=model.admission_released_at,
+        admission_attempt_count=model.admission_attempt_count,
     )
 
 
@@ -101,6 +126,23 @@ class BuildRepository:
             )
         )
         return _to_domain(model) if model else None
+
+    async def get_many_with_configs(
+        self,
+        session: AsyncSession,
+        build_ids: list[UUID],
+    ) -> dict[UUID, tuple[BuildRecord, BuildConfiguration]]:
+        """Load bounded build metadata without one query per source summary."""
+        if not build_ids:
+            return {}
+        models = list(await session.scalars(select(Build).where(Build.id.in_(set(build_ids)))))
+        return {
+            model.id: (
+                _to_domain(model),
+                BuildConfiguration.model_validate(model.build_config_json),
+            )
+            for model in models
+        }
 
     async def latest_ready(
         self,
@@ -164,6 +206,32 @@ class BuildRepository:
         )
         return [_to_domain(model) for model in result]
 
+    async def count_all(
+        self,
+        session: AsyncSession,
+        *,
+        project_id: UUID | None = None,
+        status: BuildStatus | None = None,
+    ) -> int:
+        statement = select(func.count(Build.id))
+        if project_id is not None:
+            statement = statement.where(Build.project_id == project_id)
+        if status is not None:
+            statement = statement.where(Build.status == status)
+        return int(await session.scalar(statement) or 0)
+
+    async def status_counts(
+        self,
+        session: AsyncSession,
+        *,
+        project_id: UUID | None = None,
+    ) -> dict[BuildStatus, int]:
+        statement = select(Build.status, func.count(Build.id))
+        if project_id is not None:
+            statement = statement.where(Build.project_id == project_id)
+        rows = await session.execute(statement.group_by(Build.status))
+        return {status: int(count) for status, count in rows.tuples()}
+
     async def create(
         self,
         session: AsyncSession,
@@ -205,6 +273,7 @@ class BuildRepository:
             project_id=project_id,
             sequence=sequence,
             status=BuildStatus.QUEUED,
+            pipeline_stage=BuildStatus.QUEUED,
             trigger=trigger,
             previous_build_id=previous,
             compiler_version=compiler_version,
@@ -271,16 +340,23 @@ class BuildRepository:
             raise InvalidStateError(
                 f"Build transition {expected.value} -> {target.value} is not monotonic"
             )
-        values: dict[str, object] = {"status": target}
+        values: dict[str, object] = {"status": target, "pipeline_stage": target}
         now = datetime.now(UTC)
         if expected is BuildStatus.QUEUED:
             values["started_at"] = now
         if target in TERMINAL_STATUSES:
             values["completed_at"] = now
+            values.update(_release_admission_values(now))
         result = cast(
             CursorResult[Any],
             await session.execute(
-                update(Build).where(Build.id == build_id, Build.status == expected).values(**values)
+                update(Build)
+                .where(
+                    Build.id == build_id,
+                    Build.status == expected,
+                    Build.cancellation_requested_at.is_(None),
+                )
+                .values(**values)
             ),
         )
         if result.rowcount != 1:
@@ -360,6 +436,7 @@ class BuildRepository:
         manifest_sha256: str,
         manifest_storage_key: str,
     ) -> None:
+        await lock_object_reference(session, manifest_storage_key)
         await self._stage_update(
             session,
             build_id,
@@ -376,6 +453,7 @@ class BuildRepository:
         artifact_sha256: str,
         artifact_storage_key: str,
     ) -> None:
+        await lock_object_reference(session, artifact_storage_key)
         await self._stage_update(
             session,
             build_id,
@@ -392,14 +470,20 @@ class BuildRepository:
         error_code: str,
         error_summary: str,
     ) -> None:
+        now = datetime.now(UTC)
         await session.execute(
             update(Build)
-            .where(Build.id == build_id, Build.status.not_in(TERMINAL_STATUSES))
+            .where(
+                Build.id == build_id,
+                Build.status.not_in(TERMINAL_STATUSES),
+                Build.cancellation_requested_at.is_(None),
+            )
             .values(
                 status=BuildStatus.FAILED,
                 error_code=error_code[:128],
                 error_summary=error_summary[:1000],
-                completed_at=datetime.now(UTC),
+                completed_at=now,
+                **_release_admission_values(now),
             )
         )
 
@@ -411,17 +495,62 @@ class BuildRepository:
             target=BuildStatus.READY,
         )
 
-    async def cancel(self, session: AsyncSession, build_id: UUID) -> BuildRecord:
+    async def request_cancellation(
+        self,
+        session: AsyncSession,
+        build_id: UUID,
+        *,
+        requested_by: UUID,
+    ) -> BuildRecord:
+        model = await session.scalar(select(Build).where(Build.id == build_id).with_for_update())
+        if model is None:
+            raise InvalidStateError("Build is unavailable")
+        if model.status in TERMINAL_STATUSES:
+            raise InvalidStateError("Only an active Build can be cancelled")
+        if model.cancellation_requested_at is None:
+            model.cancellation_requested_at = datetime.now(UTC)
+            model.cancellation_requested_by = requested_by
+            await session.flush()
+            await session.refresh(model)
+        return _to_domain(model)
+
+    async def cancellation_requested(self, session: AsyncSession, build_id: UUID) -> bool:
+        requested_at = await session.scalar(
+            select(Build.cancellation_requested_at).where(Build.id == build_id)
+        )
+        return requested_at is not None
+
+    async def acknowledge_cancellation(self, session: AsyncSession, build_id: UUID) -> BuildRecord:
+        now = datetime.now(UTC)
         result = cast(
             CursorResult[Any],
             await session.execute(
                 update(Build)
-                .where(Build.id == build_id, Build.status.not_in(TERMINAL_STATUSES))
-                .values(status=BuildStatus.CANCELLED, completed_at=datetime.now(UTC))
+                .where(
+                    Build.id == build_id,
+                    Build.status.not_in(TERMINAL_STATUSES),
+                    Build.cancellation_requested_at.is_not(None),
+                )
+                .values(
+                    status=BuildStatus.CANCELLED,
+                    completed_at=now,
+                    cancellation_acknowledged_at=now,
+                    manifest_sha256=None,
+                    manifest_storage_key=None,
+                    artifact_sha256=None,
+                    artifact_storage_key=None,
+                    **_release_admission_values(now),
+                )
             ),
         )
         if result.rowcount != 1:
-            raise InvalidStateError("Only an active Build can be cancelled")
+            model = await session.get(Build, build_id)
+            if model is not None and model.status is BuildStatus.CANCELLED:
+                return _to_domain(model)
+            raise InvalidStateError("Build cancellation is not pending acknowledgement")
+        await session.execute(
+            delete(DocumentIndexGeneration).where(DocumentIndexGeneration.build_id == build_id)
+        )
         model = await session.get(Build, build_id)
         assert model is not None
         return _to_domain(model)
@@ -437,7 +566,13 @@ class BuildRepository:
         result = cast(
             CursorResult[Any],
             await session.execute(
-                update(Build).where(Build.id == build_id, Build.status == status).values(**values)
+                update(Build)
+                .where(
+                    Build.id == build_id,
+                    Build.status == status,
+                    Build.cancellation_requested_at.is_(None),
+                )
+                .values(**values)
             ),
         )
         if result.rowcount != 1:

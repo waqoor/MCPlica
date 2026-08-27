@@ -4,6 +4,7 @@ from app.api import (
     audit,
     auth,
     builds,
+    cleanup,
     credentials,
     deployments,
     health,
@@ -26,3 +27,4 @@ router.include_router(mcp_access.router)
 router.include_router(settings.router)
 router.include_router(audit.router)
 router.include_router(builds.router)
+router.include_router(cleanup.router)

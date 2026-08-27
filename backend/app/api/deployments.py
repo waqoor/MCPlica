@@ -9,31 +9,54 @@ from fastapi.responses import StreamingResponse
 
 from app.api.deps import CsrfProtection, CurrentPrincipal, DeployerPrincipal, deployment_service
 from app.domain.deployments import DeploymentRecord, DeploymentStatus
-from app.schemas.deployment import DeploymentCreate, DeploymentRead, DeploymentRollback
+from app.schemas.deployment import (
+    DeploymentCreate,
+    DeploymentPageRead,
+    DeploymentRead,
+    DeploymentRollback,
+)
 from app.services.deployment.service import DeploymentService
 
 router = APIRouter(tags=["deployments"])
 
 
-def _read(request: Request, deployment: DeploymentRecord) -> DeploymentRead:
+def _read(
+    request: Request,
+    deployment: DeploymentRecord,
+    *,
+    active_deployment_id: UUID | None,
+) -> DeploymentRead:
     return DeploymentRead.from_record(
         deployment,
         tls=bool(request.app.state.settings.traefik_tls),
+        active_deployment_id=active_deployment_id,
     )
 
 
-@router.get("/projects/{project_id}/deployments", response_model=list[DeploymentRead])
+@router.get("/projects/{project_id}/deployments", response_model=DeploymentPageRead)
 async def list_deployments(
     project_id: UUID,
     request: Request,
     _principal: CurrentPrincipal,
     service: Annotated[DeploymentService, Depends(deployment_service)],
-    limit: Annotated[int, Query(ge=1, le=500)] = 100,
-    offset: Annotated[int, Query(ge=0)] = 0,
-) -> list[DeploymentRead]:
-    return [
-        _read(request, item) for item in await service.list(project_id, limit=limit, offset=offset)
-    ]
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> DeploymentPageRead:
+    active_deployment_id = await service.active_deployment_id(project_id)
+    deployments, total, has_active = await service.page(
+        project_id,
+        limit=page_size,
+        offset=(page - 1) * page_size,
+    )
+    return DeploymentPageRead(
+        items=[
+            _read(request, item, active_deployment_id=active_deployment_id) for item in deployments
+        ],
+        total=total,
+        page=page,
+        page_size=page_size,
+        has_active=has_active,
+    )
 
 
 @router.post(
@@ -55,7 +78,11 @@ async def create_deployment(
         actor_user_id=principal.user.id,
         request_id=request.state.request_id,
     )
-    return _read(request, deployment)
+    return _read(
+        request,
+        deployment,
+        active_deployment_id=await service.active_deployment_id(project_id),
+    )
 
 
 @router.get("/deployments/{deployment_id}", response_model=DeploymentRead)
@@ -65,7 +92,12 @@ async def get_deployment(
     _principal: CurrentPrincipal,
     service: Annotated[DeploymentService, Depends(deployment_service)],
 ) -> DeploymentRead:
-    return _read(request, await service.get(deployment_id))
+    deployment = await service.get(deployment_id)
+    return _read(
+        request,
+        deployment,
+        active_deployment_id=await service.active_deployment_id(deployment.project_id),
+    )
 
 
 @router.post(
@@ -85,7 +117,11 @@ async def stop_deployment(
         actor_user_id=principal.user.id,
         request_id=request.state.request_id,
     )
-    return _read(request, deployment)
+    return _read(
+        request,
+        deployment,
+        active_deployment_id=await service.active_deployment_id(deployment.project_id),
+    )
 
 
 @router.post(
@@ -105,7 +141,11 @@ async def restart_deployment(
         actor_user_id=principal.user.id,
         request_id=request.state.request_id,
     )
-    return _read(request, deployment)
+    return _read(
+        request,
+        deployment,
+        active_deployment_id=await service.active_deployment_id(deployment.project_id),
+    )
 
 
 @router.post(
@@ -127,7 +167,11 @@ async def rollback_deployment(
         actor_user_id=principal.user.id,
         request_id=request.state.request_id,
     )
-    return _read(request, deployment)
+    return _read(
+        request,
+        deployment,
+        active_deployment_id=await service.active_deployment_id(project_id),
+    )
 
 
 @router.get("/deployments/{deployment_id}/events")
@@ -137,11 +181,22 @@ async def deployment_events(
     _principal: CurrentPrincipal,
     service: Annotated[DeploymentService, Depends(deployment_service)],
 ) -> StreamingResponse:
+    # Resolve before response headers are committed.  Missing resources must
+    # use the normal structured 404 envelope, never a 200 stream that aborts on
+    # its first iterator step.
+    initial = await service.get(deployment_id)
+
     async def stream() -> AsyncGenerator[str]:
         previous: str | None = None
-        while not await request.is_disconnected():
-            deployment = await service.get(deployment_id)
-            payload = _read(request, deployment).model_dump(mode="json")
+        deployment = initial
+        while True:
+            if await request.is_disconnected():
+                return
+            payload = _read(
+                request,
+                deployment,
+                active_deployment_id=await service.active_deployment_id(deployment.project_id),
+            ).model_dump(mode="json")
             serialized = json.dumps(payload, separators=(",", ":"))
             if serialized != previous:
                 yield f"event: deployment\ndata: {serialized}\n\n"
@@ -154,6 +209,7 @@ async def deployment_events(
             }:
                 return
             await asyncio.sleep(1)
+            deployment = await service.get(deployment_id)
 
     return StreamingResponse(
         stream(),

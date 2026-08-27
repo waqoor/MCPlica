@@ -18,6 +18,7 @@ secret_bundle = load_secret_bundle(
     settings.secret_bundle_path,
     max_bytes=settings.max_secret_bundle_bytes,
     require_secure_permissions=settings.require_secure_secret_permissions,
+    expected_sha256=settings.auth_overlay_sha256,
 )
 app = build_app(manifest, secret_bundle, settings)
 

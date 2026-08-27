@@ -110,9 +110,12 @@ def test_read_schemas_accept_domain_records_without_exposing_internal_fields() -
         auth_schemes=["bearerAuth"],
         errors=[
             SourceIssueRecord(
+                source_version_id=version.id,
+                stage="parsing",
                 code="SOURCE_WARNING",
                 severity="warning",
                 message="Example warning",
+                pointer="#/paths",
             )
         ],
         index_status=IndexGenerationStatus.READY,
@@ -129,6 +132,8 @@ def test_read_schemas_accept_domain_records_without_exposing_internal_fields() -
     assert "key_version" not in CredentialRead.model_validate(credential).model_dump()
     assert UserRead.model_validate(user).id == user_id
     assert "password_hash" not in UserRead.model_validate(user).model_dump()
-    assert BuildRead.model_validate(build).id == build.id
-    assert "requested_by" not in BuildRead.model_validate(build).model_dump()
-    assert "manifest_storage_key" not in BuildRead.model_validate(build).model_dump()
+    build_read = BuildRead.model_validate(build)
+    assert build_read.id == build.id
+    assert build_read.canonical_snapshot_id is None
+    assert "requested_by" not in build_read.model_dump()
+    assert "manifest_storage_key" not in build_read.model_dump()

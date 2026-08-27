@@ -74,10 +74,10 @@ docs/                Authoritative implementation specifications
    make compose-up
    ```
 
-6. Sign in with the development defaults:
+6. Sign in with the development defaults read from `.env`:
 
-   - Email: `admin@admin.com`
-   - Password: `admin@321`
+   - `DEFAULT_ADMIN_EMAIL=admin@admin.com`
+   - `DEFAULT_ADMIN_PASSWORD=admin@321`
 
    - MCPlica UI: `http://localhost:8080`
    - Backend OpenAPI: `http://localhost:8000/docs`
@@ -86,9 +86,11 @@ docs/                Authoritative implementation specifications
    PostgreSQL, Redis, Milvus, etcd, and MinIO stay exclusively on the internal
    builder network and are intentionally not published on host ports.
 
-   These well-known credentials are development-only. The seed command refuses
-   to run outside `ENV=development`; production installation continues to use the
-   prompted bootstrap flow documented in `docs/operations/installation.md`.
+   These well-known credentials are development-only. The seed command and live
+   E2E workflows read the same values from `.env`; external `E2E_ADMIN_*` values
+   may override them in CI. Production configuration rejects `DEFAULT_ADMIN_*`,
+   and production installation continues to use the prompted bootstrap flow in
+   `docs/operations/installation.md`. The seed never resets an existing password.
 
 ## Local development without full Compose
 
@@ -141,7 +143,7 @@ Read these before changing product behavior:
 5. `docs/tech_stack.md`
 6. `docs/open_source_and_sponsorship_model.md`
 
-`docs/implementation_plan.md` is the execution order. `docs/README.md` indexes user, API, operations, security, and release documentation.
+`docs/implementation_plan.md` is the execution order. `docs/README.md` indexes user, API, operations, security, and release documentation. The evidence-backed second-round disposition of all 48 findings in `issues_001.md` (22 verified, 26 fixed, zero blocked) and the fresh repository/runtime verification snapshot are recorded in `docs/evidence/issues-001-closure.md`.
 
 ## License and contributions
 

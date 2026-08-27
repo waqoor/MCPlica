@@ -1,12 +1,12 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowRight, LockKeyhole } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { z } from "@/lib/schemas";
 import { useAuth } from "@/auth/use-auth";
 import { BrandLogo } from "@/components/brand-logo";
-import { Alert } from "@/components/ui/alert";
+import { ErrorNotice } from "@/components/error-notice";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,7 @@ export function LoginPage() {
   const { user, login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [submitError, setSubmitError] = useState<unknown>(null);
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
@@ -39,15 +40,14 @@ export function LoginPage() {
   if (user) return <Navigate replace to="/" />;
 
   async function submit(values: LoginValues) {
+    setSubmitError(null);
     try {
       await login(values);
       navigate(destination.startsWith("/") ? destination : "/", {
         replace: true,
       });
     } catch (error) {
-      form.setError("root", {
-        message: error instanceof Error ? error.message : "Sign-in failed.",
-      });
+      setSubmitError(error);
     }
   }
 
@@ -135,9 +135,13 @@ export function LoginPage() {
               )}
             </div>
 
-            {form.formState.errors.root && (
-              <Alert tone="danger">{form.formState.errors.root.message}</Alert>
-            )}
+            {submitError !== null ? (
+              <ErrorNotice
+                error={submitError}
+                nextStep="Verify the installation account and try again. Repeated failures are recorded for administrators."
+                title="Sign-in failed"
+              />
+            ) : null}
 
             <Button
               className="w-full"

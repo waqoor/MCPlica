@@ -25,8 +25,12 @@ _OPERATIONAL_SETTING_KEY = "operational_limits"
 
 
 class OperationalSettingsView(Protocol):
+    builders_can_deploy: bool
     mcp_base_domain: str
+    build_concurrency: int
     max_upload_bytes: int
+    source_retention_days: int | None
+    build_retention_count: int | None
 
 
 class OperationalSettingsProvider(Protocol):

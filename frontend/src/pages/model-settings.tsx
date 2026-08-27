@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { ModelSettings } from "@/api/contracts";
 import { settingsApi } from "@/api/settings";
 import { PageHeader } from "@/components/page-header";
+import { ErrorNotice, MutationError } from "@/components/error-notice";
 import { QueryError, QueryPending } from "@/components/query-state";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { FieldHelp, Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { UnsavedChangesGuard } from "@/components/unsaved-changes-guard";
 
 export function ModelSettingsPage() {
   const queryClient = useQueryClient();
@@ -31,7 +33,7 @@ export function ModelSettingsPage() {
   const [form, setForm] = useState<ModelSettings | null>(null);
   const [apiKey, setApiKey] = useState("");
   useEffect(() => {
-    if (settings.data) setForm(settings.data);
+    if (settings.data) setForm((current) => current ?? settings.data);
   }, [settings.data]);
   const save = useMutation({
     mutationFn: (value: ModelSettings) => settingsApi.updateModels(value),
@@ -48,7 +50,7 @@ export function ModelSettingsPage() {
     },
   });
   const test = useMutation({ mutationFn: settingsApi.testOpenRouter });
-  if (settings.isPending || catalog.isPending)
+  if (settings.isPending)
     return <QueryPending label="Loading model configuration" />;
   if (settings.error)
     return (
@@ -57,23 +59,22 @@ export function ModelSettingsPage() {
         onRetry={() => void settings.refetch()}
       />
     );
-  if (catalog.error)
-    return (
-      <QueryError
-        error={catalog.error}
-        onRetry={() => void catalog.refetch()}
-        title="Compatible model catalog could not be loaded"
-      />
-    );
   if (!form) return null;
-  const structuredModels = catalog.data.filter(
+  const structuredModels = (catalog.data ?? []).filter(
     (model) => model.supports_structured_outputs,
   );
-  const embeddingModels = catalog.data.filter(
+  const embeddingModels = (catalog.data ?? []).filter(
     (model) => model.supports_embeddings,
+  );
+  const dirty = Boolean(
+    settings.data &&
+    (JSON.stringify(form) !== JSON.stringify(settings.data) || apiKey),
   );
   return (
     <div className="space-y-7">
+      <UnsavedChangesGuard
+        active={dirty && !save.isPending && !rotateKey.isPending}
+      />
       <PageHeader
         description="OpenRouter is build-time intelligence only. These settings never enter a generated MCP runtime."
         eyebrow="Settings"
@@ -133,9 +134,7 @@ export function ModelSettingsPage() {
             </Button>
           </div>
           {(rotateKey.error || test.error) && (
-            <Alert className="mt-4" tone="danger">
-              {rotateKey.error?.message ?? test.error?.message}
-            </Alert>
+            <MutationError error={rotateKey.error ?? test.error} />
           )}
           {test.data && (
             <Alert className="mt-4" tone={test.data.ok ? "success" : "warning"}>
@@ -153,7 +152,19 @@ export function ModelSettingsPage() {
             </div>
           </CardHeader>
           <div className="space-y-4">
+            {catalog.isPending && (
+              <QueryPending label="Loading compatible model catalog" />
+            )}
+            {catalog.error && (
+              <ErrorNotice
+                error={catalog.error}
+                nextStep="Saved provider status and manual model identifiers remain editable below."
+                onRetry={() => void catalog.refetch()}
+                title="Compatible model catalog could not be loaded"
+              />
+            )}
             <ModelSelect
+              catalogAvailable={Boolean(catalog.data)}
               label="Analysis model"
               id="analysis-model"
               value={form.analysis_model ?? ""}
@@ -163,6 +174,7 @@ export function ModelSettingsPage() {
               }
             />
             <ModelSelect
+              catalogAvailable={Boolean(catalog.data)}
               label="Semantic validation model"
               id="validation-model"
               value={form.validation_model ?? ""}
@@ -172,6 +184,7 @@ export function ModelSettingsPage() {
               }
             />
             <ModelSelect
+              catalogAvailable={Boolean(catalog.data)}
               label="Embedding model"
               id="embedding-model"
               value={form.embedding_model ?? ""}
@@ -207,17 +220,16 @@ export function ModelSettingsPage() {
           </div>
           <Button
             className="mt-5"
-            disabled={save.isPending}
+            disabled={
+              save.isPending ||
+              JSON.stringify(form) === JSON.stringify(settings.data)
+            }
             onClick={() => save.mutate(form)}
           >
             <Save aria-hidden="true" className="size-4" />
             Save model policy
           </Button>
-          {save.error && (
-            <Alert className="mt-4" tone="danger">
-              {save.error.message}
-            </Alert>
-          )}
+          {save.error && <MutationError error={save.error} />}
           {save.isSuccess && (
             <Alert className="mt-4" tone="success">
               Model policy saved.
@@ -235,28 +247,42 @@ function ModelSelect({
   value,
   models,
   onChange,
+  catalogAvailable,
 }: {
   label: string;
   id: string;
   value: string;
   models: Array<{ id: string; name: string }>;
   onChange: (value: string) => void;
+  catalogAvailable: boolean;
 }) {
   return (
     <div className="space-y-2">
       <Label htmlFor={id}>{label}</Label>
-      <Select
-        id={id}
-        onChange={(event) => onChange(event.target.value)}
-        value={value}
-      >
-        <option value="">Select a compatible model</option>
-        {models.map((model) => (
-          <option key={model.id} value={model.id}>
-            {model.name} · {model.id}
-          </option>
-        ))}
-      </Select>
+      {catalogAvailable ? (
+        <Select
+          id={id}
+          onChange={(event) => onChange(event.target.value)}
+          value={value}
+        >
+          <option value="">Select a compatible model</option>
+          {value && !models.some((model) => model.id === value) && (
+            <option value={value}>Current: {value}</option>
+          )}
+          {models.map((model) => (
+            <option key={model.id} value={model.id}>
+              {model.name} · {model.id}
+            </option>
+          ))}
+        </Select>
+      ) : (
+        <Input
+          id={id}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="Provider model identifier"
+          value={value}
+        />
+      )}
     </div>
   );
 }

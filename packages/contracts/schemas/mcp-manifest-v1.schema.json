@@ -210,7 +210,8 @@
         "PATCH",
         "DELETE",
         "HEAD",
-        "OPTIONS"
+        "OPTIONS",
+        "TRACE"
       ],
       "title": "HttpMethod",
       "type": "string"
@@ -711,15 +712,29 @@
           "title": "Default Timeout Ms",
           "type": "integer"
         },
-        "inbound_auth_mode": {
-          "default": "static_bearer",
-          "enum": [
-            "static_bearer",
-            "oidc",
-            "none"
-          ],
-          "title": "Inbound Auth Mode",
+        "inbound_auth_boundary": {
+          "const": "deployment_overlay",
+          "default": "deployment_overlay",
+          "title": "Inbound Auth Boundary",
           "type": "string"
+        },
+        "inbound_auth_mode": {
+          "anyOf": [
+            {
+              "enum": [
+                "static_bearer",
+                "oidc",
+                "none"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "deprecated": true,
+          "title": "Inbound Auth Mode"
         }
       },
       "required": [

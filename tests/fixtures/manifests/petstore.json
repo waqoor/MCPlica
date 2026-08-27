@@ -18,9 +18,30 @@
       },
       "output_schema": {
         "type": "object",
-        "properties": {"id": {"type": "string"}, "name": {"type": "string"}},
-        "required": ["id", "name"]
+        "additionalProperties": false,
+        "properties": {
+          "status": {"type": "integer", "minimum": 200, "maximum": 299},
+          "contentType": {"type": "string"},
+          "body": {
+            "type": "object",
+            "properties": {"id": {"type": "string"}, "name": {"type": "string"}},
+            "required": ["id", "name"]
+          }
+        },
+        "required": ["status", "contentType", "body"]
       },
+      "responses": [
+        {
+          "status_code": "200",
+          "media_type": "application/json",
+          "schema": {
+            "type": "object",
+            "properties": {"id": {"type": "string"}, "name": {"type": "string"}},
+            "required": ["id", "name"]
+          },
+          "description": "Successful response"
+        }
+      ],
       "operation_key": "op_fixture_get_pet",
       "request_mapping": {
         "server_ref": "main",

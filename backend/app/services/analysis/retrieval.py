@@ -1,3 +1,4 @@
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -26,13 +27,13 @@ class RetrievalService:
         operation: CanonicalOperation,
         *,
         generation: DocumentIndexGenerationRecord,
-        enabled: bool,
+        include_documentation: bool,
         limit: int,
         max_context_chars: int,
+        cancellation_check: Callable[[], Awaitable[None]] | None = None,
     ) -> RetrievalContext:
         if (
-            not enabled
-            or generation.status is not IndexGenerationStatus.READY
+            generation.status is not IndexGenerationStatus.READY
             or generation.chunk_count == 0
             or generation.collection_name is None
             or generation.embedding_model is None
@@ -40,10 +41,14 @@ class RetrievalService:
         ):
             return RetrievalContext([], None)
         query = _query(operation)
+        if cancellation_check is not None:
+            await cancellation_check()
         embedded = await self._ai.embed(
             model=generation.embedding_model,
             texts=[query],
         )
+        if cancellation_check is not None:
+            await cancellation_check()
         if embedded.dimensions != generation.dimensions:
             raise IndexingError(
                 "Retrieval embedding dimensions do not match the indexed generation"
@@ -54,6 +59,7 @@ class RetrievalService:
             generation_id=generation.id,
             vector=embedded.vectors[0],
             limit=limit,
+            include_documentation=include_documentation,
         )
         chunks: list[DocumentChunk] = []
         consumed = 0

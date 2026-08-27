@@ -1,0 +1,472 @@
+{
+  "active_server_ref": "server_98f040a4ab3aeedd",
+  "description": null,
+  "documentation_refs": [],
+  "operations": [
+    {
+      "description": null,
+      "key": "op_2be87307d5f09e8e6cd46573",
+      "method": "POST",
+      "parameters": [],
+      "path_template": "/items",
+      "provenance": {
+        "executable_fields": {
+          "method": {
+            "pointer": "#/paths/~1items/post",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "path_template": {
+            "pointer": "#/paths/~1items",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "server_ref": {
+            "pointer": "#/servers/0",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          }
+        },
+        "operation": {
+          "pointer": "#/paths/~1items/post",
+          "source_version_id": "00000000-0000-0000-0000-000000000002"
+        }
+      },
+      "request_body": {
+        "content": [
+          {
+            "examples": [],
+            "media_type": "application/json",
+            "schema": {
+              "$defs": {
+                "mcplica_ref_02e28db53ae68b89b244": {
+                  "properties": {
+                    "attributes": {
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "type": "object"
+                    },
+                    "choice": {
+                      "anyOf": [
+                        {
+                          "oneOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "integer"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "labels": {
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "type": "array"
+                    },
+                    "nickname": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "score": {
+                      "exclusiveMinimum": 0,
+                      "maximum": 10,
+                      "type": "number"
+                    },
+                    "state": {
+                      "anyOf": [
+                        {
+                          "enum": [
+                            "active",
+                            "inactive"
+                          ],
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "score",
+                    "labels",
+                    "choice"
+                  ],
+                  "type": "object"
+                }
+              },
+              "$ref": "#/$defs/mcplica_ref_02e28db53ae68b89b244",
+              "$schema": "https://json-schema.org/draft/2020-12/schema"
+            },
+            "source_ref": {
+              "pointer": "#/paths/~1items/post/requestBody/content/application~1json",
+              "source_version_id": "00000000-0000-0000-0000-000000000002"
+            }
+          }
+        ],
+        "description": null,
+        "required": true,
+        "source_ref": {
+          "pointer": "#/paths/~1items/post/requestBody",
+          "source_version_id": "00000000-0000-0000-0000-000000000002"
+        }
+      },
+      "responses": [
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema": {
+                "$defs": {
+                  "mcplica_ref_02e28db53ae68b89b244": {
+                    "properties": {
+                      "attributes": {
+                        "additionalProperties": {
+                          "anyOf": [
+                            {
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "type": "object"
+                      },
+                      "choice": {
+                        "anyOf": [
+                          {
+                            "oneOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "integer"
+                              }
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "labels": {
+                        "items": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "type": "array"
+                      },
+                      "nickname": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "score": {
+                        "exclusiveMinimum": 0,
+                        "maximum": 10,
+                        "type": "number"
+                      },
+                      "state": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "active",
+                              "inactive"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "score",
+                      "labels",
+                      "choice"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "$ref": "#/$defs/mcplica_ref_02e28db53ae68b89b244",
+                "$schema": "https://json-schema.org/draft/2020-12/schema"
+              },
+              "source_ref": {
+                "pointer": "#/paths/~1items/post/responses/201/content/application~1json",
+                "source_version_id": "00000000-0000-0000-0000-000000000002"
+              }
+            }
+          ],
+          "description": "Created",
+          "source_ref": {
+            "pointer": "#/paths/~1items/post/responses/201",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "status_code": "201"
+        }
+      ],
+      "security": [],
+      "semantic": {
+        "category": null,
+        "confidence": null,
+        "description": null,
+        "documentation_chunk_ids": [],
+        "keywords": [],
+        "provenance": null,
+        "relationship_hints": [],
+        "title": null
+      },
+      "server_candidates": [
+        "server_98f040a4ab3aeedd"
+      ],
+      "server_ref": "server_98f040a4ab3aeedd",
+      "source_operation_id": "createItem",
+      "summary": null,
+      "tags": [],
+      "tool_name_seed": "create_item"
+    }
+  ],
+  "project_id": "00000000-0000-0000-0000-000000000001",
+  "provenance": {
+    "schema_dialect": {
+      "source": "openapi-3.0-schema-object",
+      "target": "https://json-schema.org/draft/2020-12/schema",
+      "transformations": [
+        {
+          "source_pointer": "#/components/schemas/FlexibleItem/properties/attributes/additionalProperties",
+          "transformation": "nullable"
+        },
+        {
+          "source_pointer": "#/components/schemas/FlexibleItem/properties/choice",
+          "transformation": "nullable"
+        },
+        {
+          "source_pointer": "#/components/schemas/FlexibleItem/properties/labels/items",
+          "transformation": "nullable"
+        },
+        {
+          "source_pointer": "#/components/schemas/FlexibleItem/properties/nickname",
+          "transformation": "nullable"
+        },
+        {
+          "source_pointer": "#/components/schemas/FlexibleItem/properties/score",
+          "transformation": "exclusiveMaximum"
+        },
+        {
+          "source_pointer": "#/components/schemas/FlexibleItem/properties/score",
+          "transformation": "exclusiveMinimum"
+        },
+        {
+          "source_pointer": "#/components/schemas/FlexibleItem/properties/state",
+          "transformation": "nullable"
+        },
+        {
+          "source_pointer": "#/paths/~1items/post/requestBody/content/application~1json/schema/$defs/mcplica_ref_02e28db53ae68b89b244/properties/attributes/additionalProperties",
+          "transformation": "nullable"
+        },
+        {
+          "source_pointer": "#/paths/~1items/post/requestBody/content/application~1json/schema/$defs/mcplica_ref_02e28db53ae68b89b244/properties/choice",
+          "transformation": "nullable"
+        },
+        {
+          "source_pointer": "#/paths/~1items/post/requestBody/content/application~1json/schema/$defs/mcplica_ref_02e28db53ae68b89b244/properties/labels/items",
+          "transformation": "nullable"
+        },
+        {
+          "source_pointer": "#/paths/~1items/post/requestBody/content/application~1json/schema/$defs/mcplica_ref_02e28db53ae68b89b244/properties/nickname",
+          "transformation": "nullable"
+        },
+        {
+          "source_pointer": "#/paths/~1items/post/requestBody/content/application~1json/schema/$defs/mcplica_ref_02e28db53ae68b89b244/properties/score",
+          "transformation": "exclusiveMaximum"
+        },
+        {
+          "source_pointer": "#/paths/~1items/post/requestBody/content/application~1json/schema/$defs/mcplica_ref_02e28db53ae68b89b244/properties/score",
+          "transformation": "exclusiveMinimum"
+        },
+        {
+          "source_pointer": "#/paths/~1items/post/requestBody/content/application~1json/schema/$defs/mcplica_ref_02e28db53ae68b89b244/properties/state",
+          "transformation": "nullable"
+        },
+        {
+          "source_pointer": "#/paths/~1items/post/responses/201/content/application~1json/schema/$defs/mcplica_ref_02e28db53ae68b89b244/properties/attributes/additionalProperties",
+          "transformation": "nullable"
+        },
+        {
+          "source_pointer": "#/paths/~1items/post/responses/201/content/application~1json/schema/$defs/mcplica_ref_02e28db53ae68b89b244/properties/choice",
+          "transformation": "nullable"
+        },
+        {
+          "source_pointer": "#/paths/~1items/post/responses/201/content/application~1json/schema/$defs/mcplica_ref_02e28db53ae68b89b244/properties/labels/items",
+          "transformation": "nullable"
+        },
+        {
+          "source_pointer": "#/paths/~1items/post/responses/201/content/application~1json/schema/$defs/mcplica_ref_02e28db53ae68b89b244/properties/nickname",
+          "transformation": "nullable"
+        },
+        {
+          "source_pointer": "#/paths/~1items/post/responses/201/content/application~1json/schema/$defs/mcplica_ref_02e28db53ae68b89b244/properties/score",
+          "transformation": "exclusiveMaximum"
+        },
+        {
+          "source_pointer": "#/paths/~1items/post/responses/201/content/application~1json/schema/$defs/mcplica_ref_02e28db53ae68b89b244/properties/score",
+          "transformation": "exclusiveMinimum"
+        },
+        {
+          "source_pointer": "#/paths/~1items/post/responses/201/content/application~1json/schema/$defs/mcplica_ref_02e28db53ae68b89b244/properties/state",
+          "transformation": "nullable"
+        }
+      ]
+    },
+    "source_fingerprint": "1e406b23d093696dcf316a3ce8f6c967736535e938960d726c94a63e7661371e",
+    "source_version_ids": [
+      "00000000-0000-0000-0000-000000000002"
+    ]
+  },
+  "schema_version": "canonical-api/v1",
+  "schemas": {
+    "schema_flexible_item_7bdae9cc": {
+      "key": "schema_flexible_item_7bdae9cc",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "attributes": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object"
+          },
+          "choice": {
+            "anyOf": [
+              {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "labels": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "nickname": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "score": {
+            "exclusiveMinimum": 0,
+            "maximum": 10,
+            "type": "number"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "enum": [
+                  "active",
+                  "inactive"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "score",
+          "labels",
+          "choice"
+        ],
+        "type": "object"
+      },
+      "source_ref": {
+        "pointer": "#/components/schemas/FlexibleItem",
+        "source_version_id": "00000000-0000-0000-0000-000000000002"
+      }
+    }
+  },
+  "security_schemes": {},
+  "servers": [
+    {
+      "description": null,
+      "key": "server_98f040a4ab3aeedd",
+      "source_ref": {
+        "pointer": "#/servers/0",
+        "source_version_id": "00000000-0000-0000-0000-000000000002"
+      },
+      "url": "https://dialect.example.com/"
+    }
+  ],
+  "source_format": "openapi-3.0",
+  "title": "Schema dialect matrix",
+  "version": "1.0.0"
+}

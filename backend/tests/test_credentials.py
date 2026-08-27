@@ -32,8 +32,8 @@ def test_credential_headers_cannot_override_transport_headers() -> None:
         )
 
 
-def test_oauth_token_url_rejects_embedded_credentials_and_fragments() -> None:
-    with pytest.raises(ValueError, match="credentials or a fragment"):
+def test_oauth_endpoint_and_scope_are_non_secret_build_metadata() -> None:
+    with pytest.raises(ValueError, match="unexpected secret fields"):
         validate_credential_secret(
             CredentialScheme.OAUTH2_CLIENT_CREDENTIALS,
             {
@@ -42,4 +42,19 @@ def test_oauth_token_url_rejects_embedded_credentials_and_fragments() -> None:
                 "token_url": "https://user:password@identity.example/token#fragment",
             },
             {},
+        )
+    validate_credential_secret(
+        CredentialScheme.OAUTH2_CLIENT_CREDENTIALS,
+        {"client_id": "client", "client_secret": "secret"},
+        {
+            "security_scheme": "oauth",
+            "scope": "read write",
+            "token_auth_method": "client_secret_post",
+        },
+    )
+    with pytest.raises(ValueError, match="token_auth_method"):
+        validate_credential_secret(
+            CredentialScheme.OAUTH2_CLIENT_CREDENTIALS,
+            {"client_id": "client", "client_secret": "secret"},
+            {"token_auth_method": "private_key_jwt"},
         )

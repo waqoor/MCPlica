@@ -1,0 +1,185 @@
+{
+  "openapi": "3.1.0",
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "info": {
+    "title": "MCPlica pipeline matrix",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {"url": "https://api.example.com/v1", "description": "Production"},
+    {"url": "https://staging.example.com/v1", "description": "Staging"}
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {"type": "http", "scheme": "bearer"},
+      "basicAuth": {"type": "http", "scheme": "basic"},
+      "headerKey": {"type": "apiKey", "in": "header", "name": "X-API-Key"},
+      "queryKey": {"type": "apiKey", "in": "query", "name": "api_key"},
+      "oauthAuth": {
+        "type": "oauth2",
+        "flows": {
+          "clientCredentials": {
+            "tokenUrl": "https://identity.example.com/oauth/token",
+            "scopes": {"read": "Read matrix resources"}
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Identifier": {
+        "anyOf": [
+          {"type": "string", "format": "uuid"},
+          {"type": "integer", "minimum": 1}
+        ]
+      },
+      "BaseItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "state"],
+        "properties": {
+          "id": {"$ref": "#/components/schemas/Identifier"},
+          "state": {"type": "string", "enum": ["active", "archived"]}
+        }
+      },
+      "Item": {
+        "allOf": [
+          {"$ref": "#/components/schemas/BaseItem"},
+          {
+            "type": "object",
+            "properties": {
+              "metadata": {
+                "oneOf": [
+                  {"type": "object", "additionalProperties": {"type": "string"}},
+                  {"type": "null"}
+                ]
+              },
+              "parent": {"$ref": "#/components/schemas/Item"}
+            }
+          }
+        ]
+      }
+    }
+  },
+  "paths": {
+    "/items/{item_id}": {
+      "parameters": [
+        {
+          "name": "item_id",
+          "in": "path",
+          "required": true,
+          "schema": {"$ref": "#/components/schemas/Identifier"}
+        }
+      ],
+      "get": {
+        "operationId": "getMatrixItem",
+        "parameters": [
+          {
+            "name": "expand",
+            "in": "query",
+            "style": "form",
+            "explode": false,
+            "schema": {"type": "array", "items": {"type": "string"}}
+          },
+          {
+            "name": "X-Trace-Id",
+            "in": "header",
+            "schema": {"type": "string", "minLength": 1}
+          }
+        ],
+        "security": [{"bearerAuth": []}],
+        "responses": {
+          "200": {
+            "description": "Matrix item",
+            "content": {
+              "application/json": {"schema": {"$ref": "#/components/schemas/Item"}}
+            }
+          }
+        }
+      }
+    },
+    "/items": {
+      "post": {
+        "operationId": "createMatrixItem",
+        "security": [{"basicAuth": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {"schema": {"$ref": "#/components/schemas/Item"}}
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {"application/json": {"schema": {"type": "object"}}}
+          }
+        }
+      }
+    },
+    "/header-auth": {
+      "get": {
+        "operationId": "headerAuthenticated",
+        "security": [{"headerKey": []}],
+        "responses": {"200": {"description": "OK", "content": {"application/json": {"schema": {"type": "object"}}}}}
+      }
+    },
+    "/search": {
+      "get": {
+        "operationId": "queryAuthenticatedSearch",
+        "security": [{"queryKey": []}],
+        "parameters": [
+          {"name": "term", "in": "query", "required": true, "schema": {"type": "string", "enum": ["matrix"]}}
+        ],
+        "responses": {"200": {"description": "OK", "content": {"application/json": {"schema": {"type": "array", "items": {"type": "string"}}}}}}
+      }
+    },
+    "/oauth": {
+      "get": {
+        "operationId": "oauthAuthenticated",
+        "security": [{"oauthAuth": ["read"]}],
+        "responses": {"200": {"description": "OK", "content": {"application/json": {"schema": {"type": "object"}}}}}
+      }
+    },
+    "/upload": {
+      "post": {
+        "operationId": "uploadMatrixFile",
+        "servers": [{"url": "https://uploads.example.com/v2"}],
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["file"],
+                "properties": {
+                  "file": {"type": "string", "format": "binary"},
+                  "description": {"type": ["string", "null"]}
+                }
+              }
+            }
+          }
+        },
+        "responses": {"204": {"description": "Uploaded"}}
+      }
+    },
+    "/form": {
+      "post": {
+        "operationId": "submitMatrixForm",
+        "security": [{"queryKey": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {"name": {"type": "string"}, "enabled": {"type": "boolean"}}
+              }
+            }
+          }
+        },
+        "responses": {"200": {"description": "Submitted", "content": {"text/plain": {"schema": {"type": "string"}}}}}
+      }
+    }
+  }
+}

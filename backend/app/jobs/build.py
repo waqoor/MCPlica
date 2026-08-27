@@ -25,8 +25,10 @@ from app.providers.ai.openrouter import OpenRouterProvider
 from app.providers.milvus import MilvusVectorStore
 from app.providers.storage import FilesystemArtifactStorage
 from app.repositories.audit import AuditRepository
+from app.repositories.build_admission import BuildAdmissionRepository
 from app.repositories.builds import BuildAIRunRepository, BuildRepository
 from app.repositories.canonical import CanonicalRepository
+from app.repositories.cleanup import CleanupRepository
 from app.repositories.indexing import IndexGenerationRepository
 from app.repositories.projects import ProjectRepository
 from app.repositories.settings import SettingsRepository
@@ -35,6 +37,7 @@ from app.repositories.validation import ValidationRepository
 from app.services.analysis import AnalysisService, SemanticReviewService
 from app.services.analysis.retrieval import RetrievalService
 from app.services.artifacts import ArtifactService
+from app.services.build_admission import BuildAdmissionService
 from app.services.builds.pipeline import BuildPipeline
 from app.services.canonicalization import CanonicalizationService
 from app.services.indexing import IndexingService
@@ -44,6 +47,7 @@ from app.services.validation import ValidationService
 
 async def _run(
     build_id: UUID,
+    admission_token: UUID,
     *,
     final_attempt: bool,
     attempt_number: int,
@@ -64,7 +68,37 @@ async def _run(
     storage = FilesystemArtifactStorage(storage_client)
     http = HttpClient(timeout_seconds=settings.openrouter_timeout_seconds)
     milvus_client = MilvusVectorClient(settings.milvus_uri, settings.milvus_token)
+    admission = BuildAdmissionService(
+        database,
+        BuildAdmissionRepository(),
+        lease_seconds=settings.build_admission_lease_seconds,
+    )
+    heartbeat_stop = asyncio.Event()
+    admission_lost = asyncio.Event()
+    heartbeat_task: asyncio.Task[bool] | None = None
+    keep_lease_for_retry = False
     try:
+        if not await admission.begin(build_id, admission_token):
+            outcome = "stale_admission"
+            logger.info(
+                "build.admission_rejected",
+                extra={"build_id": str(build_id)},
+            )
+            return
+        owner_task = asyncio.current_task()
+        assert owner_task is not None
+        heartbeat_task = asyncio.create_task(
+            _heartbeat_admission(
+                admission,
+                build_id,
+                admission_token,
+                heartbeat_stop,
+                admission_lost,
+                owner_task,
+                interval_seconds=settings.build_admission_heartbeat_seconds,
+            ),
+            name=f"build-admission-heartbeat-{build_id}",
+        )
         pipeline = _pipeline(
             settings,
             database=database,
@@ -74,6 +108,11 @@ async def _run(
         )
         try:
             await pipeline.run(build_id)
+        except asyncio.CancelledError:
+            if admission_lost.is_set():
+                outcome = "admission_lost"
+                return
+            raise
         except Exception as exc:
             retryable = is_retryable_build_error(exc)
             outcome = "retry_scheduled" if retryable and not final_attempt else "failed"
@@ -85,9 +124,19 @@ async def _run(
             )
             if final_attempt or not retryable:
                 await pipeline.fail_from_exception(build_id, exc)
+            keep_lease_for_retry = retryable and not final_attempt
             if final_attempt or retryable:
                 raise
     finally:
+        heartbeat_stop.set()
+        if heartbeat_task is not None:
+            lease_retained = await heartbeat_task
+            if not lease_retained:
+                outcome = "admission_lost"
+        if keep_lease_for_retry:
+            await admission.heartbeat(build_id, admission_token)
+        else:
+            await admission.release(build_id, admission_token)
         duration = time.perf_counter() - started
         observe_build_job(outcome, duration)
         logger.info(
@@ -106,6 +155,34 @@ async def _run(
         await http.close()
         await storage_client.close()
         await database.close()
+
+
+async def _heartbeat_admission(
+    admission: BuildAdmissionService,
+    build_id: UUID,
+    token: UUID,
+    stop_event: asyncio.Event,
+    admission_lost: asyncio.Event,
+    owner_task: asyncio.Task[object],
+    *,
+    interval_seconds: float,
+) -> bool:
+    while not stop_event.is_set():
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=interval_seconds)
+            return True
+        except TimeoutError:
+            try:
+                if not await admission.heartbeat(build_id, token):
+                    admission_lost.set()
+                    owner_task.cancel()
+                    return False
+            except Exception:
+                logging.getLogger("mcplica.builder").exception(
+                    "build.admission_heartbeat_failed",
+                    extra={"build_id": str(build_id)},
+                )
+    return True
 
 
 def _pipeline(
@@ -182,7 +259,10 @@ def _pipeline(
         database,
         reports,
         semantic_review,
-        MCPValidationClient(),
+        MCPValidationClient(
+            validator_endpoint=str(settings.mcp_runtime_validator_url),
+            timeout_seconds=settings.mcp_runtime_validator_timeout_seconds,
+        ),
         runtime_version=settings.mcp_runtime_version,
     )
     return BuildPipeline(
@@ -199,6 +279,7 @@ def _pipeline(
         analysis,
         validation,
         artifacts,
+        CleanupRepository(),
     )
 
 
@@ -214,7 +295,7 @@ def is_retryable_build_error(exc: Exception) -> bool:
     )
 
 
-def run_build_job(build_id: str) -> None:
+def run_build_job(build_id: str, admission_token: str) -> None:
     job = get_current_job()
     final_attempt = job is None or not job.should_retry
     retries_left = job.retries_left if job is not None and job.retries_left is not None else 0
@@ -228,6 +309,7 @@ def run_build_job(build_id: str) -> None:
     asyncio.run(
         _run(
             UUID(build_id),
+            UUID(admission_token),
             final_attempt=final_attempt,
             attempt_number=attempt_number,
         )

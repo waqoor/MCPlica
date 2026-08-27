@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, String, Text
+from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Index, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -75,6 +75,12 @@ class MCPAccessToken(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         CheckConstraint(
             "revoked_at IS NULL OR expires_at IS NOT NULL",
             name="ck_mcp_access_tokens_revocation_expiry",
+        ),
+        Index(
+            "ix_mcp_access_tokens_active",
+            "project_id",
+            "expires_at",
+            postgresql_where=text("revoked_at IS NULL"),
         ),
     )
 

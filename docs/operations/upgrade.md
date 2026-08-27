@@ -15,7 +15,7 @@ Upgrade only between verified releases and never by pulling mutable `latest` tag
 Pause new builds/deployments, stop both workers, pull the new digest-pinned images, and run database migrations as an explicit job:
 
 ```bash
-docker compose --env-file .env -f infra/compose.yaml -f infra/compose.production.yaml run --rm api alembic -c ../migrations/alembic.ini upgrade head
+docker compose --env-file .env -f infra/compose.yaml -f infra/compose.production.yaml run --rm migrate
 docker compose --env-file .env -f infra/compose.yaml -f infra/compose.production.yaml up -d --no-build api frontend builder-worker deployment-worker
 ```
 

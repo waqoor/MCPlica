@@ -49,6 +49,14 @@ class UpstreamContentTypeError(RuntimeExecutionError):
         )
 
 
+class UpstreamResponseContractError(RuntimeExecutionError):
+    def __init__(self) -> None:
+        super().__init__(
+            "upstream_response_contract_mismatch",
+            "The upstream API response did not match its compiled contract",
+        )
+
+
 class UpstreamAuthenticationError(RuntimeExecutionError):
     def __init__(self) -> None:
         super().__init__("upstream_authentication_failed", "Upstream authentication failed")

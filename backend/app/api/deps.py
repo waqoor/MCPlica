@@ -9,6 +9,7 @@ from app.domain.auth import AuthPrincipal, UserRole
 from app.services.auth import AuthService
 from app.services.credentials import CredentialService
 from app.services.deployment.service import DeploymentService
+from app.services.journey import JourneyService
 from app.services.mcp_access import MCPAccessService
 from app.services.projects import ProjectService
 from app.services.users import UserService
@@ -40,6 +41,12 @@ def deployment_service(
     container: Annotated[ServiceContainer, Depends(services)],
 ) -> DeploymentService:
     return container.deployments
+
+
+def journey_service(
+    container: Annotated[ServiceContainer, Depends(services)],
+) -> JourneyService:
+    return container.journey
 
 
 def mcp_access_service(

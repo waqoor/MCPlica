@@ -157,6 +157,31 @@ class ResponseDefinition(BaseModel):
     schema_: JsonObject | None = Field(default=None, alias="schema")
     description: str | None = None
 
+    @field_validator("status_code")
+    @classmethod
+    def normalize_status_code(cls, value: str) -> str:
+        normalized = value.strip()
+        if normalized.casefold() == "default":
+            return "default"
+        normalized = normalized.upper()
+        if not re.fullmatch(r"[1-5](?:[0-9]{2}|XX)", normalized):
+            raise ValueError("response status must be an HTTP code, class wildcard, or default")
+        return normalized
+
+    @field_validator("media_type")
+    @classmethod
+    def normalize_media_type(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.split(";", 1)[0].strip().casefold()
+        if (
+            not normalized
+            or "/" not in normalized
+            or any(character in normalized for character in "\r\n\x00")
+        ):
+            raise ValueError("response media type is invalid")
+        return normalized
+
 
 class MCPTool(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -191,7 +216,15 @@ class MCPResource(BaseModel):
 class RuntimeSecurity(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    inbound_auth_mode: Literal["static_bearer", "oidc", "none"] = "static_bearer"
+    # Read compatibility for artifacts produced before inbound authorization
+    # moved to the separately hashed deployment overlay. New compilers leave
+    # this unset so an immutable tool manifest never claims a mutable access
+    # mode is effective.
+    inbound_auth_mode: Literal["static_bearer", "oidc", "none"] | None = Field(
+        default=None,
+        deprecated=True,
+    )
+    inbound_auth_boundary: Literal["deployment_overlay"] = "deployment_overlay"
     allowed_upstream_hosts: list[str] = Field(min_length=1)
     allow_insecure_none_only_in_development: bool = True
     default_timeout_ms: int = Field(default=30_000, ge=100, le=300_000)

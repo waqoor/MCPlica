@@ -1,8 +1,16 @@
 # MCPlica Implementation Plan
 
-**Status:** Authoritative AI-executable implementation roadmap  
-**Date:** 2026-08-24  
+**Status:** Authoritative AI-executable implementation roadmap; second-round repository verification complete
+
+**Date:** 2026-08-27
+
 **Execution mode:** Incremental, direct implementation against the live repository
+
+The current implementation disposition is evidence-backed in
+`evidence/issues-001-closure.md`. It records all 48 `issues_001.md` findings using the
+required VERIFIED COMPLETE/FIXED IN SECOND ROUND/BLOCKED vocabulary and is the current
+verification record: 22 were verified without another code change, 26 were fixed in the second
+round, and none is blocked. This plan remains the implementation-sequence authority.
 
 ## 1. Document ownership
 
@@ -134,7 +142,7 @@ Configure:
 
 - Python 3.13;
 - Ruff lint/format;
-- mypy or Pyright according to `tech_stack.md` (use the selected standard consistently);
+- strict Pyright according to `tech_stack.md`;
 - pytest;
 - coverage;
 - import boundaries if a suitable lightweight rule tool is selected.
@@ -483,13 +491,16 @@ Implement:
 
 ### 2.6 CredentialService
 
-Implement encrypted create/rotate/revoke metadata for:
+Implement encrypted create/rotate/revoke behavior for:
 
 - upstream API credentials;
 - OAuth client credentials;
 - later MCP verifier material.
 
-Secret values may be accepted on create/rotate and must never be returned later.
+Secret values may be accepted on create/rotate and must never be returned later. Creation validates
+and stores the source-security binding. Rotation replaces only secret material under optimistic
+concurrency and preserves that immutable binding even after source drift; remapping requires a
+replacement credential and a new Build.
 
 ### 2.7 REST APIs
 
@@ -630,8 +641,13 @@ Add source parse preview showing:
 - servers;
 - auth schemes;
 - operation count;
-- parse errors;
+- parse errors attributed to the exact immutable source version, including stage, stable code,
+  pointer or one-based line/column where available, and redacted structured evidence;
 - schema/ref issues.
+
+Persist these findings before the build job reports its aggregate failure. Use a retry-idempotent
+finding key and add a two-source test proving a malformed dependency does not mark the valid
+primary source invalid.
 
 Do not yet claim MCP build completion.
 
@@ -640,6 +656,12 @@ Do not yet claim MCP build completion.
 Must include the complete parser fixture matrix in `design_document.md` plus SSRF tests.
 
 Golden snapshots verify equivalent input parses to stable canonical output.
+
+Freeze the runtime manifest byte limit in each Build configuration. Validate the exact stored
+serialization before `READY`, use an inclusive boundary, and keep deployment/runtime bounded reads
+at the same or a stricter effective value. Tests must cover exact-limit success, one-byte excess,
+and a compiled 10,000-by-6,000-character documentation resource set being rejected both by the
+Builder gate and runtime loader.
 
 ## Phase gate
 
@@ -1103,7 +1125,7 @@ Test:
 
 - two materially different manifests on the same image;
 - exact tool schemas;
-- GET/POST/PUT/PATCH/DELETE mappings;
+- all standard OpenAPI Path Item methods: GET/POST/PUT/PATCH/DELETE/HEAD/OPTIONS/TRACE;
 - path/query/body/form/multipart supported mappings;
 - auth injection;
 - inbound auth;
@@ -1196,7 +1218,11 @@ Implement health-before-switch strategy exactly as design. If using same hostnam
 
 Implement lifecycle actions and durable audit.
 
-Rollback deploys an old READY Build as a new deployment event; never changes build content.
+Rollback deploys an old READY Build as a new deployment event; never changes build content. Lock
+the project and target in one transaction, require immutable activation evidence bound to the exact
+runtime identity, reject the currently active target, and expose the same `rollback_eligible`
+predicate in the read model. Cover stopped-before-start, failed activation, formerly active,
+currently active, superseded, and legacy-success cases.
 
 ### 8.9 Deployment API/UI
 
@@ -1744,6 +1770,8 @@ The coding agent shall maintain objective evidence during implementation, ideall
 - no-secret artifact scan;
 - dependency/SBOM scan;
 - final requirement traceability matrix.
+- a per-finding second-pass ledger that distinguishes reverified prior fixes from additional
+  implementation, with exact code and test evidence.
 
 Do not consider prose claims such as “implemented” sufficient when a test or inspectable artifact can prove the requirement.
 

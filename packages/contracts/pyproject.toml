@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Infrastructure-free shared contracts for MCPlica builder and runtime"
 requires-python = ">=3.13,<3.14"
 dependencies = [
+  "packaging>=26,<27",
   "pydantic>=2.11,<3",
 ]
 

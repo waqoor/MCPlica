@@ -33,6 +33,7 @@ These six documents define scope and implementation authority. Later explicit de
 - `release/release-process.md`
 - `release/release-checklist.md`
 - `evidence/final-integrated-validation.md` — repository-wide final traceability and local execution proof.
+- `evidence/issues-001-closure.md` — authoritative second-round status (22 verified, 26 fixed, zero blocked), previous-fix review, additional changes, implementation evidence, and fresh test/runtime proof for all 48 `issues_001.md` findings.
 - `evidence/agent3-requirement-traceability.md`
 
 Root-level legal/community policy remains authoritative for contributors: `LICENSE`, `CLA.md`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `GOVERNANCE.md`, `MAINTAINERS.md`, `SECURITY.md`, `SPONSORSHIP.md`, `TRADEMARKS.md`, and `GENERATED_OUTPUTS.md`.

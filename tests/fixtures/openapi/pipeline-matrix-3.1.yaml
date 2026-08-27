@@ -1,0 +1,43 @@
+openapi: 3.1.0
+jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
+info:
+  title: MCPlica YAML pipeline matrix
+  version: 1.0.0
+servers:
+  - url: https://yaml.example.com/api
+paths:
+  /matrix/{id}:
+    get:
+      operationId: getYamlMatrix
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            anyOf:
+              - type: string
+                minLength: 1
+              - type: integer
+                minimum: 1
+        - name: mode
+          in: query
+          schema:
+            type: [string, 'null']
+            enum: [summary, detailed, null]
+      responses:
+        '200':
+          description: Matrix result
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    required: [value]
+                    properties:
+                      value: {type: string}
+                  - type: object
+                    required: [values]
+                    properties:
+                      values:
+                        type: array
+                        items: {type: string}

@@ -33,11 +33,11 @@ export function buildCanDeploy(
 
 export function deploymentIsActive(status: DeploymentStatus): boolean {
   return [
-    "PENDING",
-    "DEPLOYING",
-    "HEALTHCHECK",
-    "RUNNING",
-    "UNHEALTHY",
+    "pending",
+    "deploying",
+    "healthcheck",
+    "running",
+    "unhealthy",
   ].includes(status);
 }
 

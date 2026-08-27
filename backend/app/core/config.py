@@ -5,6 +5,7 @@ from typing import Annotated, Literal
 from pydantic import (
     AnyHttpUrl,
     BeforeValidator,
+    EmailStr,
     Field,
     SecretStr,
     TypeAdapter,
@@ -22,12 +23,13 @@ def _split_csv(value: object) -> object:
     return value
 
 
-def _empty_secret_to_none(value: object) -> object:
+def _empty_to_none(value: object) -> object:
     return None if value == "" else value
 
 
 CsvList = Annotated[list[str], NoDecode, BeforeValidator(_split_csv)]
-OptionalSecret = Annotated[SecretStr | None, BeforeValidator(_empty_secret_to_none)]
+OptionalEmail = Annotated[EmailStr | None, BeforeValidator(_empty_to_none)]
+OptionalSecret = Annotated[SecretStr | None, BeforeValidator(_empty_to_none)]
 _HTTP_URL = TypeAdapter(AnyHttpUrl)
 
 
@@ -70,12 +72,23 @@ class Settings(BaseSettings):
     build_job_timeout_seconds: int = Field(default=3600, ge=60, le=86_400)
     build_job_max_attempts: int = Field(default=3, ge=1, le=8)
     build_concurrency: int = Field(default=2, ge=1, le=32)
+    build_admission_dispatch_interval_seconds: float = Field(default=1.0, ge=0.1, le=60)
+    build_admission_lease_seconds: float = Field(default=300.0, ge=30, le=3_600)
+    build_admission_heartbeat_seconds: float = Field(default=30.0, ge=1, le=300)
     builders_can_deploy: bool = False
     source_retention_days: int | None = Field(default=None, ge=1, le=3650)
     build_retention_count: int | None = Field(default=20, ge=1, le=10_000)
     max_operations_per_project: int = Field(default=1_000, ge=1, le=100_000)
     deployment_job_timeout_seconds: int = Field(default=900, ge=60, le=7_200)
     deployment_job_max_attempts: int = Field(default=3, ge=1, le=8)
+    runtime_command_dispatch_interval_seconds: float = Field(default=1.0, ge=0.1, le=60)
+    runtime_command_dispatch_lease_seconds: float = Field(default=30.0, ge=5, le=300)
+    runtime_command_execution_lease_seconds: float = Field(default=1_200.0, ge=60, le=7_200)
+    cleanup_dispatch_interval_seconds: float = Field(default=5.0, ge=0.1, le=300)
+    cleanup_lease_seconds: float = Field(default=60.0, ge=5, le=3_600)
+    cleanup_max_attempts: int = Field(default=8, ge=1, le=100)
+    cleanup_retention_interval_seconds: float = Field(default=3_600.0, ge=10, le=86_400)
+    cleanup_orphan_guard_delay_seconds: float = Field(default=300.0, ge=5, le=86_400)
 
     milvus_uri: str = "http://localhost:19530"
     milvus_token: str | None = None
@@ -100,6 +113,8 @@ class Settings(BaseSettings):
     auth_signing_key: OptionalSecret = Field(default=None, repr=False)
     refresh_token_pepper: OptionalSecret = Field(default=None, repr=False)
     bootstrap_secret: OptionalSecret = Field(default=None, repr=False)
+    default_admin_email: OptionalEmail = None
+    default_admin_password: OptionalSecret = Field(default=None, repr=False)
     access_token_ttl_seconds: int = Field(default=900, ge=60, le=3600)
     refresh_token_ttl_seconds: int = Field(default=2_592_000, ge=3600, le=7_776_000)
     auth_cookie_name: str = "mcplica_access"
@@ -152,6 +167,8 @@ class Settings(BaseSettings):
     mcp_runtime_image: str = "mcplica/mcp-runtime:1.0.0"
     mcp_runtime_version: str = Field(default="1.0.0", min_length=1, max_length=64)
     mcp_runtime_pull_policy: Literal["never", "missing", "always"] = "missing"
+    mcp_runtime_validator_url: AnyHttpUrl = AnyHttpUrl("http://runtime-validator:8090/validate")
+    mcp_runtime_validator_timeout_seconds: float = Field(default=60.0, gt=0, le=600)
     mcp_domain: str = "mcp.localhost"
     traefik_network: str = "mcplica-edge"
     traefik_container_name: str = "mcplica-traefik-1"
@@ -198,8 +215,14 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production_secrets(self) -> "Settings":
+        if (self.default_admin_email is None) != (self.default_admin_password is None):
+            raise ValueError(
+                "DEFAULT_ADMIN_EMAIL and DEFAULT_ADMIN_PASSWORD must be configured together"
+            )
         if self.build_queue_name == self.deployment_queue_name:
             raise ValueError("build and deployment jobs require separate RQ queues")
+        if self.build_admission_heartbeat_seconds * 2 >= self.build_admission_lease_seconds:
+            raise ValueError("build admission lease must exceed two heartbeat intervals")
         for label, value in (
             ("build_queue_name", self.build_queue_name),
             ("deployment_queue_name", self.deployment_queue_name),
@@ -219,6 +242,11 @@ class Settings(BaseSettings):
         ):
             raise ValueError("runtime file roots cannot be filesystem roots")
         if self.is_production:
+            if self.default_admin_email is not None:
+                raise ValueError(
+                    "DEFAULT_ADMIN_EMAIL and DEFAULT_ADMIN_PASSWORD are development-only "
+                    "and must be unset in production"
+                )
             missing = [
                 name
                 for name in (

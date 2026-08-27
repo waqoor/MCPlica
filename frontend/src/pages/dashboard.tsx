@@ -20,7 +20,6 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatDate } from "@/lib/format";
-import { buildIsActive } from "@/lib/lifecycle";
 
 function MetricCard({
   label,
@@ -62,7 +61,7 @@ export function DashboardPage() {
     queryKey: ["projects"],
     queryFn: ({ signal }) => projectApi.list(signal),
   });
-  const [builds, readiness] = useQueries({
+  const [builds, readiness, metrics] = useQueries({
     queries: [
       {
         queryKey: ["builds", "global", { page_size: 8 }],
@@ -75,16 +74,23 @@ export function DashboardPage() {
           systemApi.readiness(signal),
         refetchInterval: 60_000,
       },
+      {
+        queryKey: ["builds", "metrics"],
+        queryFn: ({ signal }: { signal: AbortSignal }) =>
+          buildApi.metrics(signal),
+        refetchInterval: 60_000,
+      },
     ],
   });
 
-  const activeBuilds =
-    builds.data?.filter((build) => buildIsActive(build.status)).length ?? 0;
-  const failedBuilds =
-    builds.data?.filter((build) => build.status === "FAILED").length ?? 0;
+  const activeBuilds = metrics.data?.active;
+  const failedBuilds = metrics.data?.failed;
   const activeDeployments =
     projects.data?.filter((project) => project.active_deployment_id).length ??
     0;
+  const projectNames = new Map(
+    projects.data?.map((project) => [project.id, project.name]),
+  );
 
   return (
     <div className="space-y-7">
@@ -111,10 +117,14 @@ export function DashboardPage() {
           value={projects.data?.length ?? "—"}
         />
         <MetricCard
-          detail={`${failedBuilds} recent failures`}
+          detail={
+            failedBuilds === undefined
+              ? "installation count unavailable"
+              : `${failedBuilds} installation-wide failures`
+          }
           icon={Hammer}
           label="Builds active"
-          value={builds.isError ? "—" : activeBuilds}
+          value={metrics.isError ? "—" : (activeBuilds ?? "—")}
         />
         <MetricCard
           detail="active project references"
@@ -130,7 +140,7 @@ export function DashboardPage() {
         />
       </section>
 
-      {(builds.isError || projects.isError) && (
+      {(builds.isError || projects.isError || metrics.isError) && (
         <Alert
           title="Some operational summaries are unavailable"
           tone="warning"
@@ -169,7 +179,7 @@ export function DashboardPage() {
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium text-foreground">
-                      {build.project_name ?? "Project build"}
+                      {projectNames.get(build.project_id) ?? "Deleted project"}
                     </span>
                     <span className="block text-xs text-muted">
                       {formatDate(build.created_at)}
@@ -284,7 +294,7 @@ export function DashboardPage() {
         />
       )}
 
-      {failedBuilds > 0 && (
+      {(failedBuilds ?? 0) > 0 && (
         <Alert title="Review required" tone="danger">
           <span className="inline-flex items-center gap-2">
             <CircleAlert aria-hidden="true" className="size-4" />

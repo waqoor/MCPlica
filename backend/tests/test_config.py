@@ -3,8 +3,44 @@ from pathlib import Path
 
 import pytest
 import yaml
+from pydantic import SecretStr, ValidationError
 
 from app.core.config import Settings
+
+
+class _ComposeLoader(yaml.SafeLoader):
+    """Parse Compose override tags without applying merge semantics in unit tests."""
+
+
+_ComposeLoader.add_constructor("!reset", lambda _loader, _node: None)
+
+
+def test_default_admin_credentials_must_be_configured_as_a_pair() -> None:
+    with pytest.raises(ValidationError, match="must be configured together"):
+        Settings(
+            _env_file=None,  # pyright: ignore[reportCallIssue]
+            env="development",
+            default_admin_email="admin@admin.com",
+            default_admin_password=None,
+        )
+
+
+def test_default_admin_credentials_are_development_only_and_masked() -> None:
+    settings = Settings(
+        _env_file=None,  # pyright: ignore[reportCallIssue]
+        env="development",
+        default_admin_email="admin@admin.com",
+        default_admin_password=SecretStr("admin@321"),
+    )
+    assert "admin@321" not in repr(settings)
+
+    with pytest.raises(ValidationError, match="development-only"):
+        Settings(
+            _env_file=None,  # pyright: ignore[reportCallIssue]
+            env="production",
+            default_admin_email="admin@admin.com",
+            default_admin_password=SecretStr("admin@321"),
+        )
 
 
 def test_csv_environment_settings_accept_operator_friendly_values(
@@ -61,3 +97,31 @@ def test_compose_api_tmpfs_can_spool_the_default_upload_limit(
     tmpfs_capacity = int(match.group(1)) * units[match.group(2).lower()]
 
     assert tmpfs_capacity > upload_limit
+
+
+def test_compose_application_services_wait_for_schema_migrations() -> None:
+    root = Path(__file__).resolve().parents[2]
+    compose = yaml.safe_load((root / "infra" / "compose.yaml").read_text(encoding="utf-8"))
+    services = compose["services"]
+
+    assert services["migrate"]["command"] == [
+        "alembic",
+        "-c",
+        "../migrations/alembic.ini",
+        "upgrade",
+        "head",
+    ]
+    assert services["migrate"]["restart"] == "no"
+    for service_name in ("api", "builder-worker", "deployment-worker"):
+        assert services[service_name]["depends_on"]["migrate"] == {
+            "condition": "service_completed_successfully"
+        }
+
+    production = yaml.load(
+        (root / "infra" / "compose.production.yaml").read_text(encoding="utf-8"),
+        Loader=_ComposeLoader,
+    )
+    assert production["services"]["migrate"].get("build") is None
+    assert production["services"]["migrate"]["image"].startswith("${BACKEND_IMAGE:")
+    for service_name in ("api", "runtime-validator", "frontend"):
+        assert production["services"][service_name]["build"] is None

@@ -10,6 +10,9 @@ async def echo(request: Request) -> JSONResponse:
     body = await request.body()
     if len(body) > _MAX_FIXTURE_BODY_BYTES:
         return JSONResponse({"error": "fixture_body_too_large"}, status_code=413)
+    status_code = (
+        201 if request.method == "POST" and request.url.path.rstrip("/") == "/api/widgets" else 200
+    )
     return JSONResponse(
         {
             "method": request.method,
@@ -19,7 +22,8 @@ async def echo(request: Request) -> JSONResponse:
             "authorization": request.headers.get("authorization"),
             "api_key": request.headers.get("x-api-key"),
             "body_bytes": len(body),
-        }
+        },
+        status_code=status_code,
     )
 
 

@@ -1,7 +1,17 @@
 from enum import StrEnum
 from uuid import UUID
 
-from sqlalchemy import Boolean, Enum, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Enum,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -16,6 +26,33 @@ def _enum_values(enum_type: type[StrEnum]) -> list[str]:
 
 class ValidationReport(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "validation_reports"
+    __table_args__ = (
+        CheckConstraint(
+            "operation_source_count >= 0 AND operation_excluded_count >= 0 AND "
+            "operation_expected_count >= 0 AND operation_generated_count >= 0",
+            name="ck_validation_reports_counts_nonnegative",
+        ),
+        CheckConstraint(
+            "coverage_percent >= 0 AND coverage_percent <= 100",
+            name="ck_validation_reports_coverage_range",
+        ),
+        CheckConstraint(
+            "blocking_error_count >= 0 AND warning_count >= 0",
+            name="ck_validation_reports_findings_nonnegative",
+        ),
+        CheckConstraint(
+            "operation_excluded_count <= operation_source_count AND "
+            "operation_expected_count = operation_source_count - operation_excluded_count",
+            name="ck_validation_reports_count_consistency",
+        ),
+        CheckConstraint(
+            "overall_status <> 'pass'::validation_status OR ("
+            "blocking_error_count = 0 AND "
+            "operation_generated_count = operation_expected_count "
+            "AND coverage_percent = 100)",
+            name="ck_validation_reports_pass_integrity",
+        ),
+    )
 
     build_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
@@ -44,6 +81,14 @@ class OperationExclusion(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
             "project_id",
             "operation_key",
             name="uq_operation_exclusions_project_operation",
+        ),
+        CheckConstraint(
+            "char_length(btrim(reason)) > 0",
+            name="ck_operation_exclusions_reason_nonempty",
+        ),
+        CheckConstraint(
+            "char_length(btrim(reason_code)) > 0",
+            name="ck_operation_exclusions_reason_code_nonempty",
         ),
     )
 

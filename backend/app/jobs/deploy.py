@@ -4,8 +4,6 @@ from collections.abc import Awaitable
 from typing import Protocol
 from uuid import UUID
 
-from rq import get_current_job
-
 from app.clients.database import DatabaseClient
 from app.clients.docker import DockerClient
 from app.clients.queue import DeploymentQueueClient
@@ -19,7 +17,13 @@ from app.repositories.credentials import CredentialRepository
 from app.repositories.deployments import DeploymentRepository
 from app.repositories.mcp_access import MCPAccessRepository
 from app.repositories.projects import ProjectRepository
+from app.repositories.runtime_commands import RuntimeCommandRepository
+from app.repositories.sources import SourceRepository
+from app.services.builds.configuration_identity import ExecutableConfigurationIdentity
 from app.services.credentials import CredentialService
+from app.services.deployment.command_dispatcher import RuntimeCommandDispatcher
+from app.services.deployment.command_executor import RuntimeCommandExecutor
+from app.services.deployment.preflight import DeploymentPreflight
 from app.services.deployment.runtime_manager import RuntimeManager
 from app.services.deployment.secret_materializer import DeploymentSecretMaterializer
 from app.services.deployment.service import DeploymentRunner, DeploymentService
@@ -34,7 +38,7 @@ class _AsyncClosable(Protocol):
 async def _runner(
     settings: Settings,
 ) -> tuple[
-    DeploymentRunner,
+    RuntimeCommandExecutor,
     DatabaseClient,
     FilesystemStorageClient,
     RuntimeFilesClient,
@@ -69,27 +73,48 @@ async def _runner(
         )
         docker = await DockerClient.connect(settings.docker_base_url)
         deployments = DeploymentRepository()
+        commands = RuntimeCommandRepository()
         access = MCPAccessRepository()
         audit = AuditRepository()
         credentials_repository = CredentialRepository()
         projects = ProjectRepository()
+        sources = SourceRepository()
         queue = DeploymentQueueClient(
             settings.redis_url,
             settings.deployment_queue_name,
             job_timeout_seconds=settings.deployment_job_timeout_seconds,
             max_attempts=settings.deployment_job_max_attempts,
         )
+        dispatcher = RuntimeCommandDispatcher(
+            database,
+            commands,
+            queue,
+            interval_seconds=settings.runtime_command_dispatch_interval_seconds,
+            lease_seconds=settings.runtime_command_dispatch_lease_seconds,
+        )
+        artifact_storage = FilesystemArtifactStorage(storage)
+        preflight = DeploymentPreflight(
+            access,
+            credentials_repository,
+            ExecutableConfigurationIdentity(projects, sources),
+            artifact_storage,
+            settings,
+            manifest_max_bytes=settings.runtime_manifest_max_bytes,
+        )
         deployment_service = DeploymentService(
             database,
             deployments,
+            commands,
             audit,
-            queue,
+            dispatcher,
+            preflight,
             settings,
         )
         credentials = CredentialService(
             database,
             credentials_repository,
             projects,
+            commands,
             audit,
             cipher,
             deployment_service,
@@ -97,15 +122,20 @@ async def _runner(
         runner = DeploymentRunner(
             database,
             deployments,
-            access,
             audit,
-            FilesystemArtifactStorage(storage),
+            preflight,
             runtime_files,
             DeploymentSecretMaterializer(credentials, settings),
             RuntimeManager(docker, settings),
-            manifest_max_bytes=settings.runtime_manifest_max_bytes,
         )
-        return runner, database, storage, runtime_files, docker, queue
+        executor = RuntimeCommandExecutor(
+            database,
+            commands,
+            deployments,
+            runner,
+            lease_seconds=settings.runtime_command_execution_lease_seconds,
+        )
+        return executor, database, storage, runtime_files, docker, queue
     except Exception:
         await _close_resources(database, storage, runtime_files, docker, queue)
         raise
@@ -122,22 +152,13 @@ async def _close_resources(*resources: _AsyncClosable | None) -> None:
         logger.warning("deployment_job_resource_cleanup_failed")
 
 
-async def _run(deployment_id: UUID, *, stop: bool) -> None:
-    runner, database, storage, runtime_files, docker, queue = await _runner(get_settings())
+async def _run(command_id: UUID) -> None:
+    executor, database, storage, runtime_files, docker, queue = await _runner(get_settings())
     try:
-        if stop:
-            await runner.stop(deployment_id)
-        else:
-            job = get_current_job()
-            final_attempt = job is None or not job.should_retry
-            await runner.run(deployment_id, final_attempt=final_attempt)
+        await executor.run(command_id)
     finally:
         await _close_resources(docker, queue, runtime_files, storage, database)
 
 
-def run_deployment_job(deployment_id: str) -> None:
-    asyncio.run(_run(UUID(deployment_id), stop=False))
-
-
-def run_stop_deployment_job(deployment_id: str) -> None:
-    asyncio.run(_run(UUID(deployment_id), stop=True))
+def run_runtime_command_job(command_id: str) -> None:
+    asyncio.run(_run(UUID(command_id)))

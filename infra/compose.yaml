@@ -95,6 +95,22 @@ services:
         condition: service_healthy
     networks: [builder]
 
+  migrate:
+    image: ${BACKEND_IMAGE:-mcplica-api:local}
+    env_file:
+      - path: ../.env
+        required: false
+    command: ["alembic", "-c", "../migrations/alembic.ini", "upgrade", "head"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [builder]
+
   api:
     image: ${BACKEND_IMAGE:-mcplica-api:local}
     build:
@@ -132,6 +148,8 @@ services:
       timeout: 5s
       retries: 12
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -144,6 +162,49 @@ services:
       traefik.http.routers.mcplica-api.rule: Host(`api.localhost`)
       traefik.http.routers.mcplica-api.entrypoints: web
       traefik.http.services.mcplica-api.loadbalancer.server.port: "8000"
+
+  runtime-validator:
+    image: ${MCP_RUNTIME_IMAGE:-mcplica-runtime:local}
+    build:
+      context: ..
+      dockerfile: infra/docker/runtime.Dockerfile
+      args:
+        RUNTIME_VERSION: ${MCP_RUNTIME_VERSION:-1.0.0}
+    command:
+      [
+        "python",
+        "-m",
+        "uvicorn",
+        "app.validation_main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8090",
+        "--workers",
+        "1",
+        "--no-server-header",
+      ]
+    environment:
+      MCP_RUNTIME_VERSION: ${MCP_RUNTIME_VERSION:-1.0.0}
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/healthz', timeout=3).read()",
+        ]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 12
+    networks: [builder]
 
   builder-worker:
     image: ${BACKEND_IMAGE:-mcplica-api:local}
@@ -187,11 +248,15 @@ services:
       start_period: 15s
       retries: 12
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
       milvus:
+        condition: service_healthy
+      runtime-validator:
         condition: service_healthy
     networks: [builder, egress]
 
@@ -265,6 +330,8 @@ services:
       start_period: 15s
       retries: 12
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:

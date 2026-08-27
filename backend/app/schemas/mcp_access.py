@@ -3,7 +3,7 @@ from uuid import UUID
 
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, model_validator
 
-from app.domain.deployments import MCPAuthMode
+from app.domain.deployments import MCPAuthMode, RuntimeEffectState
 
 
 class MCPAuthConfigUpdate(BaseModel):
@@ -51,6 +51,9 @@ class MCPAuthConfigRead(BaseModel):
     metadata: dict[str, object]
     updated_by: UUID
     updated_at: datetime
+    runtime_effect_state: RuntimeEffectState
+    runtime_command_id: UUID | None
+    runtime_error_code: str | None
 
 
 class MCPAccessTokenCreate(BaseModel):
@@ -78,6 +81,9 @@ class MCPAccessTokenRead(BaseModel):
     expires_at: datetime | None
     last_used_at: datetime | None
     revoked_at: datetime | None
+    runtime_effect_state: RuntimeEffectState
+    runtime_command_id: UUID | None
+    runtime_error_code: str | None
 
 
 class MCPAccessTokenIssued(BaseModel):
@@ -92,3 +98,15 @@ class MCPAccessRead(BaseModel):
 
     auth_config: MCPAuthConfigRead | None
     tokens: list[MCPAccessTokenRead]
+
+
+class MCPAccessStatusRead(BaseModel):
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    project_id: UUID
+    mode: MCPAuthMode | None
+    configured: bool
+    remediation: str | None
+    runtime_effect_state: RuntimeEffectState
+    runtime_command_id: UUID | None
+    runtime_error_code: str | None

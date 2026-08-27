@@ -36,6 +36,7 @@ class VectorStore(ABC):
         generation_id: UUID,
         vector: list[float],
         limit: int,
+        include_documentation: bool = True,
     ) -> list[VectorSearchResult]: ...
 
     @abstractmethod

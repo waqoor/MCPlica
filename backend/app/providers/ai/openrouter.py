@@ -112,8 +112,8 @@ class OpenRouterProvider(AIProvider):
         raw_data = response.get("data")
         if not isinstance(raw_data, list) or len(raw_data) != len(texts):
             raise ClientResponseError("OpenRouter embedding count does not match input count")
-        ordered: list[tuple[int, list[float]]] = []
-        for fallback_index, item in enumerate(cast(list[JsonValue], raw_data)):
+        vectors_by_index: list[list[float] | None] = [None] * len(texts)
+        for item in cast(list[JsonValue], raw_data):
             if not isinstance(item, dict):
                 raise ClientResponseError("OpenRouter returned malformed embeddings")
             raw_vector = item.get("embedding")
@@ -127,7 +127,7 @@ class OpenRouterProvider(AIProvider):
                 ]
                 if len(vector) != len(raw_vector):
                     raise ValueError("embedding contains a non-numeric value")
-                raw_index = item.get("index", fallback_index)
+                raw_index = item.get("index")
                 if not isinstance(raw_index, int) or isinstance(raw_index, bool):
                     raise ValueError("embedding index is not an integer")
                 index = raw_index
@@ -135,9 +135,14 @@ class OpenRouterProvider(AIProvider):
                 raise ClientResponseError("OpenRouter returned malformed embeddings") from exc
             if not vector:
                 raise ClientResponseError("OpenRouter returned an empty embedding")
-            ordered.append((index, vector))
-        ordered.sort(key=lambda item: item[0])
-        vectors = [item[1] for item in ordered]
+            if index < 0 or index >= len(texts) or vectors_by_index[index] is not None:
+                raise ClientResponseError(
+                    "OpenRouter returned invalid or duplicate embedding indexes"
+                )
+            vectors_by_index[index] = vector
+        if any(vector is None for vector in vectors_by_index):
+            raise ClientResponseError("OpenRouter returned incomplete embedding indexes")
+        vectors = [vector for vector in vectors_by_index if vector is not None]
         dimensions = len(vectors[0])
         if any(len(vector) != dimensions for vector in vectors):
             raise ClientResponseError("OpenRouter returned inconsistent embedding dimensions")

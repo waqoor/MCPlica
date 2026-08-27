@@ -46,8 +46,6 @@
     var(--color-brand-indigo) 100%
   );
   --grid-line: rgb(107 155 255 / 0.038);
-  --logo-border: rgb(245 247 255 / 0.18);
-  --logo-shadow: 0 10px 26px rgb(1 5 24 / 0.2);
   --panel-sheen: linear-gradient(
     135deg,
     rgb(16 96 255 / 0.045),
@@ -104,8 +102,6 @@
     --shadow-dialog: 0 28px 90px rgb(28 42 97 / 0.24);
     --shadow-action: 0 10px 28px rgb(49 87 214 / 0.18);
     --grid-line: rgb(16 96 255 / 0.055);
-    --logo-border: rgb(16 24 74 / 0.13);
-    --logo-shadow: 0 10px 26px rgb(31 54 128 / 0.12);
     --panel-sheen: linear-gradient(
       135deg,
       rgb(16 96 255 / 0.035),
@@ -194,18 +190,9 @@ a {
   flex: none;
   overflow: hidden;
   isolation: isolate;
-  border: 1px solid var(--logo-border);
-  background: var(--color-brand-paper);
-  box-shadow: var(--logo-shadow);
-}
-
-.brand-logo::after {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.48);
-  content: "";
-  pointer-events: none;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .brand-logo img {

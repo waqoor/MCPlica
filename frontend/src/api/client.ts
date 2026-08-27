@@ -21,11 +21,73 @@ export class ApiError extends Error {
   }
 }
 
+type ContractIssue = {
+  readonly path?: readonly (string | number)[];
+  readonly message: string;
+  readonly code?: string;
+};
+
+export type ResponseContract<T> = {
+  safeParse(value: unknown):
+    | { readonly success: true; readonly data: T }
+    | {
+        readonly success: false;
+        readonly error: { readonly issues: readonly ContractIssue[] };
+      };
+};
+
+export class ResponseContractError extends ApiError {
+  constructor(
+    path: string,
+    method: string,
+    issues: readonly ContractIssue[],
+    requestId: string | null,
+  ) {
+    const endpoint = `${method.toUpperCase()} ${path.split("?", 1)[0]}`;
+    super(
+      502,
+      `The server response for ${endpoint} did not match the published API contract. Refresh and retry; if the problem persists, report the request ID.`,
+      "RESPONSE_CONTRACT_INVALID",
+      {
+        endpoint,
+        issues: issues.map((issue) => ({
+          path: issue.path?.join(".") || "$",
+          message: issue.message,
+          code: issue.code ?? "invalid_value",
+        })),
+      },
+      requestId,
+    );
+    this.name = "ResponseContractError";
+  }
+}
+
 const apiBaseUrl =
   (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(
     /\/$/,
     "",
   ) ?? "";
+
+type SessionRecoveryState = "refreshed" | "failed";
+type SessionRecoveryListener = (state: SessionRecoveryState) => void;
+
+let sessionRecovery: Promise<boolean> | null = null;
+let sessionRecoveryListener: SessionRecoveryListener | null = null;
+
+const recoveryExcludedPaths = new Set([
+  "/api/v1/auth/login",
+  "/api/v1/auth/logout",
+  "/api/v1/auth/refresh",
+]);
+
+export function setSessionRecoveryListener(
+  listener: SessionRecoveryListener | null,
+): () => void {
+  sessionRecoveryListener = listener;
+  return () => {
+    if (sessionRecoveryListener === listener) sessionRecoveryListener = null;
+  };
+}
 
 function csrfToken(): string | null {
   const match = document.cookie.match(/(?:^|;\s*)mcplica_csrf=([^;]+)/);
@@ -40,6 +102,18 @@ function errorMessage(payload: ErrorEnvelope | null, fallback: string): string {
     if (messages.length) return messages.join("; ");
   }
   return fallback || "The request could not be completed.";
+}
+
+function errorDetails(payload: ErrorEnvelope | null): Record<string, unknown> {
+  const details = { ...(payload?.error?.details ?? {}) };
+  if (!Array.isArray(payload?.detail)) return details;
+  for (const issue of payload.detail) {
+    const field = issue.loc
+      ?.filter((part) => part !== "body" && part !== "query" && part !== "path")
+      .join(".");
+    if (field && issue.msg) details[field] = issue.msg;
+  }
+  return details;
 }
 
 function requestHeaders(init: RequestInit): Headers {
@@ -60,12 +134,55 @@ function requestHeaders(init: RequestInit): Headers {
   return headers;
 }
 
-export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
+function fetchRequest(path: string, init: RequestInit): Promise<Response> {
+  return fetch(`${apiBaseUrl}${path}`, {
     ...init,
     credentials: "include",
     headers: requestHeaders(init),
   });
+}
+
+async function recoverSession(): Promise<boolean> {
+  if (sessionRecovery) return sessionRecovery;
+  sessionRecovery = (async () => {
+    try {
+      const response = await fetchRequest("/api/v1/auth/refresh", {
+        method: "POST",
+      });
+      const recovered = response.ok;
+      sessionRecoveryListener?.(recovered ? "refreshed" : "failed");
+      return recovered;
+    } catch {
+      sessionRecoveryListener?.("failed");
+      return false;
+    } finally {
+      sessionRecovery = null;
+    }
+  })();
+  return sessionRecovery;
+}
+
+async function fetchWithRecovery(
+  path: string,
+  init: RequestInit,
+): Promise<Response> {
+  let response = await fetchRequest(path, init);
+  if (
+    response.status === 401 &&
+    !recoveryExcludedPaths.has(path) &&
+    (await recoverSession())
+  ) {
+    response = await fetchRequest(path, init);
+  }
+  return response;
+}
+
+export async function api<T>(
+  path: string,
+  contract: ResponseContract<T>,
+  init: RequestInit = {},
+): Promise<T> {
+  const response = await fetchWithRecovery(path, init);
 
   if (!response.ok) {
     const payload = (await response
@@ -75,13 +192,41 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
       response.status,
       errorMessage(payload, response.statusText),
       payload?.error?.code ?? "HTTP_ERROR",
-      payload?.error?.details ?? {},
+      errorDetails(payload),
       payload?.error?.request_id ?? response.headers.get("X-Request-ID"),
     );
   }
 
-  if (response.status === 204) return undefined as T;
-  return (await response.json()) as T;
+  let payload: unknown = undefined;
+  if (response.status !== 204) {
+    try {
+      payload = await response.json();
+    } catch {
+      throw new ResponseContractError(
+        path,
+        init.method ?? "GET",
+        [
+          {
+            path: [],
+            message: "Response body is not valid JSON.",
+            code: "invalid_json",
+          },
+        ],
+        response.headers.get("X-Request-ID"),
+      );
+    }
+  }
+
+  const parsed = contract.safeParse(payload);
+  if (!parsed.success) {
+    throw new ResponseContractError(
+      path,
+      init.method ?? "GET",
+      parsed.error.issues,
+      response.headers.get("X-Request-ID"),
+    );
+  }
+  return parsed.data;
 }
 
 export function jsonBody(value: unknown): string {
@@ -104,11 +249,7 @@ export async function download(
   path: string,
   signal?: AbortSignal,
 ): Promise<Blob> {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
-    credentials: "include",
-    headers: requestHeaders({ signal }),
-    signal,
-  });
+  const response = await fetchWithRecovery(path, { signal });
   if (!response.ok) {
     const payload = (await response
       .json()
@@ -117,6 +258,8 @@ export async function download(
       response.status,
       errorMessage(payload, response.statusText),
       payload?.error?.code ?? "HTTP_ERROR",
+      errorDetails(payload),
+      payload?.error?.request_id ?? response.headers.get("X-Request-ID"),
     );
   }
   return response.blob();

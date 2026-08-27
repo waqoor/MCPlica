@@ -1,13 +1,19 @@
 from datetime import UTC, datetime
 from typing import Any, cast
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import CursorResult, select, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import InvalidStateError
-from app.domain.indexing import DocumentIndexGenerationRecord, IndexGenerationStatus
-from app.models.indexing import DocumentIndexGeneration
+from app.domain.indexing import (
+    CachedEmbeddingRecord,
+    DocumentIndexGenerationRecord,
+    IndexGenerationStatus,
+)
+from app.models.indexing import DocumentIndexGeneration, EmbeddingVectorCache
+from app.repositories.cleanup import lock_object_reference
 
 
 def _to_domain(model: DocumentIndexGeneration) -> DocumentIndexGenerationRecord:
@@ -30,7 +36,91 @@ def _to_domain(model: DocumentIndexGeneration) -> DocumentIndexGenerationRecord:
     )
 
 
+def _to_cached_embedding(model: EmbeddingVectorCache) -> CachedEmbeddingRecord:
+    return CachedEmbeddingRecord(
+        id=model.id,
+        project_id=model.project_id,
+        model_identity=model.model_identity,
+        content_sha256=model.content_sha256,
+        resolved_model=model.resolved_model,
+        dimensions=model.dimensions,
+        vector=model.vector_json,
+        created_at=model.created_at,
+        last_used_at=model.last_used_at,
+    )
+
+
 class IndexGenerationRepository:
+    async def list_cached_embeddings(
+        self,
+        session: AsyncSession,
+        *,
+        project_id: UUID,
+        model_identity: str,
+        content_sha256s: list[str],
+    ) -> list[CachedEmbeddingRecord]:
+        if not content_sha256s:
+            return []
+        now = datetime.now(UTC)
+        models = list(
+            await session.scalars(
+                select(EmbeddingVectorCache).where(
+                    EmbeddingVectorCache.project_id == project_id,
+                    EmbeddingVectorCache.model_identity == model_identity,
+                    EmbeddingVectorCache.content_sha256.in_(content_sha256s),
+                )
+            )
+        )
+        if models:
+            await session.execute(
+                update(EmbeddingVectorCache)
+                .where(EmbeddingVectorCache.id.in_([model.id for model in models]))
+                .values(last_used_at=now)
+            )
+        return [
+            _to_cached_embedding(model).model_copy(update={"last_used_at": now}) for model in models
+        ]
+
+    async def upsert_cached_embeddings(
+        self,
+        session: AsyncSession,
+        *,
+        project_id: UUID,
+        model_identity: str,
+        resolved_model: str,
+        dimensions: int,
+        vectors_by_sha256: dict[str, list[float]],
+    ) -> None:
+        if not vectors_by_sha256:
+            return
+        now = datetime.now(UTC)
+        values = [
+            {
+                "id": uuid4(),
+                "project_id": project_id,
+                "model_identity": model_identity,
+                "content_sha256": content_sha256,
+                "resolved_model": resolved_model,
+                "dimensions": dimensions,
+                "vector_json": vector,
+                "created_at": now,
+                "last_used_at": now,
+            }
+            for content_sha256, vector in vectors_by_sha256.items()
+        ]
+        statement = insert(EmbeddingVectorCache).values(values)
+        await session.execute(
+            statement.on_conflict_do_update(
+                constraint="uq_embedding_vector_cache_identity",
+                set_={
+                    "resolved_model": statement.excluded.resolved_model,
+                    "dimensions": statement.excluded.dimensions,
+                    "vector_json": statement.excluded.vector_json,
+                    "last_used_at": statement.excluded.last_used_at,
+                },
+            )
+        )
+
     async def prepare(
         self,
         session: AsyncSession,
@@ -118,6 +208,7 @@ class IndexGenerationRepository:
         chunk_manifest_storage_key: str,
         chunk_manifest_sha256: str,
     ) -> DocumentIndexGenerationRecord:
+        await lock_object_reference(session, chunk_manifest_storage_key)
         now = datetime.now(UTC)
         result = cast(
             CursorResult[Any],
@@ -173,3 +264,19 @@ class IndexGenerationRepository:
             select(DocumentIndexGeneration).where(DocumentIndexGeneration.build_id == build_id)
         )
         return _to_domain(model) if model else None
+
+    async def get_for_builds(
+        self,
+        session: AsyncSession,
+        build_ids: list[UUID],
+    ) -> dict[UUID, DocumentIndexGenerationRecord]:
+        if not build_ids:
+            return {}
+        models = list(
+            await session.scalars(
+                select(DocumentIndexGeneration).where(
+                    DocumentIndexGeneration.build_id.in_(set(build_ids))
+                )
+            )
+        )
+        return {model.build_id: _to_domain(model) for model in models}

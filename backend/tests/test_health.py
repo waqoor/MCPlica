@@ -9,7 +9,10 @@ from app.api.health import health, ready
 
 @pytest.mark.asyncio
 async def test_health_endpoint() -> None:
-    assert await health() == {"status": "ok", "service": "mcplica-api"}
+    assert (await health()).model_dump() == {
+        "status": "ok",
+        "service": "mcplica-api",
+    }
 
 
 class _Dependency:
@@ -36,8 +39,8 @@ def _request(*, storage: bool = True, openrouter: bool = False) -> Request:
 async def test_ready_is_bounded_to_essential_control_plane_dependencies() -> None:
     response = Response()
     result = await ready(_request(), response)
-    assert result["ready"] is True
-    assert result["dependencies"] == {
+    assert result.ready is True
+    assert result.dependencies.model_dump() == {
         "postgres": True,
         "redis": True,
         "artifact_storage": True,
@@ -48,5 +51,5 @@ async def test_ready_is_bounded_to_essential_control_plane_dependencies() -> Non
     assert response.status_code == 200
 
     unavailable = Response()
-    assert (await ready(_request(storage=False), unavailable))["ready"] is False
+    assert (await ready(_request(storage=False), unavailable)).ready is False
     assert unavailable.status_code == 503

@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.clients.ai import OpenRouterClient
 from app.clients.http import HttpClient
-from app.core.exceptions import AIAnalysisError
+from app.core.exceptions import AIAnalysisError, ClientResponseError
 from app.providers.ai.openrouter import OpenRouterProvider
 
 
@@ -85,6 +85,49 @@ async def test_embeddings_preserve_provider_index_order_and_dimensions() -> None
     result = await provider.embed(model="embed/model", texts=["one", "two"])
     assert result.vectors == [[0.1, 0.2], [0.3, 0.4]]
     assert result.dimensions == 2
+    await http.close()
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [
+            {"index": 0, "embedding": [0.1, 0.2]},
+            {"index": 0, "embedding": [0.3, 0.4]},
+        ],
+        [
+            {"index": -1, "embedding": [0.1, 0.2]},
+            {"index": 1, "embedding": [0.3, 0.4]},
+        ],
+        [
+            {"index": 0, "embedding": [0.1, 0.2]},
+            {"index": 2, "embedding": [0.3, 0.4]},
+        ],
+        [
+            {"index": 0, "embedding": [0.1, 0.2]},
+            {"embedding": [0.3, 0.4]},
+        ],
+        [
+            {"index": 0, "embedding": [0.1, 0.2]},
+            {"index": 1, "embedding": [0.3]},
+        ],
+    ],
+    ids=["duplicate", "negative", "out-of-range", "missing", "mixed-dimension"],
+)
+async def test_embeddings_reject_malformed_index_contract(
+    data: list[dict[str, object]],
+) -> None:
+    http = HttpClient(
+        transport=httpx.MockTransport(
+            lambda _request: httpx.Response(
+                200,
+                json={"model": "embed/model", "data": data},
+            )
+        )
+    )
+    provider = OpenRouterProvider(OpenRouterClient(http, _key, "https://openrouter.example/api/v1"))
+    with pytest.raises(ClientResponseError):
+        await provider.embed(model="embed/model", texts=["one", "two"])
     await http.close()
 
 

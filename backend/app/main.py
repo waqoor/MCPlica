@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import secrets
 import time
@@ -31,16 +32,20 @@ from app.core.network_policy import UrlPolicy
 from app.observability import observe_http_request, render_metrics
 from app.observability.metrics import METRICS_CONTENT_TYPE
 from app.providers.ai.openrouter import OpenRouterProvider
+from app.providers.milvus import MilvusVectorStore
 from app.providers.storage import FilesystemArtifactStorage
 from app.repositories.audit import AuditRepository
 from app.repositories.auth_sessions import AuthSessionRepository
+from app.repositories.build_admission import BuildAdmissionRepository
 from app.repositories.builds import BuildAIRunRepository, BuildRepository
 from app.repositories.canonical import CanonicalRepository
+from app.repositories.cleanup import CleanupRepository
 from app.repositories.credentials import CredentialRepository
 from app.repositories.deployments import DeploymentRepository
 from app.repositories.indexing import IndexGenerationRepository
 from app.repositories.mcp_access import MCPAccessRepository
 from app.repositories.projects import ProjectRepository
+from app.repositories.runtime_commands import RuntimeCommandRepository
 from app.repositories.settings import SettingsRepository
 from app.repositories.sources import SourceRepository
 from app.repositories.users import UserRepository
@@ -48,9 +53,16 @@ from app.repositories.validation import ValidationRepository
 from app.services.artifacts import ArtifactService
 from app.services.audit import AuditService
 from app.services.auth import AuthService
+from app.services.build_admission import BuildAdmissionDispatcher
 from app.services.builds import BuildService
+from app.services.builds.configuration_identity import ExecutableConfigurationIdentity
+from app.services.canonicalization import CanonicalizationService
+from app.services.cleanup import CleanupService, CleanupWorker
 from app.services.credentials import CredentialService
+from app.services.deployment.command_dispatcher import RuntimeCommandDispatcher
+from app.services.deployment.preflight import DeploymentPreflight
 from app.services.deployment.service import DeploymentService
+from app.services.journey import JourneyService
 from app.services.mcp_access import MCPAccessService
 from app.services.projects import ProjectService
 from app.services.settings import SettingsService
@@ -163,6 +175,9 @@ def create_app(settings_override: Settings | None = None) -> FastAPI:
         credentials = CredentialRepository()
         validation = ValidationRepository()
         deployments = DeploymentRepository()
+        runtime_commands = RuntimeCommandRepository()
+        cleanup_repository = CleanupRepository()
+        build_admission_repository = BuildAdmissionRepository()
         mcp_access = MCPAccessRepository()
         passwords = PasswordManager()
         tokens = TokenManager(
@@ -180,11 +195,91 @@ def create_app(settings_override: Settings | None = None) -> FastAPI:
         app.state.milvus = milvus
         app.state.openrouter = openrouter
         app.state.storage = storage
+        runtime_command_dispatcher = RuntimeCommandDispatcher(
+            database,
+            runtime_commands,
+            deployment_queue,
+            interval_seconds=config.runtime_command_dispatch_interval_seconds,
+            lease_seconds=config.runtime_command_dispatch_lease_seconds,
+        )
+        cleanup_worker = CleanupWorker(
+            database,
+            cleanup_repository,
+            audit,
+            artifact_storage,
+            MilvusVectorStore(milvus, config.milvus_collection),
+            settings_service,
+            interval_seconds=config.cleanup_dispatch_interval_seconds,
+            lease_seconds=config.cleanup_lease_seconds,
+            max_attempts=config.cleanup_max_attempts,
+            retention_interval_seconds=config.cleanup_retention_interval_seconds,
+        )
+        cleanup_service = CleanupService(
+            database,
+            cleanup_repository,
+            audit,
+            orphan_guard_delay_seconds=config.cleanup_orphan_guard_delay_seconds,
+            notify=cleanup_worker.wake,
+        )
+        build_admission = BuildAdmissionDispatcher(
+            database,
+            build_admission_repository,
+            build_queue,
+            settings_service,
+            audit,
+            interval_seconds=config.build_admission_dispatch_interval_seconds,
+            lease_seconds=config.build_admission_lease_seconds,
+        )
+        deployment_preflight = DeploymentPreflight(
+            mcp_access,
+            credentials,
+            ExecutableConfigurationIdentity(projects, sources),
+            artifact_storage,
+            config,
+            manifest_max_bytes=config.runtime_manifest_max_bytes,
+        )
         deployment_service = DeploymentService(
             database,
             deployments,
+            runtime_commands,
             audit,
-            deployment_queue,
+            runtime_command_dispatcher,
+            deployment_preflight,
+            config,
+        )
+        canonicalization = CanonicalizationService(
+            database,
+            projects,
+            sources,
+            snapshots,
+            artifact_storage,
+        )
+        source_service = SourceService(
+            database,
+            sources,
+            projects,
+            builds,
+            snapshots,
+            generations,
+            audit,
+            artifact_storage,
+            http,
+            url_policy,
+            settings_service,
+            canonicalization=canonicalization,
+            document_max_bytes=config.document_max_bytes,
+            fetch_max_bytes=config.fetch_max_bytes,
+            fetch_max_redirects=config.fetch_max_redirects,
+            fetch_max_attempts=config.fetch_max_attempts,
+            cleanup=cleanup_service,
+        )
+        mcp_access_service = MCPAccessService(
+            database,
+            mcp_access,
+            deployments,
+            runtime_commands,
+            audit,
+            deployment_service,
             config,
         )
         app.state.services = ServiceContainer(
@@ -205,66 +300,92 @@ def create_app(settings_override: Settings | None = None) -> FastAPI:
                 database,
                 projects,
                 audit,
+                runtime_commands,
                 deployment_service,
                 settings_service,
+                cleanup_service,
             ),
-            sources=SourceService(
-                database,
-                sources,
-                projects,
-                builds,
-                snapshots,
-                generations,
-                audit,
-                artifact_storage,
-                http,
-                url_policy,
-                settings_service,
-                document_max_bytes=config.document_max_bytes,
-                fetch_max_bytes=config.fetch_max_bytes,
-                fetch_max_redirects=config.fetch_max_redirects,
-                fetch_max_attempts=config.fetch_max_attempts,
-            ),
+            sources=source_service,
             credentials=CredentialService(
                 database,
                 credentials,
                 projects,
+                runtime_commands,
                 audit,
                 secret_cipher,
                 deployment_service,
+                source_configuration=source_service,
             ),
             audit=AuditService(database, audit),
             deployments=deployment_service,
-            mcp_access=MCPAccessService(
+            journey=JourneyService(
                 database,
-                mcp_access,
+                projects,
+                sources,
+                builds,
+                validation,
+                credentials,
                 deployments,
-                audit,
-                deployment_service,
+                source_service,
+                mcp_access_service,
+                deployment_preflight,
+                settings_service,
                 config,
             ),
+            mcp_access=mcp_access_service,
             settings=settings_service,
             ai=ai,
+            build_admission=build_admission,
             builds=BuildService(
                 database,
                 builds,
                 ai_runs,
                 snapshots,
                 sources,
+                source_service,
                 projects,
                 credentials,
-                mcp_access,
                 validation,
                 audit,
                 settings_service,
                 build_queue,
                 config,
                 ArtifactService(artifact_storage),
+                cleanup_service,
+                build_admission,
             ),
+            cleanup=cleanup_service,
         )
+        runtime_command_stop = asyncio.Event()
+        runtime_command_task = asyncio.create_task(
+            runtime_command_dispatcher.run(runtime_command_stop),
+            name="runtime-command-dispatcher",
+        )
+        runtime_command_dispatcher.wake()
+        cleanup_stop = asyncio.Event()
+        cleanup_task = asyncio.create_task(
+            cleanup_worker.run(cleanup_stop),
+            name="cleanup-dispatcher",
+        )
+        cleanup_worker.wake()
+        build_admission_stop = asyncio.Event()
+        build_admission_task = asyncio.create_task(
+            build_admission.run(build_admission_stop),
+            name="build-admission-dispatcher",
+        )
+        build_admission.wake()
         try:
             yield
         finally:
+            runtime_command_stop.set()
+            runtime_command_dispatcher.wake()
+            await runtime_command_task
+            cleanup_stop.set()
+            cleanup_worker.wake()
+            await cleanup_task
+            build_admission_stop.set()
+            build_admission.wake()
+            await build_admission_task
             await database.close()
             await redis.close()
             await deployment_queue.close()

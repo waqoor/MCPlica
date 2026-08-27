@@ -37,18 +37,22 @@ Place the first output in `AUTH_SIGNING_KEY`, the second in `REFRESH_TOKEN_PEPPE
 
 Review every setting against `configuration.md`; `.env.example` is a shape, not a production secret store.
 
-For local development, `make compose-up` applies migrations and creates the initial
-`admin@admin.com` account with password `admin@321`. That seed command is structurally
-limited to `ENV=development` and must not be used as a production bootstrap path.
+For local development, `.env` defines `DEFAULT_ADMIN_EMAIL=admin@admin.com` and
+`DEFAULT_ADMIN_PASSWORD=admin@321`. `make compose-up` reads those settings after
+applying migrations and creates the account only when it is missing. The seed is
+structurally limited to `ENV=development`; production rejects both variables and
+must use the prompted bootstrap path below.
 
 ## Start and initialize
 
 ```powershell
 docker build --file infra/docker/runtime.Dockerfile --build-arg RUNTIME_VERSION=1.0.0 --tag mcplica/mcp-runtime:1.0.0 .
 docker compose --env-file .env -f infra/compose.yaml up --build --detach --wait --wait-timeout 300
-docker compose --env-file .env -f infra/compose.yaml exec api alembic -c ../migrations/alembic.ini upgrade head
 docker compose --env-file .env -f infra/compose.yaml exec api python -m app.cli.bootstrap_admin --email admin@admin.com --display-name "MCPlica Admin"
 ```
+
+The one-shot `migrate` service must complete successfully before the API or either
+worker starts, so application code never runs against an older schema.
 
 The bootstrap command prompts for the administrator password and bootstrap secret; neither belongs on the command line. It only creates the first user. Remove `BOOTSTRAP_SECRET` from `.env` and recreate the API and both workers after successful bootstrap.
 

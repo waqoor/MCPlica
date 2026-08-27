@@ -9,7 +9,7 @@ import jwt
 from jwt.types import Options
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 from mcp.server.auth.settings import AuthSettings
-from mcp_contracts import InboundAuthSecrets, MCPManifest, RuntimeSecretBundle
+from mcp_contracts import InboundAuthSecrets, RuntimeSecretBundle
 from pydantic import AnyHttpUrl
 
 from app.clients.oidc_client import OidcJwksClient
@@ -147,22 +147,13 @@ class InboundAuthContext:
 
 
 def build_inbound_auth(
-    manifest: MCPManifest,
     bundle: RuntimeSecretBundle,
     settings: RuntimeSettings,
     *,
     oidc_client: OidcJwksClient | None = None,
 ) -> InboundAuthContext:
-    manifest_mode = manifest.security.inbound_auth_mode
     secrets = bundle.inbound_auth
-    expected_mode = {
-        "static_bearer": "static_bearer",
-        "oidc": "external_oauth_oidc",
-        "none": "disabled_dev",
-    }[manifest_mode]
-    if secrets.mode != expected_mode:
-        raise ValueError("manifest and secret-bundle inbound authentication modes differ")
-    if manifest_mode == "static_bearer":
+    if secrets.mode == "static_bearer":
         # The SDK only installs its bearer authentication middleware when auth
         # settings are present. Static tokens do not advertise an OAuth issuer,
         # so the nullable resource URL intentionally suppresses OAuth metadata.
@@ -172,11 +163,8 @@ def build_inbound_auth(
             required_scopes=[],
         )
         return InboundAuthContext(StaticBearerTokenVerifier(secrets), auth_settings)
-    if manifest_mode == "none":
-        if (
-            not settings.is_development
-            or not manifest.security.allow_insecure_none_only_in_development
-        ):
+    if secrets.mode == "disabled_dev":
+        if not settings.is_development:
             raise ValueError(
                 "unauthenticated MCP mode is restricted to explicit development/test mode"
             )

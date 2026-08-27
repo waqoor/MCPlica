@@ -16,6 +16,23 @@ concurrency:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.6@sha256:1957b2ff3137e4ef7f3bc813e74fff50b1e1ffddc85c8b9d6f14ade972be8687
+        env:
+          POSTGRES_DB: mcplica_test
+          POSTGRES_USER: mcplica_test
+          POSTGRES_PASSWORD: integration-postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mcplica_test -d mcplica_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql+psycopg://mcplica_test:integration-postgres@127.0.0.1:5432/mcplica_test
+      TEST_DATABASE_URL: postgresql+psycopg://mcplica_test:integration-postgres@127.0.0.1:5432/mcplica_test
     defaults:
       run:
         working-directory: backend
@@ -30,7 +47,10 @@ jobs:
       - run: uv run --frozen --extra dev ruff check app tests ../packages/contracts/src ../packages/contracts/tests
       - run: uv run --frozen --extra dev ruff format --check app tests ../packages/contracts/src ../packages/contracts/tests
       - run: uv run --frozen --extra dev pyright app ../packages/contracts/src
-      - run: uv run --frozen --extra dev pytest tests ../packages/contracts/tests
+      - run: uv run --frozen --extra dev alembic -c ../migrations/alembic.ini upgrade head
+      - run: uv run --frozen --extra dev pytest -c pyproject.toml tests ../packages/contracts/tests --cov=app --cov-report=json:coverage-critical.json
+      - run: uv run --frozen --extra dev python scripts/check_critical_coverage.py coverage-critical.json
+      - run: uv run --frozen --extra dev alembic -c ../migrations/alembic.ini check
 
   runtime:
     runs-on: ubuntu-latest
@@ -67,6 +87,8 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test:run
+      - run: pnpm check:api
+      - run: pnpm check:assets
       - run: pnpm build
 
   e2e:

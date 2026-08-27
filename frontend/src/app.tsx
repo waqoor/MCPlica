@@ -131,11 +131,11 @@ const router = createBrowserRouter([
               },
               { path: "builds", element: <BuildsPage /> },
               { path: "deployments", element: <DeploymentsPage /> },
-              { path: "activity", element: <ActivityPage /> },
               { path: "settings", element: <SettingsPage /> },
               {
                 element: <AdminRoute />,
                 children: [
+                  { path: "activity", element: <ActivityPage /> },
                   { path: "settings/models", element: <ModelSettingsPage /> },
                   { path: "settings/users", element: <UsersPage /> },
                 ],

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useMemo, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, type ReactNode } from "react";
 import { authApi } from "@/api/auth";
+import { setSessionRecoveryListener } from "@/api/client";
 import { AuthContext, type AuthContextValue } from "./auth-context";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -17,7 +18,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
   const logoutMutation = useMutation({
     mutationFn: authApi.logout,
-    onSettled: () => {
+    onSuccess: () => {
       queryClient.setQueryData(["auth", "me"], null);
       queryClient.removeQueries({
         predicate: (query) => query.queryKey[0] !== "auth",
@@ -25,9 +26,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   });
 
+  useEffect(
+    () =>
+      setSessionRecoveryListener((state) => {
+        if (state === "refreshed") {
+          void queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+          return;
+        }
+        queryClient.setQueryData(["auth", "me"], null);
+        void queryClient.cancelQueries({
+          predicate: (query) => query.queryKey[0] !== "auth",
+        });
+      }),
+    [queryClient],
+  );
+
   const refresh = useCallback(async () => {
-    await currentUser.refetch();
-  }, [currentUser]);
+    const response = await authApi.refresh();
+    queryClient.setQueryData(["auth", "me"], response.user);
+    await queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+  }, [queryClient]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -36,6 +54,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       error: currentUser.error,
       login: loginMutation.mutateAsync,
       logout: logoutMutation.mutateAsync,
+      logoutError: logoutMutation.error,
+      isLoggingOut: logoutMutation.isPending,
       refresh,
     }),
     [
@@ -44,6 +64,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       currentUser.isPending,
       loginMutation.mutateAsync,
       logoutMutation.mutateAsync,
+      logoutMutation.error,
+      logoutMutation.isPending,
       refresh,
     ],
   );

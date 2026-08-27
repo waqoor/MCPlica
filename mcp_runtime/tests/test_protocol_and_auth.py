@@ -66,7 +66,11 @@ async def test_official_client_lists_calls_and_reads_exact_contract() -> None:
         resource = await client.read_resource("mcplica://docs/readme")
 
     assert [tool.name for tool in tools.tools] == ["get_pet"]
-    assert result.structured_content == {"id": "pet-1", "name": "Ada"}
+    assert result.structured_content == {
+        "status": 200,
+        "contentType": "application/json",
+        "body": {"id": "pet-1", "name": "Ada"},
+    }
     assert [str(item.uri) for item in resources.resources] == ["mcplica://docs/readme"]
     assert isinstance(resource.contents[0], types.TextResourceContents)
     assert resource.contents[0].text == "Runtime documentation"

@@ -4,6 +4,8 @@ from uuid import UUID
 
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, field_validator
 
+from app.domain.deployments import RuntimeEffectState
+
 SLUG_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
 
 
@@ -39,6 +41,7 @@ class ProjectUpdate(BaseModel):
     description: str | None = Field(default=None, max_length=10_000)
     default_base_url: AnyHttpUrl | None = None
     active_server_ref: str | None = Field(default=None, min_length=1, max_length=120)
+    server_mappings: dict[str, str] | None = None
     is_enabled: bool | None = None
 
     @field_validator("name")
@@ -61,6 +64,7 @@ class ProjectRead(BaseModel):
     description: str | None
     default_base_url: str | None
     active_server_ref: str | None
+    server_mappings: dict[str, str]
     mcp_hostname: str
     is_enabled: bool
     active_build_id: UUID | None
@@ -68,3 +72,6 @@ class ProjectRead(BaseModel):
     created_by: UUID
     created_at: datetime
     updated_at: datetime
+    runtime_effect_state: RuntimeEffectState
+    runtime_command_id: UUID | None
+    runtime_error_code: str | None

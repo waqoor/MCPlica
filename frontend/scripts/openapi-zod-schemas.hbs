@@ -1,0 +1,23 @@
+// Runtime validators are generated against the Zod 3 compatibility surface.
+// The application uses Zod 4, whose package deliberately ships this stable
+// compatibility entrypoint for generators that emit Zod 3 syntax.
+import { z } from "zod/v3";
+
+{{#each schemas}}
+const {{@key}}: z.ZodTypeAny = {{{this}}};
+{{/each}}
+
+export const schemas = {
+{{#each schemas}}
+  {{@key}},
+{{/each}}
+};
+
+// The existing HTTP client owns cookies, CSRF, and refresh semantics. Export
+// only generated success-response validators so every endpoint can validate
+// its wire payload without creating a parallel generated client.
+export const endpointResponses = {
+{{#each endpoints}}
+  "{{method}} {{path}}": {{{response}}},
+{{/each}}
+};

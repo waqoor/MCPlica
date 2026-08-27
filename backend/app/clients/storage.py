@@ -85,6 +85,10 @@ class FilesystemStorageClient(AsyncClient):
             raise ValidationError("Staged storage object is unavailable")
         return temporary_path
 
+    def storage_key_for_staged(self, staged: StagedObject) -> str:
+        namespace = self._namespace(staged.namespace)
+        return str(namespace / staged.content_sha256[:2] / staged.content_sha256).replace("\\", "/")
+
     async def stage_content_stream(
         self,
         namespace: str,
@@ -140,10 +144,7 @@ class FilesystemStorageClient(AsyncClient):
 
     async def commit_staged(self, staged: StagedObject) -> StoredObject:
         temporary_path = self._staged_path(staged)
-        namespace = self._namespace(staged.namespace)
-        storage_key = str(namespace / staged.content_sha256[:2] / staged.content_sha256).replace(
-            "\\", "/"
-        )
+        storage_key = self.storage_key_for_staged(staged)
         destination = self._safe_path(storage_key)
         await asyncio.to_thread(destination.parent.mkdir, parents=True, exist_ok=True)
         if await asyncio.to_thread(destination.exists):

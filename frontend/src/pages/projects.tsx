@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Boxes, Plus, Search } from "lucide-react";
-import { useDeferredValue, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useDeferredValue, useMemo } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { projectApi } from "@/api/projects";
 import { PageHeader } from "@/components/page-header";
 import { QueryError, QueryPending } from "@/components/query-state";
@@ -13,7 +13,8 @@ import { Input } from "@/components/ui/input";
 import { formatDate } from "@/lib/format";
 
 export function ProjectsPage() {
-  const [search, setSearch] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const search = searchParams.get("search") ?? "";
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
   const projects = useQuery({
     queryKey: ["projects"],
@@ -55,7 +56,12 @@ export function ProjectsPage() {
         />
         <Input
           id="project-search"
-          onChange={(event) => setSearch(event.target.value)}
+          onChange={(event) => {
+            const next = new URLSearchParams(searchParams);
+            if (event.target.value) next.set("search", event.target.value);
+            else next.delete("search");
+            setSearchParams(next, { replace: true });
+          }}
           placeholder="Search by name, slug, or description"
           type="search"
           value={search}

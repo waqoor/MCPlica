@@ -17,6 +17,17 @@ const DOCUMENTATION_EXTENSIONS = new Set([
   ".xlsx",
 ]);
 
+export const EXECUTABLE_FORMAT_LABEL =
+  "OpenAPI 3.x or API Inventory v1 JSON or YAML";
+export const DOCUMENTATION_FORMAT_LABEL =
+  "JSON, Markdown, TXT, CSV, XLSX, DOCX, HTML, or PDF";
+
+export function uploadFormatLabel(kind: SourceKind): string {
+  return kind === "documentation"
+    ? DOCUMENTATION_FORMAT_LABEL
+    : EXECUTABLE_FORMAT_LABEL;
+}
+
 export const EXECUTABLE_FILE_ACCEPT =
   ".json,.yaml,.yml,application/json,application/yaml,text/yaml";
 export const DOCUMENTATION_FILE_ACCEPT = [
@@ -56,9 +67,7 @@ export function uploadFileError(file: File, kind: SourceKind): string | null {
   const supported =
     kind === "documentation" ? DOCUMENTATION_EXTENSIONS : EXECUTABLE_EXTENSIONS;
   if (!supported.has(extension)) {
-    return kind === "documentation"
-      ? "Use JSON, Markdown, TXT, CSV, XLSX, DOCX, HTML, or PDF."
-      : "Use an OpenAPI/API Inventory JSON or YAML file.";
+    return `Use ${uploadFormatLabel(kind)}.`;
   }
   return null;
 }

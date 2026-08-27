@@ -1,0 +1,202 @@
+{
+  "auth_profiles": [],
+  "build": {
+    "analysis_model": null,
+    "build_id": "fixture-pipeline-matrix-3.1-yaml",
+    "canonical_sha256": "8674b9cae69bc7793be35d34dc8a6e47e9b85dc8bf48c0198ab93f8c0f2e2d48",
+    "compiler_version": "1.0.0",
+    "created_at": "2026-08-27T00:00:00+00:00",
+    "embedding_model": null,
+    "prompt_bundle_version": null,
+    "source_digest": "0de8a88341e6535837c53894fe7a160959e2614054b2ed1364ca29140e46d9ab",
+    "source_version_ids": [
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "validation_model": null
+  },
+  "manifest_id": "5262cb11d57e069e9937a88c2a90c7d9c72b52c6a4ba6d89d42eda2370577015",
+  "project": {
+    "id": "00000000-0000-0000-0000-000000000001",
+    "name": "MCPlica YAML pipeline matrix",
+    "slug": "pipeline-matrix-3.1-yaml"
+  },
+  "resources": [],
+  "runtime_compatibility": ">=1.0,<2.0",
+  "schema_version": "mcp-manifest/v1",
+  "security": {
+    "allow_insecure_none_only_in_development": true,
+    "allowed_upstream_hosts": [
+      "yaml.example.com"
+    ],
+    "default_max_response_bytes": 2000000,
+    "default_timeout_ms": 30000,
+    "inbound_auth_boundary": "deployment_overlay",
+    "inbound_auth_mode": null
+  },
+  "servers": [
+    {
+      "description": null,
+      "id": "server_ec2bc9c0845ed8c8",
+      "url": "https://yaml.example.com/api"
+    }
+  ],
+  "tools": [
+    {
+      "description": "GET /matrix/{id}",
+      "enabled": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "minimum": 1,
+                "type": "integer"
+              }
+            ]
+          },
+          "mode": {
+            "enum": [
+              "summary",
+              "detailed",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "max_request_bytes": 10000000,
+      "max_response_bytes": 2000000,
+      "name": "get_yaml_matrix",
+      "operation_key": "op_ea6a84daaa78fc88b33cfcbb",
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "oneOf": [
+              {
+                "properties": {
+                  "value": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "value"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "values": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "values"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "status": {
+            "maximum": 299,
+            "minimum": 200,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status",
+          "contentType",
+          "body"
+        ],
+        "type": "object"
+      },
+      "provenance": {
+        "source_pointer": "#/paths/~1matrix~1{id}/get",
+        "source_version_id": "00000000-0000-0000-0000-000000000002"
+      },
+      "request_mapping": {
+        "body": null,
+        "method": "GET",
+        "parameters": [
+          {
+            "allow_reserved": false,
+            "explode": null,
+            "required": true,
+            "source_name": "id",
+            "style": null,
+            "target": "path",
+            "tool_field": "id"
+          },
+          {
+            "allow_reserved": false,
+            "explode": null,
+            "required": false,
+            "source_name": "mode",
+            "style": null,
+            "target": "query",
+            "tool_field": "mode"
+          }
+        ],
+        "path": "/matrix/{id}",
+        "server_ref": "server_ec2bc9c0845ed8c8"
+      },
+      "responses": [
+        {
+          "description": "Matrix result",
+          "media_type": "application/json",
+          "schema": {
+            "oneOf": [
+              {
+                "properties": {
+                  "value": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "value"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "values": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "values"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "status_code": "200"
+        }
+      ],
+      "security_profile_ref": null,
+      "timeout_ms": 30000,
+      "title": "Get Yaml Matrix"
+    }
+  ]
+}

@@ -1,20 +1,40 @@
+from typing import Protocol
+
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError
 from jsonschema.exceptions import ValidationError as JSONSchemaValidationError
 from mcp_contracts import MCPManifest
 
 from app.auth.upstream import UpstreamAuthManager
-from app.clients.api_client import ApiClient, UpstreamResult
+from app.clients.api_client import UpstreamResult
 from app.executor.errors import ArgumentValidationError, RuntimeConfigurationError
-from app.executor.request_builder import build_request
+from app.executor.request_builder import BuiltRequest, build_request
+from app.executor.response_contract import (
+    CompiledResponseDefinition,
+    compile_response_contract,
+    validate_upstream_response,
+)
 from app.security.url_policy import UpstreamUrlPolicy
+
+
+class UpstreamRequestExecutor(Protocol):
+    async def execute(
+        self,
+        request: BuiltRequest,
+        *,
+        timeout_ms: int,
+        max_request_bytes: int,
+        max_response_bytes: int,
+    ) -> UpstreamResult: ...
+
+    async def close(self) -> None: ...
 
 
 class ToolExecutor:
     def __init__(
         self,
         manifest: MCPManifest,
-        api_client: ApiClient,
+        api_client: UpstreamRequestExecutor,
         auth_manager: UpstreamAuthManager,
         url_policy: UpstreamUrlPolicy,
     ) -> None:
@@ -23,6 +43,7 @@ class ToolExecutor:
         self._url_policy = url_policy
         self._tools = {tool.name: tool for tool in manifest.enabled_tools()}
         self._validators: dict[str, Draft202012Validator] = {}
+        self._response_contracts: dict[str, tuple[CompiledResponseDefinition, ...]] = {}
         for name, tool in self._tools.items():
             try:
                 Draft202012Validator.check_schema(tool.input_schema)
@@ -31,6 +52,7 @@ class ToolExecutor:
                     f"Tool {name!r} has an invalid input schema"
                 ) from exc
             self._validators[name] = Draft202012Validator(tool.input_schema)
+            self._response_contracts[name] = compile_response_contract(tool)
 
     async def execute(self, tool_name: str, arguments: dict[str, object]) -> UpstreamResult:
         tool = self._tools.get(tool_name)
@@ -45,12 +67,14 @@ class ToolExecutor:
             raise ArgumentValidationError(f"Invalid tool arguments{location}") from exc
         auth = await self._auth_manager.injection_for(tool.security_profile_ref)
         request = build_request(tool, arguments, self._url_policy, auth)
-        return await self._api_client.execute(
+        result = await self._api_client.execute(
             request,
             timeout_ms=tool.timeout_ms,
             max_request_bytes=tool.max_request_bytes,
             max_response_bytes=tool.max_response_bytes,
         )
+        validate_upstream_response(self._response_contracts[tool_name], result)
+        return result
 
     async def close(self) -> None:
         await self._api_client.close()
