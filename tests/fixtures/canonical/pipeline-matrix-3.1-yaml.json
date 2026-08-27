@@ -1,0 +1,182 @@
+{
+  "active_server_ref": "server_ec2bc9c0845ed8c8",
+  "description": null,
+  "documentation_refs": [],
+  "operations": [
+    {
+      "description": null,
+      "key": "op_ea6a84daaa78fc88b33cfcbb",
+      "method": "GET",
+      "parameters": [
+        {
+          "allow_reserved": false,
+          "description": null,
+          "explode": null,
+          "location": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "minimum": 1,
+                "type": "integer"
+              }
+            ]
+          },
+          "source_ref": {
+            "pointer": "#/paths/~1matrix~1{id}/get/parameters/0",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "style": null
+        },
+        {
+          "allow_reserved": false,
+          "description": null,
+          "explode": null,
+          "location": "query",
+          "name": "mode",
+          "required": false,
+          "schema": {
+            "enum": [
+              "summary",
+              "detailed",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_ref": {
+            "pointer": "#/paths/~1matrix~1{id}/get/parameters/1",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "style": null
+        }
+      ],
+      "path_template": "/matrix/{id}",
+      "provenance": {
+        "executable_fields": {
+          "method": {
+            "pointer": "#/paths/~1matrix~1{id}/get",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "path_template": {
+            "pointer": "#/paths/~1matrix~1{id}",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "server_ref": {
+            "pointer": "#/servers/0",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          }
+        },
+        "operation": {
+          "pointer": "#/paths/~1matrix~1{id}/get",
+          "source_version_id": "00000000-0000-0000-0000-000000000002"
+        }
+      },
+      "request_body": null,
+      "responses": [
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema": {
+                "oneOf": [
+                  {
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "properties": {
+                      "values": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "values"
+                    ],
+                    "type": "object"
+                  }
+                ]
+              },
+              "source_ref": {
+                "pointer": "#/paths/~1matrix~1{id}/get/responses/200/content/application~1json",
+                "source_version_id": "00000000-0000-0000-0000-000000000002"
+              }
+            }
+          ],
+          "description": "Matrix result",
+          "source_ref": {
+            "pointer": "#/paths/~1matrix~1{id}/get/responses/200",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "status_code": "200"
+        }
+      ],
+      "security": [],
+      "semantic": {
+        "category": null,
+        "confidence": null,
+        "description": null,
+        "documentation_chunk_ids": [],
+        "keywords": [],
+        "provenance": null,
+        "relationship_hints": [],
+        "title": null
+      },
+      "server_candidates": [
+        "server_ec2bc9c0845ed8c8"
+      ],
+      "server_ref": "server_ec2bc9c0845ed8c8",
+      "source_operation_id": "getYamlMatrix",
+      "summary": null,
+      "tags": [],
+      "tool_name_seed": "get_yaml_matrix"
+    }
+  ],
+  "project_id": "00000000-0000-0000-0000-000000000001",
+  "provenance": {
+    "schema_dialect": {
+      "source": "https://json-schema.org/draft/2020-12/schema",
+      "target": "https://json-schema.org/draft/2020-12/schema",
+      "transformations": []
+    },
+    "source_fingerprint": "0de8a88341e6535837c53894fe7a160959e2614054b2ed1364ca29140e46d9ab",
+    "source_version_ids": [
+      "00000000-0000-0000-0000-000000000002"
+    ]
+  },
+  "schema_version": "canonical-api/v1",
+  "schemas": {},
+  "security_schemes": {},
+  "servers": [
+    {
+      "description": null,
+      "key": "server_ec2bc9c0845ed8c8",
+      "source_ref": {
+        "pointer": "#/servers/0",
+        "source_version_id": "00000000-0000-0000-0000-000000000002"
+      },
+      "url": "https://yaml.example.com/api"
+    }
+  ],
+  "source_format": "openapi-3.1",
+  "title": "MCPlica YAML pipeline matrix",
+  "version": "1.0.0"
+}

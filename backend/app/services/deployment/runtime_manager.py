@@ -8,7 +8,8 @@ from app.clients.docker import (
 )
 from app.clients.runtime_files import RuntimeMounts
 from app.core.config import Settings
-from app.domain.deployments import DeploymentRecord
+from app.core.exceptions import RuntimeHealthError
+from app.domain.deployments import DeploymentActivationProof, DeploymentRecord
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,6 +17,7 @@ class ProvisionedRuntime:
     container_id: str
     image_digest: str
     health_status: str
+    activation_proof: DeploymentActivationProof
 
 
 class RuntimeDockerClient(Protocol):
@@ -36,6 +38,8 @@ class RuntimeDockerClient(Protocol):
     async def create_runtime_container(self, spec: RuntimeContainerSpec) -> ContainerInfo: ...
 
     async def start_container(self, name: str) -> ContainerInfo: ...
+
+    async def inspect_container(self, name: str) -> ContainerInfo | None: ...
 
     async def wait_until_healthy(
         self,
@@ -137,6 +141,7 @@ class RuntimeManager:
                 "MCP_MANIFEST_PATH": "/runtime/manifest.json",
                 "MCP_MANIFEST_SHA256": deployment.manifest_sha256,
                 "MCP_SECRET_BUNDLE_PATH": "/run/secrets/mcplica-runtime.json",
+                "MCP_AUTH_OVERLAY_SHA256": mounts.auth_overlay_sha256,
                 "MCP_PUBLIC_BASE_URL": public_base_url,
                 "MCP_ALLOWED_HOSTS": (
                     f"{deployment.hostname},127.0.0.1,127.0.0.1:8000,localhost,localhost:8000"
@@ -179,10 +184,119 @@ class RuntimeManager:
             timeout_seconds=self._settings.runtime_health_timeout_seconds,
             poll_interval_seconds=self._settings.runtime_health_poll_seconds,
         )
+        confirmed = await self._docker.inspect_container(healthy.name)
+        if (
+            confirmed is None
+            or confirmed.id != healthy.id
+            or confirmed.image_id != (healthy.image_id or image_digest)
+            or confirmed.status != "running"
+            or confirmed.health != "healthy"
+        ):
+            raise RuntimeHealthError("Runtime changed during initial edge verification")
         return ProvisionedRuntime(
-            healthy.id,
-            healthy.image_id or image_digest,
-            healthy.health or "healthy",
+            confirmed.id,
+            confirmed.image_id,
+            confirmed.health,
+            self._activation_proof(
+                deployment,
+                container_id=confirmed.id,
+                image_digest=confirmed.image_id,
+            ),
+        )
+
+    async def revalidate_activation_candidate(
+        self, deployment: DeploymentRecord
+    ) -> DeploymentActivationProof:
+        """Re-prove exact container and edge identity before retiring the prior runtime."""
+
+        info = await self._docker.inspect_container(deployment.container_name)
+        if info is None:
+            raise RuntimeHealthError("Activation candidate container no longer exists")
+        if deployment.container_id is None or info.id != deployment.container_id:
+            raise RuntimeHealthError("Activation candidate container identity changed")
+        if deployment.image_digest is None or info.image_id != deployment.image_digest:
+            raise RuntimeHealthError("Activation candidate image identity changed")
+        if info.status != "running" or info.health != "healthy":
+            raise RuntimeHealthError("Activation candidate is no longer healthy")
+        await self._docker.wait_until_route_ready(
+            info.name,
+            edge_container_name=self._settings.traefik_container_name,
+            hostname=deployment.hostname,
+            expected_build_id=str(deployment.build_id),
+            expected_deployment_id=str(deployment.id),
+            tls=self._settings.traefik_tls,
+            timeout_seconds=self._settings.runtime_health_timeout_seconds,
+            poll_interval_seconds=self._settings.runtime_health_poll_seconds,
+        )
+        confirmed = await self._docker.inspect_container(deployment.container_name)
+        if (
+            confirmed is None
+            or confirmed.id != info.id
+            or confirmed.image_id != info.image_id
+            or confirmed.status != "running"
+            or confirmed.health != "healthy"
+        ):
+            raise RuntimeHealthError("Activation candidate changed during edge verification")
+        return self._activation_proof(
+            deployment,
+            container_id=confirmed.id,
+            image_digest=confirmed.image_id,
+        )
+
+    async def restore_activation_predecessor(
+        self, deployment: DeploymentRecord
+    ) -> DeploymentActivationProof:
+        """Restart, health-check, and edge-prove the retained predecessor runtime."""
+
+        info = await self._docker.inspect_container(deployment.container_name)
+        if info is None:
+            raise RuntimeHealthError("Previous runtime container no longer exists")
+        if deployment.container_id is None or info.id != deployment.container_id:
+            raise RuntimeHealthError("Previous runtime container identity changed")
+        if deployment.image_digest is None or info.image_id != deployment.image_digest:
+            raise RuntimeHealthError("Previous runtime image identity changed")
+        if info.status != "running":
+            info = await self._docker.start_container(info.name)
+        if info.health != "healthy":
+            info = await self._docker.wait_until_healthy(
+                info.name,
+                timeout_seconds=self._settings.runtime_health_timeout_seconds,
+                poll_interval_seconds=self._settings.runtime_health_poll_seconds,
+            )
+        if info.id != deployment.container_id or info.image_id != deployment.image_digest:
+            raise RuntimeHealthError("Previous runtime identity changed during restoration")
+        await self._docker.wait_until_route_ready(
+            info.name,
+            edge_container_name=self._settings.traefik_container_name,
+            hostname=deployment.hostname,
+            expected_build_id=str(deployment.build_id),
+            expected_deployment_id=str(deployment.id),
+            tls=self._settings.traefik_tls,
+            timeout_seconds=self._settings.runtime_health_timeout_seconds,
+            poll_interval_seconds=self._settings.runtime_health_poll_seconds,
+        )
+        return self._activation_proof(
+            deployment,
+            container_id=info.id,
+            image_digest=info.image_id,
+        )
+
+    @staticmethod
+    def _activation_proof(
+        deployment: DeploymentRecord,
+        *,
+        container_id: str,
+        image_digest: str,
+    ) -> DeploymentActivationProof:
+        return DeploymentActivationProof.verified(
+            deployment_id=deployment.id,
+            project_id=deployment.project_id,
+            build_id=deployment.build_id,
+            container_id=container_id,
+            image_digest=image_digest,
+            hostname=deployment.hostname,
+            manifest_sha256=deployment.manifest_sha256,
+            runtime_version=deployment.runtime_version,
         )
 
     async def stop(self, deployment: DeploymentRecord, *, remove: bool) -> None:

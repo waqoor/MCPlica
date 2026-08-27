@@ -19,6 +19,57 @@ from app.repositories.mcp_access import MCPTokenVerifierRecord
 from app.services.credentials import CredentialService
 
 
+def materialize_inbound_auth(
+    *,
+    hostname: str,
+    config: MCPAuthConfigRecord | None,
+    verifiers: list[MCPTokenVerifierRecord],
+    settings: Settings,
+) -> InboundAuthSecrets:
+    """Build and validate the current deployment-auth overlay without side effects."""
+
+    mode = config.mode if config is not None else MCPAuthMode.STATIC_BEARER
+    if mode == MCPAuthMode.STATIC_BEARER:
+        return InboundAuthSecrets(
+            mode="static_bearer",
+            static_tokens=[
+                StaticTokenDigest(
+                    id=str(verifier.id),
+                    sha256=verifier.token_hash,
+                    expires_at=verifier.expires_at,
+                )
+                for verifier in verifiers
+            ],
+        )
+    if mode == MCPAuthMode.DISABLED_DEV:
+        if settings.is_production:
+            raise InvalidStateError("Unauthenticated MCP access is forbidden in production")
+        return InboundAuthSecrets(mode="disabled_dev")
+    if config is None or not config.issuer_url:
+        raise InvalidStateError("OIDC access configuration is incomplete")
+    scheme = "https" if settings.traefik_tls else "http"
+    metadata = config.metadata
+    jwks_url = metadata.get("jwks_url")
+    raw_algorithms = metadata.get("allowed_algorithms", ["RS256", "ES256"])
+    if jwks_url is not None and not isinstance(jwks_url, str):
+        raise InvalidStateError("OIDC JWKS URL is invalid")
+    if not isinstance(raw_algorithms, list):
+        raise InvalidStateError("OIDC algorithm allowlist is invalid")
+    algorithm_values = cast(list[object], raw_algorithms)
+    if not all(isinstance(value, str) for value in algorithm_values):
+        raise InvalidStateError("OIDC algorithm allowlist is invalid")
+    algorithms = [str(value) for value in algorithm_values]
+    return InboundAuthSecrets(
+        mode="external_oauth_oidc",
+        issuer_url=AnyHttpUrl(config.issuer_url),
+        jwks_url=AnyHttpUrl(jwks_url) if jwks_url is not None else None,
+        resource_url=AnyHttpUrl(f"{scheme}://{hostname}/mcp"),
+        audiences=config.audiences,
+        required_scopes=config.required_scopes,
+        allowed_algorithms=algorithms,
+    )
+
+
 class DeploymentSecretMaterializer:
     def __init__(self, credentials: CredentialService, settings: Settings) -> None:
         self._credentials = credentials
@@ -131,9 +182,6 @@ class DeploymentSecretMaterializer:
                 password=SecretStr(self._text(secret, "password")),
             )
         if runtime_type == "oauth2_client_credentials":
-            configured_token_url = self._text(secret, "token_url")
-            if any(str(profile.token_url) != configured_token_url for profile in profiles):
-                raise InvalidStateError("OAuth token endpoint does not match the manifest")
             return UpstreamCredential(
                 type="oauth2_client_credentials",
                 client_id=SecretStr(self._text(secret, "client_id")),
@@ -162,55 +210,11 @@ class DeploymentSecretMaterializer:
         config: MCPAuthConfigRecord | None,
         verifiers: list[MCPTokenVerifierRecord],
     ) -> InboundAuthSecrets:
-        mode = config.mode if config is not None else MCPAuthMode.STATIC_BEARER
-        manifest_mode = manifest.security.inbound_auth_mode
-        expected_manifest_mode = {
-            MCPAuthMode.STATIC_BEARER: "static_bearer",
-            MCPAuthMode.EXTERNAL_OAUTH_OIDC: "oidc",
-            MCPAuthMode.DISABLED_DEV: "none",
-        }[mode]
-        if manifest_mode != expected_manifest_mode:
-            raise InvalidStateError(
-                "Build manifest authentication mode does not match project MCP access settings"
-            )
-        if mode == MCPAuthMode.STATIC_BEARER:
-            return InboundAuthSecrets(
-                mode="static_bearer",
-                static_tokens=[
-                    StaticTokenDigest(
-                        id=str(verifier.id),
-                        sha256=verifier.token_hash,
-                        expires_at=verifier.expires_at,
-                    )
-                    for verifier in verifiers
-                ],
-            )
-        if mode == MCPAuthMode.DISABLED_DEV:
-            if self._settings.is_production:
-                raise InvalidStateError("Unauthenticated MCP access is forbidden in production")
-            return InboundAuthSecrets(mode="disabled_dev")
-        if config is None or not config.issuer_url:
-            raise InvalidStateError("OIDC access configuration is incomplete")
-        scheme = "https" if self._settings.traefik_tls else "http"
-        metadata = config.metadata
-        jwks_url = metadata.get("jwks_url")
-        raw_algorithms = metadata.get("allowed_algorithms", ["RS256", "ES256"])
-        if jwks_url is not None and not isinstance(jwks_url, str):
-            raise InvalidStateError("OIDC JWKS URL is invalid")
-        if not isinstance(raw_algorithms, list):
-            raise InvalidStateError("OIDC algorithm allowlist is invalid")
-        algorithm_values = cast(list[object], raw_algorithms)
-        if not all(isinstance(value, str) for value in algorithm_values):
-            raise InvalidStateError("OIDC algorithm allowlist is invalid")
-        algorithms = [str(value) for value in algorithm_values]
-        return InboundAuthSecrets(
-            mode="external_oauth_oidc",
-            issuer_url=AnyHttpUrl(config.issuer_url),
-            jwks_url=AnyHttpUrl(jwks_url) if jwks_url is not None else None,
-            resource_url=AnyHttpUrl(f"{scheme}://{hostname}/mcp"),
-            audiences=config.audiences,
-            required_scopes=config.required_scopes,
-            allowed_algorithms=algorithms,
+        return materialize_inbound_auth(
+            hostname=hostname,
+            config=config,
+            verifiers=verifiers,
+            settings=self._settings,
         )
 
     @classmethod

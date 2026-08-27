@@ -79,7 +79,7 @@ class AuditRepository:
         if created_from is not None:
             statement = statement.where(AuditEvent.created_at >= created_from)
         if created_to is not None:
-            statement = statement.where(AuditEvent.created_at <= created_to)
+            statement = statement.where(AuditEvent.created_at < created_to)
         result = await session.scalars(
             statement.order_by(AuditEvent.created_at.desc()).limit(min(limit, 500)).offset(offset)
         )
@@ -110,5 +110,5 @@ class AuditRepository:
         if created_from is not None:
             statement = statement.where(AuditEvent.created_at >= created_from)
         if created_to is not None:
-            statement = statement.where(AuditEvent.created_at <= created_to)
+            statement = statement.where(AuditEvent.created_at < created_to)
         return int(await session.scalar(statement) or 0)

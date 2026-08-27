@@ -1,15 +1,19 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, Request, status
 
 from app.api.deps import (
     AdminPrincipal,
     BuilderPrincipal,
     CsrfProtection,
+    journey_service,
     project_service,
 )
+from app.schemas.cleanup import CleanupJobRead
+from app.schemas.journey import ProjectJourneyRead
 from app.schemas.project import ProjectCreate, ProjectRead, ProjectUpdate
+from app.services.journey import JourneyService
 from app.services.projects import ProjectService
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -51,6 +55,22 @@ async def get_project(
     return ProjectRead.model_validate(await service.get(project_id))
 
 
+@router.get("/{project_id}/journey", response_model=ProjectJourneyRead)
+async def get_project_journey(
+    project_id: UUID,
+    principal: BuilderPrincipal,
+    service: Annotated[JourneyService, Depends(journey_service)],
+    build_id: UUID | None = None,
+) -> ProjectJourneyRead:
+    return ProjectJourneyRead.model_validate(
+        await service.get(
+            project_id,
+            requested_build_id=build_id,
+            actor_role=principal.user.role,
+        )
+    )
+
+
 @router.patch("/{project_id}", response_model=ProjectRead)
 async def update_project(
     project_id: UUID,
@@ -64,22 +84,29 @@ async def update_project(
         project_id,
         values=payload.model_dump(exclude_unset=True, mode="json"),
         actor_user_id=principal.user.id,
+        actor_role=principal.user.role,
         request_id=request.state.request_id,
     )
     return ProjectRead.model_validate(project)
 
 
-@router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{project_id}",
+    response_model=CleanupJobRead,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def delete_project(
     project_id: UUID,
     request: Request,
     principal: AdminPrincipal,
     _csrf: CsrfProtection,
     service: Annotated[ProjectService, Depends(project_service)],
-) -> Response:
-    await service.delete(
+) -> CleanupJobRead:
+    job = await service.delete(
         project_id,
         actor_user_id=principal.user.id,
         request_id=request.state.request_id,
     )
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    if job is None:  # pragma: no cover - compatibility for isolated legacy service tests
+        raise RuntimeError("Project cleanup service is not configured")
+    return CleanupJobRead.model_validate(job)

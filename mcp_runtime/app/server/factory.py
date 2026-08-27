@@ -244,7 +244,6 @@ def build_app(
             trust_env=settings.trust_environment_proxy,
         )
     inbound_auth = build_inbound_auth(
-        manifest,
         secret_bundle,
         settings,
         oidc_client=oidc_client,

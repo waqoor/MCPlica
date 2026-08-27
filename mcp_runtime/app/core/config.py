@@ -16,6 +16,7 @@ class RuntimeSettings(BaseSettings):
     manifest_path: str = "/runtime/manifest.json"
     manifest_sha256: str | None = None
     secret_bundle_path: str = "/run/secrets/mcplica-runtime.json"
+    auth_overlay_sha256: str | None = None
     runtime_host: str = "0.0.0.0"
     runtime_port: int = Field(default=8000, ge=1, le=65535)
     public_base_url: str = "https://localhost"
@@ -47,15 +48,20 @@ class RuntimeSettings(BaseSettings):
             raise ValueError("runtime HTTP clients cannot inherit environment proxies")
         if self.environment == "production" and not self.require_secure_secret_permissions:
             raise ValueError("secure secret-file permissions are required in production")
-        if self.environment == "production" and (
-            self.manifest_sha256 is None
-            or len(self.manifest_sha256.removeprefix("sha256:")) != 64
-            or any(
-                character not in "0123456789abcdef"
-                for character in self.manifest_sha256.removeprefix("sha256:").lower()
-            )
-        ):
-            raise ValueError("production requires an expected manifest SHA-256")
+        if self.environment == "production":
+            for label, digest in (
+                ("manifest", self.manifest_sha256),
+                ("deployment authentication overlay", self.auth_overlay_sha256),
+            ):
+                if (
+                    digest is None
+                    or len(digest.removeprefix("sha256:")) != 64
+                    or any(
+                        character not in "0123456789abcdef"
+                        for character in digest.removeprefix("sha256:").lower()
+                    )
+                ):
+                    raise ValueError(f"production requires an expected {label} SHA-256")
         public_url = urlsplit(self.public_base_url)
         if (
             public_url.scheme not in {"http", "https"}

@@ -1,0 +1,1121 @@
+{
+  "active_server_ref": "server_53aee2ca762b9729",
+  "description": null,
+  "documentation_refs": [],
+  "operations": [
+    {
+      "description": null,
+      "key": "op_9c88426dd5a304ddf249e1aa",
+      "method": "GET",
+      "parameters": [
+        {
+          "allow_reserved": false,
+          "description": null,
+          "explode": null,
+          "location": "path",
+          "name": "item_id",
+          "required": true,
+          "schema": {
+            "$defs": {
+              "mcplica_ref_2e1f20ff59b9af4a46c5": {
+                "anyOf": [
+                  {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  {
+                    "minimum": 1,
+                    "type": "integer"
+                  }
+                ]
+              }
+            },
+            "$ref": "#/$defs/mcplica_ref_2e1f20ff59b9af4a46c5"
+          },
+          "source_ref": {
+            "pointer": "#/paths/~1items~1{item_id}/parameters/0",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "style": null
+        },
+        {
+          "allow_reserved": false,
+          "description": null,
+          "explode": false,
+          "location": "query",
+          "name": "expand",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "source_ref": {
+            "pointer": "#/paths/~1items~1{item_id}/get/parameters/0",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "style": "form"
+        },
+        {
+          "allow_reserved": false,
+          "description": null,
+          "explode": null,
+          "location": "header",
+          "name": "X-Trace-Id",
+          "required": false,
+          "schema": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "source_ref": {
+            "pointer": "#/paths/~1items~1{item_id}/get/parameters/1",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "style": null
+        }
+      ],
+      "path_template": "/items/{item_id}",
+      "provenance": {
+        "executable_fields": {
+          "method": {
+            "pointer": "#/paths/~1items~1{item_id}/get",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "path_template": {
+            "pointer": "#/paths/~1items~1{item_id}",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "server_ref": {
+            "pointer": "#/servers/0",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          }
+        },
+        "operation": {
+          "pointer": "#/paths/~1items~1{item_id}/get",
+          "source_version_id": "00000000-0000-0000-0000-000000000002"
+        }
+      },
+      "request_body": null,
+      "responses": [
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema": {
+                "$defs": {
+                  "mcplica_ref_2e1f20ff59b9af4a46c5": {
+                    "anyOf": [
+                      {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      {
+                        "minimum": 1,
+                        "type": "integer"
+                      }
+                    ]
+                  },
+                  "mcplica_ref_774cad77661ca0763189": {
+                    "allOf": [
+                      {
+                        "$ref": "#/$defs/mcplica_ref_b8ce90087e9704c568cd"
+                      },
+                      {
+                        "properties": {
+                          "metadata": {
+                            "oneOf": [
+                              {
+                                "additionalProperties": {
+                                  "type": "string"
+                                },
+                                "type": "object"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "parent": {
+                            "$ref": "#/$defs/mcplica_ref_774cad77661ca0763189"
+                          }
+                        },
+                        "type": "object"
+                      }
+                    ]
+                  },
+                  "mcplica_ref_b8ce90087e9704c568cd": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "$ref": "#/$defs/mcplica_ref_2e1f20ff59b9af4a46c5"
+                      },
+                      "state": {
+                        "enum": [
+                          "active",
+                          "archived"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "state"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "$ref": "#/$defs/mcplica_ref_774cad77661ca0763189"
+              },
+              "source_ref": {
+                "pointer": "#/paths/~1items~1{item_id}/get/responses/200/content/application~1json",
+                "source_version_id": "00000000-0000-0000-0000-000000000002"
+              }
+            }
+          ],
+          "description": "Matrix item",
+          "source_ref": {
+            "pointer": "#/paths/~1items~1{item_id}/get/responses/200",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "status_code": "200"
+        }
+      ],
+      "security": [
+        {
+          "scheme_scopes": {
+            "bearerAuth": []
+          },
+          "source_ref": {
+            "pointer": "#/paths/~1items~1{item_id}/get/security/0",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          }
+        }
+      ],
+      "semantic": {
+        "category": null,
+        "confidence": null,
+        "description": null,
+        "documentation_chunk_ids": [],
+        "keywords": [],
+        "provenance": null,
+        "relationship_hints": [],
+        "title": null
+      },
+      "server_candidates": [
+        "server_53aee2ca762b9729",
+        "server_e7cf0bd90ae48666"
+      ],
+      "server_ref": "server_53aee2ca762b9729",
+      "source_operation_id": "getMatrixItem",
+      "summary": null,
+      "tags": [],
+      "tool_name_seed": "get_matrix_item"
+    },
+    {
+      "description": null,
+      "key": "op_f827da4aa0fa68fa203a7f99",
+      "method": "POST",
+      "parameters": [],
+      "path_template": "/items",
+      "provenance": {
+        "executable_fields": {
+          "method": {
+            "pointer": "#/paths/~1items/post",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "path_template": {
+            "pointer": "#/paths/~1items",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "server_ref": {
+            "pointer": "#/servers/0",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          }
+        },
+        "operation": {
+          "pointer": "#/paths/~1items/post",
+          "source_version_id": "00000000-0000-0000-0000-000000000002"
+        }
+      },
+      "request_body": {
+        "content": [
+          {
+            "examples": [],
+            "media_type": "application/json",
+            "schema": {
+              "$defs": {
+                "mcplica_ref_2e1f20ff59b9af4a46c5": {
+                  "anyOf": [
+                    {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    {
+                      "minimum": 1,
+                      "type": "integer"
+                    }
+                  ]
+                },
+                "mcplica_ref_774cad77661ca0763189": {
+                  "allOf": [
+                    {
+                      "$ref": "#/$defs/mcplica_ref_b8ce90087e9704c568cd"
+                    },
+                    {
+                      "properties": {
+                        "metadata": {
+                          "oneOf": [
+                            {
+                              "additionalProperties": {
+                                "type": "string"
+                              },
+                              "type": "object"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "parent": {
+                          "$ref": "#/$defs/mcplica_ref_774cad77661ca0763189"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                },
+                "mcplica_ref_b8ce90087e9704c568cd": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "$ref": "#/$defs/mcplica_ref_2e1f20ff59b9af4a46c5"
+                    },
+                    "state": {
+                      "enum": [
+                        "active",
+                        "archived"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "state"
+                  ],
+                  "type": "object"
+                }
+              },
+              "$ref": "#/$defs/mcplica_ref_774cad77661ca0763189"
+            },
+            "source_ref": {
+              "pointer": "#/paths/~1items/post/requestBody/content/application~1json",
+              "source_version_id": "00000000-0000-0000-0000-000000000002"
+            }
+          }
+        ],
+        "description": null,
+        "required": true,
+        "source_ref": {
+          "pointer": "#/paths/~1items/post/requestBody",
+          "source_version_id": "00000000-0000-0000-0000-000000000002"
+        }
+      },
+      "responses": [
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema": {
+                "type": "object"
+              },
+              "source_ref": {
+                "pointer": "#/paths/~1items/post/responses/201/content/application~1json",
+                "source_version_id": "00000000-0000-0000-0000-000000000002"
+              }
+            }
+          ],
+          "description": "Created",
+          "source_ref": {
+            "pointer": "#/paths/~1items/post/responses/201",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "status_code": "201"
+        }
+      ],
+      "security": [
+        {
+          "scheme_scopes": {
+            "basicAuth": []
+          },
+          "source_ref": {
+            "pointer": "#/paths/~1items/post/security/0",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          }
+        }
+      ],
+      "semantic": {
+        "category": null,
+        "confidence": null,
+        "description": null,
+        "documentation_chunk_ids": [],
+        "keywords": [],
+        "provenance": null,
+        "relationship_hints": [],
+        "title": null
+      },
+      "server_candidates": [
+        "server_53aee2ca762b9729",
+        "server_e7cf0bd90ae48666"
+      ],
+      "server_ref": "server_53aee2ca762b9729",
+      "source_operation_id": "createMatrixItem",
+      "summary": null,
+      "tags": [],
+      "tool_name_seed": "create_matrix_item"
+    },
+    {
+      "description": null,
+      "key": "op_09f5e853e86dfbfe1b0b5556",
+      "method": "GET",
+      "parameters": [],
+      "path_template": "/header-auth",
+      "provenance": {
+        "executable_fields": {
+          "method": {
+            "pointer": "#/paths/~1header-auth/get",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "path_template": {
+            "pointer": "#/paths/~1header-auth",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "server_ref": {
+            "pointer": "#/servers/0",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          }
+        },
+        "operation": {
+          "pointer": "#/paths/~1header-auth/get",
+          "source_version_id": "00000000-0000-0000-0000-000000000002"
+        }
+      },
+      "request_body": null,
+      "responses": [
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema": {
+                "type": "object"
+              },
+              "source_ref": {
+                "pointer": "#/paths/~1header-auth/get/responses/200/content/application~1json",
+                "source_version_id": "00000000-0000-0000-0000-000000000002"
+              }
+            }
+          ],
+          "description": "OK",
+          "source_ref": {
+            "pointer": "#/paths/~1header-auth/get/responses/200",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "status_code": "200"
+        }
+      ],
+      "security": [
+        {
+          "scheme_scopes": {
+            "headerKey": []
+          },
+          "source_ref": {
+            "pointer": "#/paths/~1header-auth/get/security/0",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          }
+        }
+      ],
+      "semantic": {
+        "category": null,
+        "confidence": null,
+        "description": null,
+        "documentation_chunk_ids": [],
+        "keywords": [],
+        "provenance": null,
+        "relationship_hints": [],
+        "title": null
+      },
+      "server_candidates": [
+        "server_53aee2ca762b9729",
+        "server_e7cf0bd90ae48666"
+      ],
+      "server_ref": "server_53aee2ca762b9729",
+      "source_operation_id": "headerAuthenticated",
+      "summary": null,
+      "tags": [],
+      "tool_name_seed": "header_authenticated"
+    },
+    {
+      "description": null,
+      "key": "op_34955562108ac2a63c93887c",
+      "method": "GET",
+      "parameters": [
+        {
+          "allow_reserved": false,
+          "description": null,
+          "explode": null,
+          "location": "query",
+          "name": "term",
+          "required": true,
+          "schema": {
+            "enum": [
+              "matrix"
+            ],
+            "type": "string"
+          },
+          "source_ref": {
+            "pointer": "#/paths/~1search/get/parameters/0",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "style": null
+        }
+      ],
+      "path_template": "/search",
+      "provenance": {
+        "executable_fields": {
+          "method": {
+            "pointer": "#/paths/~1search/get",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "path_template": {
+            "pointer": "#/paths/~1search",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "server_ref": {
+            "pointer": "#/servers/0",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          }
+        },
+        "operation": {
+          "pointer": "#/paths/~1search/get",
+          "source_version_id": "00000000-0000-0000-0000-000000000002"
+        }
+      },
+      "request_body": null,
+      "responses": [
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "source_ref": {
+                "pointer": "#/paths/~1search/get/responses/200/content/application~1json",
+                "source_version_id": "00000000-0000-0000-0000-000000000002"
+              }
+            }
+          ],
+          "description": "OK",
+          "source_ref": {
+            "pointer": "#/paths/~1search/get/responses/200",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "status_code": "200"
+        }
+      ],
+      "security": [
+        {
+          "scheme_scopes": {
+            "queryKey": []
+          },
+          "source_ref": {
+            "pointer": "#/paths/~1search/get/security/0",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          }
+        }
+      ],
+      "semantic": {
+        "category": null,
+        "confidence": null,
+        "description": null,
+        "documentation_chunk_ids": [],
+        "keywords": [],
+        "provenance": null,
+        "relationship_hints": [],
+        "title": null
+      },
+      "server_candidates": [
+        "server_53aee2ca762b9729",
+        "server_e7cf0bd90ae48666"
+      ],
+      "server_ref": "server_53aee2ca762b9729",
+      "source_operation_id": "queryAuthenticatedSearch",
+      "summary": null,
+      "tags": [],
+      "tool_name_seed": "query_authenticated_search"
+    },
+    {
+      "description": null,
+      "key": "op_dcdd4fe3b15995e4a4f4d121",
+      "method": "GET",
+      "parameters": [],
+      "path_template": "/oauth",
+      "provenance": {
+        "executable_fields": {
+          "method": {
+            "pointer": "#/paths/~1oauth/get",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "path_template": {
+            "pointer": "#/paths/~1oauth",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "server_ref": {
+            "pointer": "#/servers/0",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          }
+        },
+        "operation": {
+          "pointer": "#/paths/~1oauth/get",
+          "source_version_id": "00000000-0000-0000-0000-000000000002"
+        }
+      },
+      "request_body": null,
+      "responses": [
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "application/json",
+              "schema": {
+                "type": "object"
+              },
+              "source_ref": {
+                "pointer": "#/paths/~1oauth/get/responses/200/content/application~1json",
+                "source_version_id": "00000000-0000-0000-0000-000000000002"
+              }
+            }
+          ],
+          "description": "OK",
+          "source_ref": {
+            "pointer": "#/paths/~1oauth/get/responses/200",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "status_code": "200"
+        }
+      ],
+      "security": [
+        {
+          "scheme_scopes": {
+            "oauthAuth": [
+              "read"
+            ]
+          },
+          "source_ref": {
+            "pointer": "#/paths/~1oauth/get/security/0",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          }
+        }
+      ],
+      "semantic": {
+        "category": null,
+        "confidence": null,
+        "description": null,
+        "documentation_chunk_ids": [],
+        "keywords": [],
+        "provenance": null,
+        "relationship_hints": [],
+        "title": null
+      },
+      "server_candidates": [
+        "server_53aee2ca762b9729",
+        "server_e7cf0bd90ae48666"
+      ],
+      "server_ref": "server_53aee2ca762b9729",
+      "source_operation_id": "oauthAuthenticated",
+      "summary": null,
+      "tags": [],
+      "tool_name_seed": "oauth_authenticated"
+    },
+    {
+      "description": null,
+      "key": "op_9edc93a67a2ab83aeda56b29",
+      "method": "POST",
+      "parameters": [],
+      "path_template": "/upload",
+      "provenance": {
+        "executable_fields": {
+          "method": {
+            "pointer": "#/paths/~1upload/post",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "path_template": {
+            "pointer": "#/paths/~1upload",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "server_ref": {
+            "pointer": "#/paths/~1upload/post/servers/0",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          }
+        },
+        "operation": {
+          "pointer": "#/paths/~1upload/post",
+          "source_version_id": "00000000-0000-0000-0000-000000000002"
+        }
+      },
+      "request_body": {
+        "content": [
+          {
+            "examples": [],
+            "media_type": "multipart/form-data",
+            "schema": {
+              "properties": {
+                "description": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "file": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "file"
+              ],
+              "type": "object"
+            },
+            "source_ref": {
+              "pointer": "#/paths/~1upload/post/requestBody/content/multipart~1form-data",
+              "source_version_id": "00000000-0000-0000-0000-000000000002"
+            }
+          }
+        ],
+        "description": null,
+        "required": true,
+        "source_ref": {
+          "pointer": "#/paths/~1upload/post/requestBody",
+          "source_version_id": "00000000-0000-0000-0000-000000000002"
+        }
+      },
+      "responses": [
+        {
+          "content": [],
+          "description": "Uploaded",
+          "source_ref": {
+            "pointer": "#/paths/~1upload/post/responses/204",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "status_code": "204"
+        }
+      ],
+      "security": [],
+      "semantic": {
+        "category": null,
+        "confidence": null,
+        "description": null,
+        "documentation_chunk_ids": [],
+        "keywords": [],
+        "provenance": null,
+        "relationship_hints": [],
+        "title": null
+      },
+      "server_candidates": [
+        "server_e466ea7791397e98"
+      ],
+      "server_ref": "server_e466ea7791397e98",
+      "source_operation_id": "uploadMatrixFile",
+      "summary": null,
+      "tags": [],
+      "tool_name_seed": "upload_matrix_file"
+    },
+    {
+      "description": null,
+      "key": "op_9d7f381b9c969cd512e17822",
+      "method": "POST",
+      "parameters": [],
+      "path_template": "/form",
+      "provenance": {
+        "executable_fields": {
+          "method": {
+            "pointer": "#/paths/~1form/post",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "path_template": {
+            "pointer": "#/paths/~1form",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "server_ref": {
+            "pointer": "#/servers/0",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          }
+        },
+        "operation": {
+          "pointer": "#/paths/~1form/post",
+          "source_version_id": "00000000-0000-0000-0000-000000000002"
+        }
+      },
+      "request_body": {
+        "content": [
+          {
+            "examples": [],
+            "media_type": "application/x-www-form-urlencoded",
+            "schema": {
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "type": "object"
+            },
+            "source_ref": {
+              "pointer": "#/paths/~1form/post/requestBody/content/application~1x-www-form-urlencoded",
+              "source_version_id": "00000000-0000-0000-0000-000000000002"
+            }
+          }
+        ],
+        "description": null,
+        "required": true,
+        "source_ref": {
+          "pointer": "#/paths/~1form/post/requestBody",
+          "source_version_id": "00000000-0000-0000-0000-000000000002"
+        }
+      },
+      "responses": [
+        {
+          "content": [
+            {
+              "examples": [],
+              "media_type": "text/plain",
+              "schema": {
+                "type": "string"
+              },
+              "source_ref": {
+                "pointer": "#/paths/~1form/post/responses/200/content/text~1plain",
+                "source_version_id": "00000000-0000-0000-0000-000000000002"
+              }
+            }
+          ],
+          "description": "Submitted",
+          "source_ref": {
+            "pointer": "#/paths/~1form/post/responses/200",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          },
+          "status_code": "200"
+        }
+      ],
+      "security": [
+        {
+          "scheme_scopes": {
+            "queryKey": []
+          },
+          "source_ref": {
+            "pointer": "#/paths/~1form/post/security/0",
+            "source_version_id": "00000000-0000-0000-0000-000000000002"
+          }
+        }
+      ],
+      "semantic": {
+        "category": null,
+        "confidence": null,
+        "description": null,
+        "documentation_chunk_ids": [],
+        "keywords": [],
+        "provenance": null,
+        "relationship_hints": [],
+        "title": null
+      },
+      "server_candidates": [
+        "server_53aee2ca762b9729",
+        "server_e7cf0bd90ae48666"
+      ],
+      "server_ref": "server_53aee2ca762b9729",
+      "source_operation_id": "submitMatrixForm",
+      "summary": null,
+      "tags": [],
+      "tool_name_seed": "submit_matrix_form"
+    }
+  ],
+  "project_id": "00000000-0000-0000-0000-000000000001",
+  "provenance": {
+    "schema_dialect": {
+      "source": "https://json-schema.org/draft/2020-12/schema",
+      "target": "https://json-schema.org/draft/2020-12/schema",
+      "transformations": []
+    },
+    "source_fingerprint": "ad301b44fce7f8d5c7cee92d7c520769062803fc2cc069a62c8a056a5573f2f0",
+    "source_version_ids": [
+      "00000000-0000-0000-0000-000000000002"
+    ]
+  },
+  "schema_version": "canonical-api/v1",
+  "schemas": {
+    "schema_base_item_54daf87e": {
+      "key": "schema_base_item_54daf87e",
+      "schema": {
+        "$defs": {
+          "mcplica_ref_2e1f20ff59b9af4a46c5": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "minimum": 1,
+                "type": "integer"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/mcplica_ref_2e1f20ff59b9af4a46c5"
+          },
+          "state": {
+            "enum": [
+              "active",
+              "archived"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "state"
+        ],
+        "type": "object"
+      },
+      "source_ref": {
+        "pointer": "#/components/schemas/BaseItem",
+        "source_version_id": "00000000-0000-0000-0000-000000000002"
+      }
+    },
+    "schema_identifier_9b10587f": {
+      "key": "schema_identifier_9b10587f",
+      "schema": {
+        "anyOf": [
+          {
+            "format": "uuid",
+            "type": "string"
+          },
+          {
+            "minimum": 1,
+            "type": "integer"
+          }
+        ]
+      },
+      "source_ref": {
+        "pointer": "#/components/schemas/Identifier",
+        "source_version_id": "00000000-0000-0000-0000-000000000002"
+      }
+    },
+    "schema_item_652bcc3a": {
+      "key": "schema_item_652bcc3a",
+      "schema": {
+        "$defs": {
+          "mcplica_ref_2e1f20ff59b9af4a46c5": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "minimum": 1,
+                "type": "integer"
+              }
+            ]
+          },
+          "mcplica_ref_774cad77661ca0763189": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/mcplica_ref_b8ce90087e9704c568cd"
+              },
+              {
+                "properties": {
+                  "metadata": {
+                    "oneOf": [
+                      {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "parent": {
+                    "$ref": "#/$defs/mcplica_ref_774cad77661ca0763189"
+                  }
+                },
+                "type": "object"
+              }
+            ]
+          },
+          "mcplica_ref_b8ce90087e9704c568cd": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/mcplica_ref_2e1f20ff59b9af4a46c5"
+              },
+              "state": {
+                "enum": [
+                  "active",
+                  "archived"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "state"
+            ],
+            "type": "object"
+          }
+        },
+        "allOf": [
+          {
+            "$ref": "#/$defs/mcplica_ref_b8ce90087e9704c568cd"
+          },
+          {
+            "properties": {
+              "metadata": {
+                "oneOf": [
+                  {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "parent": {
+                "$ref": "#/$defs/mcplica_ref_774cad77661ca0763189"
+              }
+            },
+            "type": "object"
+          }
+        ]
+      },
+      "source_ref": {
+        "pointer": "#/components/schemas/Item",
+        "source_version_id": "00000000-0000-0000-0000-000000000002"
+      }
+    }
+  },
+  "security_schemes": {
+    "basicAuth": {
+      "location": null,
+      "name": null,
+      "scheme": "basic",
+      "scopes": [],
+      "source_ref": {
+        "pointer": "#/components/securitySchemes/basicAuth",
+        "source_version_id": "00000000-0000-0000-0000-000000000002"
+      },
+      "token_url": null,
+      "type": "http_basic"
+    },
+    "bearerAuth": {
+      "location": null,
+      "name": null,
+      "scheme": "bearer",
+      "scopes": [],
+      "source_ref": {
+        "pointer": "#/components/securitySchemes/bearerAuth",
+        "source_version_id": "00000000-0000-0000-0000-000000000002"
+      },
+      "token_url": null,
+      "type": "http_bearer"
+    },
+    "headerKey": {
+      "location": "header",
+      "name": "X-API-Key",
+      "scheme": null,
+      "scopes": [],
+      "source_ref": {
+        "pointer": "#/components/securitySchemes/headerKey",
+        "source_version_id": "00000000-0000-0000-0000-000000000002"
+      },
+      "token_url": null,
+      "type": "api_key"
+    },
+    "oauthAuth": {
+      "location": null,
+      "name": null,
+      "scheme": null,
+      "scopes": [
+        "read"
+      ],
+      "source_ref": {
+        "pointer": "#/components/securitySchemes/oauthAuth",
+        "source_version_id": "00000000-0000-0000-0000-000000000002"
+      },
+      "token_url": "https://identity.example.com/oauth/token",
+      "type": "oauth2_client_credentials"
+    },
+    "queryKey": {
+      "location": "query",
+      "name": "api_key",
+      "scheme": null,
+      "scopes": [],
+      "source_ref": {
+        "pointer": "#/components/securitySchemes/queryKey",
+        "source_version_id": "00000000-0000-0000-0000-000000000002"
+      },
+      "token_url": null,
+      "type": "api_key"
+    }
+  },
+  "servers": [
+    {
+      "description": "Production",
+      "key": "server_53aee2ca762b9729",
+      "source_ref": {
+        "pointer": "#/servers/0",
+        "source_version_id": "00000000-0000-0000-0000-000000000002"
+      },
+      "url": "https://api.example.com/v1"
+    },
+    {
+      "description": "Staging",
+      "key": "server_e7cf0bd90ae48666",
+      "source_ref": {
+        "pointer": "#/servers/1",
+        "source_version_id": "00000000-0000-0000-0000-000000000002"
+      },
+      "url": "https://staging.example.com/v1"
+    },
+    {
+      "description": null,
+      "key": "server_e466ea7791397e98",
+      "source_ref": {
+        "pointer": "#/paths/~1upload/post/servers/0",
+        "source_version_id": "00000000-0000-0000-0000-000000000002"
+      },
+      "url": "https://uploads.example.com/v2"
+    }
+  ],
+  "source_format": "openapi-3.1",
+  "title": "MCPlica pipeline matrix",
+  "version": "1.0.0"
+}

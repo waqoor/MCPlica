@@ -1,5 +1,5 @@
 from enum import StrEnum
-from typing import Literal
+from typing import Literal, cast
 from uuid import UUID
 
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -15,6 +15,7 @@ class HttpMethod(StrEnum):
     DELETE = "DELETE"
     HEAD = "HEAD"
     OPTIONS = "OPTIONS"
+    TRACE = "TRACE"
 
 
 class ParameterLocation(StrEnum):
@@ -40,11 +41,38 @@ class SourceRef(BaseModel):
     pointer: str = Field(min_length=1)
 
 
+class SchemaTransformationProvenance(BaseModel):
+    """An executable schema rewrite applied while producing the canonical model."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source_pointer: str = Field(min_length=1)
+    transformation: Literal[
+        "nullable",
+        "exclusiveMinimum",
+        "exclusiveMaximum",
+        "example",
+    ]
+
+
+class SchemaDialectProvenance(BaseModel):
+    """The source and executable JSON Schema dialects for a canonical API."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source: str = Field(min_length=1)
+    target: Literal["https://json-schema.org/draft/2020-12/schema"]
+    transformations: list[SchemaTransformationProvenance] = Field(
+        default_factory=lambda: list[SchemaTransformationProvenance]()
+    )
+
+
 class CanonicalProvenance(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     source_version_ids: list[UUID] = Field(min_length=1)
     source_fingerprint: str = Field(pattern=r"^[a-f0-9]{64}$")
+    schema_dialect: SchemaDialectProvenance | None = None
 
 
 class SemanticProvenance(BaseModel):
@@ -182,7 +210,8 @@ class CanonicalOperation(BaseModel):
     tool_name_seed: str = Field(min_length=1, max_length=128)
     method: HttpMethod
     path_template: str = Field(pattern=r"^/")
-    server_ref: str
+    server_ref: str | None = None
+    server_candidates: list[str] = Field(min_length=1)
     summary: str | None = None
     description: str | None = None
     parameters: list[CanonicalParameter] = Field(default_factory=lambda: list[CanonicalParameter]())
@@ -194,6 +223,22 @@ class CanonicalOperation(BaseModel):
     tags: list[str] = Field(default_factory=lambda: list[str]())
     semantic: OperationSemanticMetadata = Field(default_factory=OperationSemanticMetadata)
     provenance: OperationProvenance
+
+    @model_validator(mode="before")
+    @classmethod
+    def restore_legacy_server_candidates(cls, value: object) -> object:
+        """Read pre-routing v1 snapshots without changing their persisted hash."""
+        if not isinstance(value, dict):
+            return value
+        operation = cast(dict[str, object], value)
+        if "server_candidates" in operation:
+            return operation
+        server_ref = operation.get("server_ref")
+        if not isinstance(server_ref, str) or not server_ref:
+            raise ValueError(
+                "legacy canonical operations without server_candidates require server_ref"
+            )
+        return {**operation, "server_candidates": [server_ref]}
 
     @model_validator(mode="after")
     def validate_path_parameters(self) -> "CanonicalOperation":
@@ -256,8 +301,21 @@ class CanonicalApi(BaseModel):
         if len(set(operation_keys)) != len(operation_keys):
             raise ValueError("canonical operation keys must be unique")
         for operation in self.operations:
-            if operation.server_ref not in server_keys:
+            unknown_candidates = set(operation.server_candidates) - server_keys
+            if unknown_candidates:
+                raise ValueError(
+                    f"operation {operation.key} has unknown server candidates: "
+                    + ", ".join(sorted(unknown_candidates))
+                )
+            if operation.server_ref is not None and operation.server_ref not in server_keys:
                 raise ValueError(f"operation {operation.key} references an unknown server")
+            if (
+                operation.server_ref is not None
+                and operation.server_ref not in operation.server_candidates
+            ):
+                raise ValueError(
+                    f"operation {operation.key} selected a server outside its candidate set"
+                )
             for requirement in operation.security:
                 unknown = set(requirement.scheme_scopes) - set(self.security_schemes)
                 if unknown:

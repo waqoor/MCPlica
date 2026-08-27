@@ -6,7 +6,11 @@ import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { z } from "@/lib/schemas";
 import { projectApi } from "@/api/projects";
+import { MutationError } from "@/components/error-notice";
+import { useCapabilities } from "@/auth/capabilities";
+import { UnsavedChangesGuard } from "@/components/unsaved-changes-guard";
 import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
@@ -24,6 +28,7 @@ type Values = z.infer<typeof schema>;
 
 export function ProjectSettingsPage() {
   const project = useProject();
+  const capabilities = useCapabilities();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -46,6 +51,11 @@ export function ProjectSettingsPage() {
     onSuccess: (value) => {
       queryClient.setQueryData(["projects", project.id], value);
       void queryClient.invalidateQueries({ queryKey: ["projects"] });
+      form.reset({
+        name: value.name,
+        description: value.description ?? "",
+        default_base_url: value.default_base_url ?? "",
+      });
     },
   });
   const toggle = useMutation({
@@ -63,6 +73,9 @@ export function ProjectSettingsPage() {
   });
   return (
     <div className="space-y-5">
+      <UnsavedChangesGuard
+        active={form.formState.isDirty && !update.isPending}
+      />
       <div>
         <h2 className="text-xl font-semibold text-foreground">
           Project settings
@@ -117,7 +130,7 @@ export function ProjectSettingsPage() {
               />
             </div>
           </div>
-          {update.error && <Alert tone="danger">{update.error.message}</Alert>}
+          {update.error && <MutationError error={update.error} />}
           {update.isSuccess && (
             <Alert tone="success">Project settings saved.</Alert>
           )}
@@ -147,69 +160,89 @@ export function ProjectSettingsPage() {
               runtime resources.
             </p>
           </div>
-          <Button
-            disabled={toggle.isPending}
-            onClick={() => toggle.mutate()}
-            variant="outline"
+          {capabilities.canChangeProjectLifecycle ? (
+            <Button
+              disabled={toggle.isPending}
+              onClick={() => toggle.mutate()}
+              variant="outline"
+            >
+              {project.is_enabled ? "Disable project" : "Enable project"}
+            </Button>
+          ) : (
+            <Badge>Administrator handoff required</Badge>
+          )}
+        </div>
+        {project.runtime_effect_state !== "effective" && (
+          <Alert
+            className="mt-4"
+            tone={
+              project.runtime_effect_state === "failed" ? "danger" : "warning"
+            }
           >
-            {project.is_enabled ? "Disable project" : "Enable project"}
-          </Button>
-        </div>
-        <div className="mt-5 flex flex-col justify-between gap-4 border-t border-danger/25 pt-5 sm:flex-row sm:items-center">
-          <div>
-            <p className="text-sm font-medium text-danger-soft">
-              Delete project
-            </p>
-            <p className="mt-1 text-xs text-muted">
-              Deletion is blocked while an active deployment exists.
-            </p>
-          </div>
-          <Button onClick={() => setDeleteOpen(true)} variant="destructive">
-            <Trash2 aria-hidden="true" className="size-4" />
-            Delete project
-          </Button>
-        </div>
-        {(toggle.error || remove.error) && (
-          <Alert className="mt-4" tone="danger">
-            {toggle.error?.message ?? remove.error?.message}
+            {project.runtime_effect_state === "failed"
+              ? `The project lifecycle command failed${project.runtime_error_code ? ` (${project.runtime_error_code})` : ""}. Verify and retry runtime shutdown before treating disablement as effective.`
+              : "The project is disabled in the control plane, but runtime shutdown is still pending."}
           </Alert>
         )}
-      </Card>
-      <Dialog
-        description="This action is allowed only after active runtime resources have been stopped and removed through the controlled flow."
-        onClose={() => setDeleteOpen(false)}
-        open={deleteOpen}
-        title={`Delete ${project.name}`}
-      >
-        <div className="space-y-4">
-          <Alert tone="danger">
-            Project deletion removes control-plane records according to the
-            configured retention policy. It cannot silently orphan an active
-            runtime.
-          </Alert>
-          <div className="space-y-2">
-            <Label htmlFor="delete-confirmation">
-              Type{" "}
-              <code className="font-mono text-danger-soft">{project.slug}</code>{" "}
-              to confirm
-            </Label>
-            <Input
-              autoFocus
-              id="delete-confirmation"
-              onChange={(event) => setConfirmation(event.target.value)}
-              value={confirmation}
-            />
+        {capabilities.canDeleteProject && (
+          <div className="mt-5 flex flex-col justify-between gap-4 border-t border-danger/25 pt-5 sm:flex-row sm:items-center">
+            <div>
+              <p className="text-sm font-medium text-danger-soft">
+                Delete project
+              </p>
+              <p className="mt-1 text-xs text-muted">
+                Deletion is blocked while an active deployment exists.
+              </p>
+            </div>
+            <Button onClick={() => setDeleteOpen(true)} variant="destructive">
+              <Trash2 aria-hidden="true" className="size-4" />
+              Delete project
+            </Button>
           </div>
-          <Button
-            className="w-full"
-            disabled={confirmation !== project.slug || remove.isPending}
-            onClick={() => remove.mutate()}
-            variant="destructive"
-          >
-            Permanently delete project
-          </Button>
-        </div>
-      </Dialog>
+        )}
+        {(toggle.error || remove.error) && (
+          <MutationError error={toggle.error ?? remove.error} />
+        )}
+      </Card>
+      {capabilities.canDeleteProject && (
+        <Dialog
+          description="This action is allowed only after active runtime resources have been stopped and removed through the controlled flow."
+          onClose={() => setDeleteOpen(false)}
+          open={deleteOpen}
+          title={`Delete ${project.name}`}
+        >
+          <div className="space-y-4">
+            <Alert tone="danger">
+              Project deletion removes control-plane records according to the
+              configured retention policy. It cannot silently orphan an active
+              runtime.
+            </Alert>
+            <div className="space-y-2">
+              <Label htmlFor="delete-confirmation">
+                Type{" "}
+                <code className="font-mono text-danger-soft">
+                  {project.slug}
+                </code>{" "}
+                to confirm
+              </Label>
+              <Input
+                autoFocus
+                id="delete-confirmation"
+                onChange={(event) => setConfirmation(event.target.value)}
+                value={confirmation}
+              />
+            </div>
+            <Button
+              className="w-full"
+              disabled={confirmation !== project.slug || remove.isPending}
+              onClick={() => remove.mutate()}
+              variant="destructive"
+            >
+              Permanently delete project
+            </Button>
+          </div>
+        </Dialog>
+      )}
     </div>
   );
 }

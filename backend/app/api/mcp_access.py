@@ -5,12 +5,13 @@ from fastapi import APIRouter, Depends, Request, status
 
 from app.api.deps import (
     AdminPrincipal,
+    BuilderPrincipal,
     CsrfProtection,
-    CurrentPrincipal,
     mcp_access_service,
 )
 from app.schemas.mcp_access import (
     MCPAccessRead,
+    MCPAccessStatusRead,
     MCPAccessTokenCreate,
     MCPAccessTokenIssued,
     MCPAccessTokenRead,
@@ -26,7 +27,7 @@ router = APIRouter(prefix="/projects/{project_id}/mcp-access", tags=["mcp-access
 @router.get("", response_model=MCPAccessRead)
 async def get_mcp_access(
     project_id: UUID,
-    _principal: CurrentPrincipal,
+    _principal: AdminPrincipal,
     service: Annotated[MCPAccessService, Depends(mcp_access_service)],
 ) -> MCPAccessRead:
     snapshot = await service.get(project_id)
@@ -38,6 +39,15 @@ async def get_mcp_access(
         ),
         tokens=[MCPAccessTokenRead.model_validate(token) for token in snapshot.tokens],
     )
+
+
+@router.get("/status", response_model=MCPAccessStatusRead)
+async def get_mcp_access_status(
+    project_id: UUID,
+    _principal: BuilderPrincipal,
+    service: Annotated[MCPAccessService, Depends(mcp_access_service)],
+) -> MCPAccessStatusRead:
+    return MCPAccessStatusRead.model_validate(await service.get_status(project_id))
 
 
 @router.put("/auth-mode", response_model=MCPAuthConfigRead)

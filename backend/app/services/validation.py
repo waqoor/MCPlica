@@ -1,4 +1,5 @@
 import hashlib
+from collections.abc import Awaitable, Callable
 
 from mcp_contracts import CanonicalApi, MCPManifest
 
@@ -15,7 +16,11 @@ from app.domain.validation import (
 )
 from app.repositories.validation import ValidationRepository
 from app.services.analysis.review import SemanticReviewService
-from app.validators.build import coverage_percent, validate_build
+from app.validators.build import (
+    coverage_percent,
+    validate_build,
+    validate_runtime_manifest_size,
+)
 
 
 class ValidationService:
@@ -43,6 +48,7 @@ class ValidationService:
         canonical_sha256: str,
         manifest: MCPManifest,
         manifest_bytes: bytes,
+        cancellation_check: Callable[[], Awaitable[None]] | None = None,
     ) -> ValidationReportRecord:
         async with self._database.session_scope() as session:
             existing = await self._reports.get_report(session, build.id)
@@ -55,6 +61,12 @@ class ValidationService:
             excluded_operation_keys=excluded,
             canonical_sha256=canonical_sha256,
             runtime_version=self._runtime_version,
+        )
+        findings.extend(
+            validate_runtime_manifest_size(
+                manifest_bytes,
+                maximum_bytes=config.runtime_manifest_max_bytes,
+            )
         )
         actual_manifest_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
         if build.manifest_sha256 != actual_manifest_sha256:
@@ -72,7 +84,14 @@ class ValidationService:
             )
         if not _has_errors(findings):
             try:
-                protocol = await self._mcp.inspect_manifest(manifest)
+                if cancellation_check is not None:
+                    await cancellation_check()
+                protocol = await self._mcp.inspect_manifest(
+                    manifest,
+                    runtime_version=self._runtime_version,
+                )
+                if cancellation_check is not None:
+                    await cancellation_check()
                 if protocol["tool_count"] != len(manifest.enabled_tools()):
                     raise ProtocolValidationError(
                         "MCP protocol listing did not preserve all generated tools"
@@ -103,7 +122,10 @@ class ValidationService:
                     manifest=manifest,
                     model=build.validation_model,
                     max_context_chars=config.max_context_chars,
+                    cancellation_check=cancellation_check,
                 )
+                if cancellation_check is not None:
+                    await cancellation_check()
                 findings.extend(_semantic_finding(item) for item in semantic)
         source_count = len(canonical.operations)
         excluded_count = len(excluded & {operation.key for operation in canonical.operations})

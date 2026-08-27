@@ -1,0 +1,864 @@
+{
+  "auth_profiles": [
+    {
+      "credential_ref": "00000000-0000-0000-0000-000000000066",
+      "id": "auth_1a5edb2c1a4deee9",
+      "location": null,
+      "name": null,
+      "prefix": null,
+      "scopes": [],
+      "token_auth_method": "client_secret_basic",
+      "token_url": null,
+      "type": "basic"
+    },
+    {
+      "credential_ref": "00000000-0000-0000-0000-000000000065",
+      "id": "auth_26ccc5436e6d078a",
+      "location": null,
+      "name": null,
+      "prefix": null,
+      "scopes": [],
+      "token_auth_method": "client_secret_basic",
+      "token_url": null,
+      "type": "bearer"
+    },
+    {
+      "credential_ref": "00000000-0000-0000-0000-000000000069",
+      "id": "auth_290c9707f3a7618b",
+      "location": null,
+      "name": null,
+      "prefix": null,
+      "scopes": [
+        "read"
+      ],
+      "token_auth_method": "client_secret_basic",
+      "token_url": "https://identity.example.com/oauth/token",
+      "type": "oauth2_client_credentials"
+    },
+    {
+      "credential_ref": "00000000-0000-0000-0000-000000000067",
+      "id": "auth_a6b3b888f38d1a3b",
+      "location": "header",
+      "name": "X-API-Key",
+      "prefix": null,
+      "scopes": [],
+      "token_auth_method": "client_secret_basic",
+      "token_url": null,
+      "type": "api_key"
+    },
+    {
+      "credential_ref": "00000000-0000-0000-0000-000000000068",
+      "id": "auth_c13c139bb9fb077a",
+      "location": "query",
+      "name": "api_key",
+      "prefix": null,
+      "scopes": [],
+      "token_auth_method": "client_secret_basic",
+      "token_url": null,
+      "type": "api_key"
+    }
+  ],
+  "build": {
+    "analysis_model": null,
+    "build_id": "fixture-pipeline-matrix-3.1-json",
+    "canonical_sha256": "727e301d49972eac4b2e72a8fe85201e091983808fa0e2a2540488f99faa7af6",
+    "compiler_version": "1.0.0",
+    "created_at": "2026-08-27T00:00:00+00:00",
+    "embedding_model": null,
+    "prompt_bundle_version": null,
+    "source_digest": "ad301b44fce7f8d5c7cee92d7c520769062803fc2cc069a62c8a056a5573f2f0",
+    "source_version_ids": [
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "validation_model": null
+  },
+  "manifest_id": "6e290f94da7e5f3012c7754906b04de7aa6b8e35897d1c9a693492da2af1caaa",
+  "project": {
+    "id": "00000000-0000-0000-0000-000000000001",
+    "name": "MCPlica pipeline matrix",
+    "slug": "pipeline-matrix-3.1-json"
+  },
+  "resources": [],
+  "runtime_compatibility": ">=1.0,<2.0",
+  "schema_version": "mcp-manifest/v1",
+  "security": {
+    "allow_insecure_none_only_in_development": true,
+    "allowed_upstream_hosts": [
+      "api.example.com",
+      "uploads.example.com"
+    ],
+    "default_max_response_bytes": 2000000,
+    "default_timeout_ms": 30000,
+    "inbound_auth_boundary": "deployment_overlay",
+    "inbound_auth_mode": null
+  },
+  "servers": [
+    {
+      "description": "Production",
+      "id": "server_53aee2ca762b9729",
+      "url": "https://api.example.com/v1"
+    },
+    {
+      "description": null,
+      "id": "server_e466ea7791397e98",
+      "url": "https://uploads.example.com/v2"
+    }
+  ],
+  "tools": [
+    {
+      "description": "GET /header-auth",
+      "enabled": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "max_request_bytes": 10000000,
+      "max_response_bytes": 2000000,
+      "name": "header_authenticated",
+      "operation_key": "op_09f5e853e86dfbfe1b0b5556",
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "type": "object"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "status": {
+            "maximum": 299,
+            "minimum": 200,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status",
+          "contentType",
+          "body"
+        ],
+        "type": "object"
+      },
+      "provenance": {
+        "source_pointer": "#/paths/~1header-auth/get",
+        "source_version_id": "00000000-0000-0000-0000-000000000002"
+      },
+      "request_mapping": {
+        "body": null,
+        "method": "GET",
+        "parameters": [],
+        "path": "/header-auth",
+        "server_ref": "server_53aee2ca762b9729"
+      },
+      "responses": [
+        {
+          "description": "OK",
+          "media_type": "application/json",
+          "schema": {
+            "type": "object"
+          },
+          "status_code": "200"
+        }
+      ],
+      "security_profile_ref": "auth_a6b3b888f38d1a3b",
+      "timeout_ms": 30000,
+      "title": "Header Authenticated"
+    },
+    {
+      "description": "GET /search",
+      "enabled": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "term": {
+            "enum": [
+              "matrix"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "term"
+        ],
+        "type": "object"
+      },
+      "max_request_bytes": 10000000,
+      "max_response_bytes": 2000000,
+      "name": "query_authenticated_search",
+      "operation_key": "op_34955562108ac2a63c93887c",
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "status": {
+            "maximum": 299,
+            "minimum": 200,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status",
+          "contentType",
+          "body"
+        ],
+        "type": "object"
+      },
+      "provenance": {
+        "source_pointer": "#/paths/~1search/get",
+        "source_version_id": "00000000-0000-0000-0000-000000000002"
+      },
+      "request_mapping": {
+        "body": null,
+        "method": "GET",
+        "parameters": [
+          {
+            "allow_reserved": false,
+            "explode": null,
+            "required": true,
+            "source_name": "term",
+            "style": null,
+            "target": "query",
+            "tool_field": "term"
+          }
+        ],
+        "path": "/search",
+        "server_ref": "server_53aee2ca762b9729"
+      },
+      "responses": [
+        {
+          "description": "OK",
+          "media_type": "application/json",
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status_code": "200"
+        }
+      ],
+      "security_profile_ref": "auth_c13c139bb9fb077a",
+      "timeout_ms": 30000,
+      "title": "Query Authenticated Search"
+    },
+    {
+      "description": "GET /items/{item_id}",
+      "enabled": true,
+      "input_schema": {
+        "$defs": {
+          "mcplica_ref_2e1f20ff59b9af4a46c5": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "minimum": 1,
+                "type": "integer"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "X-Trace-Id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "expand": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "item_id": {
+            "$ref": "#/$defs/mcplica_ref_2e1f20ff59b9af4a46c5"
+          }
+        },
+        "required": [
+          "item_id"
+        ],
+        "type": "object"
+      },
+      "max_request_bytes": 10000000,
+      "max_response_bytes": 2000000,
+      "name": "get_matrix_item",
+      "operation_key": "op_9c88426dd5a304ddf249e1aa",
+      "output_schema": {
+        "$defs": {
+          "mcplica_ref_2e1f20ff59b9af4a46c5": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "minimum": 1,
+                "type": "integer"
+              }
+            ]
+          },
+          "mcplica_ref_774cad77661ca0763189": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/mcplica_ref_b8ce90087e9704c568cd"
+              },
+              {
+                "properties": {
+                  "metadata": {
+                    "oneOf": [
+                      {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "parent": {
+                    "$ref": "#/$defs/mcplica_ref_774cad77661ca0763189"
+                  }
+                },
+                "type": "object"
+              }
+            ]
+          },
+          "mcplica_ref_b8ce90087e9704c568cd": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/mcplica_ref_2e1f20ff59b9af4a46c5"
+              },
+              "state": {
+                "enum": [
+                  "active",
+                  "archived"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "state"
+            ],
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "$ref": "#/$defs/mcplica_ref_774cad77661ca0763189"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "status": {
+            "maximum": 299,
+            "minimum": 200,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status",
+          "contentType",
+          "body"
+        ],
+        "type": "object"
+      },
+      "provenance": {
+        "source_pointer": "#/paths/~1items~1{item_id}/get",
+        "source_version_id": "00000000-0000-0000-0000-000000000002"
+      },
+      "request_mapping": {
+        "body": null,
+        "method": "GET",
+        "parameters": [
+          {
+            "allow_reserved": false,
+            "explode": null,
+            "required": false,
+            "source_name": "X-Trace-Id",
+            "style": null,
+            "target": "header",
+            "tool_field": "X-Trace-Id"
+          },
+          {
+            "allow_reserved": false,
+            "explode": null,
+            "required": true,
+            "source_name": "item_id",
+            "style": null,
+            "target": "path",
+            "tool_field": "item_id"
+          },
+          {
+            "allow_reserved": false,
+            "explode": false,
+            "required": false,
+            "source_name": "expand",
+            "style": "form",
+            "target": "query",
+            "tool_field": "expand"
+          }
+        ],
+        "path": "/items/{item_id}",
+        "server_ref": "server_53aee2ca762b9729"
+      },
+      "responses": [
+        {
+          "description": "Matrix item",
+          "media_type": "application/json",
+          "schema": {
+            "$defs": {
+              "mcplica_ref_2e1f20ff59b9af4a46c5": {
+                "anyOf": [
+                  {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  {
+                    "minimum": 1,
+                    "type": "integer"
+                  }
+                ]
+              },
+              "mcplica_ref_774cad77661ca0763189": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/mcplica_ref_b8ce90087e9704c568cd"
+                  },
+                  {
+                    "properties": {
+                      "metadata": {
+                        "oneOf": [
+                          {
+                            "additionalProperties": {
+                              "type": "string"
+                            },
+                            "type": "object"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "parent": {
+                        "$ref": "#/$defs/mcplica_ref_774cad77661ca0763189"
+                      }
+                    },
+                    "type": "object"
+                  }
+                ]
+              },
+              "mcplica_ref_b8ce90087e9704c568cd": {
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "$ref": "#/$defs/mcplica_ref_2e1f20ff59b9af4a46c5"
+                  },
+                  "state": {
+                    "enum": [
+                      "active",
+                      "archived"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "state"
+                ],
+                "type": "object"
+              }
+            },
+            "$ref": "#/$defs/mcplica_ref_774cad77661ca0763189"
+          },
+          "status_code": "200"
+        }
+      ],
+      "security_profile_ref": "auth_26ccc5436e6d078a",
+      "timeout_ms": 30000,
+      "title": "Get Matrix Item"
+    },
+    {
+      "description": "POST /form",
+      "enabled": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "type": "object"
+      },
+      "max_request_bytes": 10000000,
+      "max_response_bytes": 2000000,
+      "name": "submit_matrix_form",
+      "operation_key": "op_9d7f381b9c969cd512e17822",
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "status": {
+            "maximum": 299,
+            "minimum": 200,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status",
+          "contentType",
+          "body"
+        ],
+        "type": "object"
+      },
+      "provenance": {
+        "source_pointer": "#/paths/~1form/post",
+        "source_version_id": "00000000-0000-0000-0000-000000000002"
+      },
+      "request_mapping": {
+        "body": {
+          "media_type": "application/x-www-form-urlencoded",
+          "multipart_files": [],
+          "required": true,
+          "tool_field": "body"
+        },
+        "method": "POST",
+        "parameters": [],
+        "path": "/form",
+        "server_ref": "server_53aee2ca762b9729"
+      },
+      "responses": [
+        {
+          "description": "Submitted",
+          "media_type": "text/plain",
+          "schema": {
+            "type": "string"
+          },
+          "status_code": "200"
+        }
+      ],
+      "security_profile_ref": "auth_c13c139bb9fb077a",
+      "timeout_ms": 30000,
+      "title": "Submit Matrix Form"
+    },
+    {
+      "description": "POST /upload",
+      "enabled": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "properties": {
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "file": {
+                "contentEncoding": "base64",
+                "format": "binary",
+                "type": "string"
+              }
+            },
+            "required": [
+              "file"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "type": "object"
+      },
+      "max_request_bytes": 10000000,
+      "max_response_bytes": 2000000,
+      "name": "upload_matrix_file",
+      "operation_key": "op_9edc93a67a2ab83aeda56b29",
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "type": "null"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "status": {
+            "maximum": 299,
+            "minimum": 200,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status",
+          "contentType",
+          "body"
+        ],
+        "type": "object"
+      },
+      "provenance": {
+        "source_pointer": "#/paths/~1upload/post",
+        "source_version_id": "00000000-0000-0000-0000-000000000002"
+      },
+      "request_mapping": {
+        "body": {
+          "media_type": "multipart/form-data",
+          "multipart_files": [
+            {
+              "content_field": "file",
+              "content_type_field": null,
+              "default_content_type": "application/octet-stream",
+              "default_filename": "file.bin",
+              "filename_field": null,
+              "part_name": "file",
+              "required": true
+            }
+          ],
+          "required": true,
+          "tool_field": "body"
+        },
+        "method": "POST",
+        "parameters": [],
+        "path": "/upload",
+        "server_ref": "server_e466ea7791397e98"
+      },
+      "responses": [
+        {
+          "description": "Uploaded",
+          "media_type": null,
+          "schema": null,
+          "status_code": "204"
+        }
+      ],
+      "security_profile_ref": null,
+      "timeout_ms": 30000,
+      "title": "Upload Matrix File"
+    },
+    {
+      "description": "GET /oauth",
+      "enabled": true,
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "max_request_bytes": 10000000,
+      "max_response_bytes": 2000000,
+      "name": "oauth_authenticated",
+      "operation_key": "op_dcdd4fe3b15995e4a4f4d121",
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "type": "object"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "status": {
+            "maximum": 299,
+            "minimum": 200,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status",
+          "contentType",
+          "body"
+        ],
+        "type": "object"
+      },
+      "provenance": {
+        "source_pointer": "#/paths/~1oauth/get",
+        "source_version_id": "00000000-0000-0000-0000-000000000002"
+      },
+      "request_mapping": {
+        "body": null,
+        "method": "GET",
+        "parameters": [],
+        "path": "/oauth",
+        "server_ref": "server_53aee2ca762b9729"
+      },
+      "responses": [
+        {
+          "description": "OK",
+          "media_type": "application/json",
+          "schema": {
+            "type": "object"
+          },
+          "status_code": "200"
+        }
+      ],
+      "security_profile_ref": "auth_290c9707f3a7618b",
+      "timeout_ms": 30000,
+      "title": "Oauth Authenticated"
+    },
+    {
+      "description": "POST /items",
+      "enabled": true,
+      "input_schema": {
+        "$defs": {
+          "mcplica_ref_2e1f20ff59b9af4a46c5": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "minimum": 1,
+                "type": "integer"
+              }
+            ]
+          },
+          "mcplica_ref_774cad77661ca0763189": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/mcplica_ref_b8ce90087e9704c568cd"
+              },
+              {
+                "properties": {
+                  "metadata": {
+                    "oneOf": [
+                      {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "type": "object"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "parent": {
+                    "$ref": "#/$defs/mcplica_ref_774cad77661ca0763189"
+                  }
+                },
+                "type": "object"
+              }
+            ]
+          },
+          "mcplica_ref_b8ce90087e9704c568cd": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/mcplica_ref_2e1f20ff59b9af4a46c5"
+              },
+              "state": {
+                "enum": [
+                  "active",
+                  "archived"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "state"
+            ],
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "$ref": "#/$defs/mcplica_ref_774cad77661ca0763189"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "type": "object"
+      },
+      "max_request_bytes": 10000000,
+      "max_response_bytes": 2000000,
+      "name": "create_matrix_item",
+      "operation_key": "op_f827da4aa0fa68fa203a7f99",
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "type": "object"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "status": {
+            "maximum": 299,
+            "minimum": 200,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status",
+          "contentType",
+          "body"
+        ],
+        "type": "object"
+      },
+      "provenance": {
+        "source_pointer": "#/paths/~1items/post",
+        "source_version_id": "00000000-0000-0000-0000-000000000002"
+      },
+      "request_mapping": {
+        "body": {
+          "media_type": "application/json",
+          "multipart_files": [],
+          "required": true,
+          "tool_field": "body"
+        },
+        "method": "POST",
+        "parameters": [],
+        "path": "/items",
+        "server_ref": "server_53aee2ca762b9729"
+      },
+      "responses": [
+        {
+          "description": "Created",
+          "media_type": "application/json",
+          "schema": {
+            "type": "object"
+          },
+          "status_code": "201"
+        }
+      ],
+      "security_profile_ref": "auth_1a5edb2c1a4deee9",
+      "timeout_ms": 30000,
+      "title": "Create Matrix Item"
+    }
+  ]
+}

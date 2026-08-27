@@ -26,6 +26,10 @@ class InvalidStateError(MCPlicaError):
     status_code = 409
 
 
+class DeployabilityError(InvalidStateError):
+    code = "DEPLOYABILITY_PREFLIGHT_FAILED"
+
+
 class PermissionDeniedError(MCPlicaError):
     code = "PERMISSION_DENIED"
     status_code = 403

@@ -267,6 +267,13 @@ The canonical model is the sole executable input to the MCP compiler. The compil
 
 Documentation is parsed, normalized, chunked, embedded through the configured OpenRouter embedding model, and indexed in Milvus under a project/build-aware namespace.
 
+The semantic corpus includes deterministic operation, schema, and security-scheme chunks from
+the canonical API in addition to uploaded documentation. Embedding responses are accepted only
+when their index/count, resolved model, dimensions, and vector lengths match the exact request.
+PostgreSQL caches verified vectors by `(project_id, requested model identity, normalized content
+SHA-256)`; a Build still creates its own immutable generation and Milvus rows, while changed
+content/model identity and cross-project access always miss the cache.
+
 Documentation may improve:
 
 - operation descriptions;
@@ -319,6 +326,14 @@ It models, at minimum:
 
 No AI-produced field may overwrite source-derived executable structure without an explicit deterministic rule.
 
+OpenAPI 3.0 Schema Objects are normalized from their dialect into the shared Draft 2020-12
+runtime schema contract (including nullable/exclusive-bound conversions) before canonicalization.
+OpenAPI 3.1 schemas retain their declared semantics. Dialect changes are inspected only at actual
+OpenAPI schema-bearing fields and JSON Schema subschema keywords; a literal `$schema` property in
+an example or extension is data, not a dialect switch. Local references are resolved from the
+schema root, and unresolved, remote, recursive-over-limit, or unsupported executable constructs
+fail at parse/compile time rather than being relabeled as a newer dialect.
+
 ### 7.9 MCP Compiler
 
 The MCP Compiler transforms a validated canonical API snapshot into a versioned MCP definition/manifest.
@@ -338,6 +353,20 @@ It owns:
 
 The compiler does not generate arbitrary per-project Python source code. The serialized MCP manifest contract is defined once in an infrastructure-free shared Python package consumed by both builder/compiler and generic runtime so the two sides cannot drift independently.
 
+Every compiled operation preserves its explicit server choice, supported request media mapping,
+required/optional security alternatives, OAuth client-credentials scopes/token endpoint, and a
+status/media-aware response contract. Heterogeneous successful responses use a deterministic
+object envelope; alternative schemas remain non-exclusive where the source permits overlap, and
+nested definitions are made resolvable from the emitted schema root. The generic runtime selects
+the actual status/content-type contract and validates the decoded body and response envelope
+before returning MCP content. Required security schemes resolve to an explicit project credential
+binding; optional anonymous branches remain optional and missing required bindings block
+readiness. A persisted project server selection resolves only ambiguous inherited root/inventory
+candidates; an explicit OpenAPI path- or operation-scoped server is not overwritten by that
+selection. Credential rotation replaces encrypted secret material against its stored immutable
+security binding. Remapping scheme identity/location requires a replacement credential and a new
+Build, so an immutable artifact can never silently change authentication meaning.
+
 ### 7.10 Validation subsystem
 
 Validation is multi-layered:
@@ -348,7 +377,11 @@ Validation is multi-layered:
 4. **Schema validation** — MCP inputs map losslessly enough to source parameters/request bodies.
 5. **Security mapping validation** — required upstream auth schemes have valid runtime mappings.
 6. **Semantic validation** — AI-assisted review checks descriptions/relationships without overriding deterministic evidence.
-7. **MCP protocol validation** — the generated manifest can be served by the generic runtime and inspected through an MCP client/Inspector test harness.
+7. **MCP protocol validation** — the exact candidate manifest is loaded by the production
+   generic-runtime factory in an isolated subprocess, then an official MCP client performs
+   initialize, list-tools/list-resources, and a successful schema-valid call for every enabled
+   tool under bounded startup/call/teardown timeouts. Error-result fallbacks never count as
+   exercised tools.
 8. **Artifact validation** — manifest hashes, runtime compatibility, and exported bundle structure are valid.
 
 A build cannot become `ready` unless all blocking deterministic validators pass.
@@ -362,6 +395,7 @@ Builds are processed asynchronously by workers and are versioned.
 Each build records:
 
 - exact source versions;
+- deterministic executable-configuration SHA-256 over the bound source versions, project base URL, active server selection, and per-operation server routing;
 - canonical snapshot hash;
 - documentation index generation ID;
 - compiler version;
@@ -374,6 +408,15 @@ Each build records:
 - timestamps/status/error metadata.
 
 An explicit review/rebuild creates a new Build; it does not mutate a prior successful build.
+
+Deployment preflight recomputes the same fingerprint from authoritative project/source rows. A mismatch is `BUILD_INPUTS_STALE`: the historical build and any already-running deployment remain immutable, but new activation fails closed until a new build captures and validates the current configuration. Migration `0011` backfills this identity for existing build configuration snapshots.
+
+Build status and `pipeline_stage` are separate contracts. New requests are `QUEUED`; workers
+advance the persisted stage only when entering that authoritative phase, terminal success records
+`READY`, and failure/cancellation preserve the last reached stage. Cancellation is a durable
+request/acknowledgement handshake checked around provider, parser, embedding, vector-write, and
+artifact boundaries. Queued work is removed when possible; running work stops at the next
+checkpoint and is not mislabeled cancelled until the worker acknowledges it.
 
 ### 7.12 Diff/Rebuild subsystem
 
@@ -403,10 +446,18 @@ It:
 - assigns Traefik labels;
 - performs health/readiness checks;
 - records container/image/manifest identity;
-- supports rollback to a previous successful build;
+- supports rollback only from a non-active deployment with immutable, content-bound evidence that
+  its exact build/runtime identity was successfully activated;
 - removes superseded runtime resources safely.
 
 The FastAPI web process must not require direct Docker socket access.
+
+Control-plane mutations that require a runtime effect use a transactional PostgreSQL outbox. The
+domain row, audit event, and idempotent runtime command commit together; callers observe
+`pending`, `effective`, or `failed` effect state rather than success after enqueue alone. A leased
+dispatcher executes commands after commit, retries transient failures with bounded backoff, and
+reclaims expired leases after restart. MCP inbound auth is a separately hashed runtime overlay,
+so token/OIDC rotation does not mutate or invalidate an immutable READY Build manifest.
 
 ### 7.14 Export Service
 
@@ -466,13 +517,17 @@ Stores durable platform/domain state:
 
 - users/auth metadata;
 - projects;
-- source metadata and versions;
+- source metadata, immutable versions, and build-scoped findings attributed to the exact
+  `source_version_id`;
 - canonical snapshot metadata/serialized structures where appropriate;
 - builds;
+- build-admission leases and cancellation request/acknowledgement state;
 - validation reports;
 - deployments;
+- durable runtime commands and their effect/error state;
 - encrypted credential records;
 - MCP access-token metadata;
+- verified project-scoped embedding-vector cache records;
 - audit/activity events;
 - system model/configuration metadata.
 
@@ -490,6 +545,11 @@ Stores only rebuildable or transient state:
 
 Redis loss may interrupt active jobs but must not lose authoritative project/build state.
 
+Parser failures are persisted in PostgreSQL as structured source findings. A finding owns a
+stable code, severity, pipeline stage, JSON/YAML pointer when available, one-based line/column
+when available, and redacted JSON details. Build-level failure summaries remain aggregate
+operator evidence and are never used to infer which source in a multi-source build failed.
+
 ### Milvus — semantic index
 
 Stores vectors and searchable metadata derived from project documentation/source descriptions.
@@ -499,6 +559,8 @@ Milvus data must be rebuildable from source versions and embedding configuration
 ### Artifact storage — local filesystem in V1
 
 Stores immutable source blobs and generated/export artifacts under controlled paths/volumes. Database rows reference content hashes and storage keys. A future object-storage provider may be added through the storage abstraction without changing domain behavior.
+
+External deletion uses a PostgreSQL-backed cleanup lifecycle rather than best-effort calls in request transactions. A Project/source deletion or retention sweep records deduplicated object keys and exact Milvus `(collection, project_id, generation_id)` targets in the same transaction that removes relational ownership. Multi-process workers claim targets with leases, serialize object-reference creation with deletion, re-check reachability across source versions, Builds, and index generations, then delete or record a reference-preserving skip. Failed targets retain bounded error evidence and exponential retry state. Upload ingestion creates a delayed orphan guard before committing its staged content-addressed object; successful database persistence resolves the guard, while a failure/restart makes the same reference-aware worker reclaim it.
 
 ---
 
@@ -778,10 +840,19 @@ Only the deployment worker/runtime-manager process receives the minimal Docker A
 
 - Build and deploy operations are asynchronous and idempotent by stable job keys.
 - Durable state transitions are written to PostgreSQL before/after external side effects.
+- Runtime-affecting authorization/lifecycle changes are never acknowledged as effective until
+  their committed outbox command succeeds; a queue notification is only a wake-up hint.
+- PostgreSQL admission leases enforce the configured global Build concurrency across processes.
 - Workers may retry transient OpenRouter, Redis, Milvus, filesystem, or Docker failures using bounded exponential backoff.
 - Deterministic validation failures are not retried automatically.
 - A crashed worker may resume/retry an interrupted build from durable stage boundaries, but must never mutate a completed build.
 - Failed builds do not replace the active deployed build.
+- Every Build freezes the generic runtime's manifest byte limit. Validation measures the exact
+  canonical manifest bytes stored under the Build hash and emits a blocking
+  `MANIFEST_RUNTIME_SIZE_LIMIT_EXCEEDED` finding before `READY` when the inclusive limit is
+  exceeded. Deployment preflight applies the smaller of that frozen limit and the runtime's
+  current effective limit, so no manifest accepted by preflight can be rejected by the mounted
+  runtime for size.
 
 ### Serving Plane
 
@@ -789,11 +860,16 @@ Only the deployment worker/runtime-manager process receives the minimal Docker A
 - Deployment replacement uses health-before-switch semantics where feasible. Both the
   candidate container and its Traefik edge route must report the exact expected Build
   and Deployment identity before active references change or the previous runtime stops.
-- A verified replacement remains durably `HEALTHCHECK/activating` while superseded
-  runtimes retire. It becomes `RUNNING` and emits its final audit event only after no
-  previous runtime remains `RUNNING` or `STOPPING`; retries resume this boundary rather
-  than provisioning a parallel candidate.
-- Rollback redeploys a previously validated immutable build.
+- A verified replacement persists an exact, content-bound activation proof and moves
+  through `verified` and `retiring_previous`. It commits `RUNNING` before destructive
+  superseded cleanup. Cleanup retries re-prove container, image, and edge identity; a
+  dead candidate is marked unhealthy and the prior runtime is restored only after its
+  own container and edge identity pass readiness again.
+- Rollback redeploys a previously validated immutable build only when the historical deployment
+  has a valid activation timestamp and content-bound runtime proof (or an explicitly retained
+  legacy-running marker) and is not already active. Status names such as `STOPPED` are never used
+  as a proxy for activation success. The API publishes this shared predicate as
+  `rollback_eligible`, and the UI renders the action from that capability.
 - Runtime API errors are mapped to MCP-readable error results without leaking credentials or internal traces.
 
 ---

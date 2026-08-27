@@ -3,7 +3,7 @@ from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Literal, cast
-from urllib.parse import urldefrag, urlsplit
+from urllib.parse import urldefrag, urljoin, urlsplit
 from uuid import UUID
 
 from jsonschema import Draft202012Validator, SchemaError
@@ -23,6 +23,8 @@ from mcp_contracts import (
     HttpMethod,
     OperationProvenance,
     ParameterLocation,
+    SchemaDialectProvenance,
+    SchemaTransformationProvenance,
     SecuritySchemeType,
     SourceRef,
 )
@@ -48,6 +50,13 @@ SUPPORTED_BODY_MEDIA_TYPES = (
     "application/x-www-form-urlencoded",
     "multipart/form-data",
 )
+CANONICAL_SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema"
+OPENAPI_30_SCHEMA_DIALECT = "openapi-3.0-schema-object"
+OPENAPI_31_SCHEMA_DIALECT = "https://spec.openapis.org/oas/3.1/dialect/base"
+SUPPORTED_OPENAPI_31_SCHEMA_DIALECTS = frozenset(
+    {OPENAPI_31_SCHEMA_DIALECT, CANONICAL_SCHEMA_DIALECT}
+)
+OpenApiSourceFormat = Literal["openapi-3.0", "openapi-3.1"]
 _JSON_OBJECT: TypeAdapter[JsonObject] = TypeAdapter(JsonObject)
 _JSON_VALUE: TypeAdapter[JsonValue] = TypeAdapter(JsonValue)
 _HTTP_URL: TypeAdapter[AnyHttpUrl] = TypeAdapter(AnyHttpUrl)
@@ -65,6 +74,19 @@ class _Resolved:
     document: JsonObject
     source_version_id: UUID
     pointer: str
+
+
+def _attribute_source_error(
+    exc: SourceParseError,
+    source_version_id: UUID,
+    *,
+    pointer: str | None = None,
+) -> None:
+    exc.details.setdefault("source_version_id", str(source_version_id))
+    if pointer is not None and not any(
+        key in exc.details for key in ("source_pointer", "source_location", "pointer")
+    ):
+        exc.details["source_pointer"] = pointer
 
 
 class OpenApiReferenceResolver:
@@ -104,6 +126,29 @@ class OpenApiReferenceResolver:
     ) -> _Resolved:
         current_document = document or self._root_document
         current_source_id = source_version_id or self._root_source_version_id
+        try:
+            return self._resolve(
+                value,
+                document=current_document,
+                source_version_id=current_source_id,
+                pointer=pointer,
+                seen=seen,
+            )
+        except SourceParseError as exc:
+            _attribute_source_error(exc, current_source_id, pointer=pointer)
+            raise
+
+    def _resolve(
+        self,
+        value: JsonValue,
+        *,
+        document: JsonObject,
+        source_version_id: UUID,
+        pointer: str,
+        seen: frozenset[tuple[UUID, str]],
+    ) -> _Resolved:
+        current_document = document
+        current_source_id = source_version_id
         if not isinstance(value, dict):
             raise ReferenceResolutionError(f"Expected an object at {pointer}")
         if "$ref" not in value:
@@ -119,7 +164,11 @@ class OpenApiReferenceResolver:
         identity = (target_source_id, target_pointer)
         if identity in seen:
             raise ReferenceResolutionError(f"Circular non-schema $ref: {raw_ref}")
-        target = self._pointer(target_document, target_pointer)
+        try:
+            target = self._pointer(target_document, target_pointer)
+        except SourceParseError as exc:
+            _attribute_source_error(exc, target_source_id, pointer=target_pointer)
+            raise
         return self.resolve(
             target,
             document=target_document,
@@ -170,11 +219,30 @@ class OpenApiReferenceResolver:
         source_version_id: UUID,
         location: str,
     ) -> JsonObject:
+        try:
+            return self._materialize_schema(
+                value,
+                document=document,
+                source_version_id=source_version_id,
+                location=location,
+            )
+        except SourceParseError as exc:
+            _attribute_source_error(exc, source_version_id, pointer=location)
+            raise
+
+    def _materialize_schema(
+        self,
+        value: JsonValue,
+        *,
+        document: JsonObject,
+        source_version_id: UUID,
+        location: str,
+    ) -> JsonObject:
         root = _json_object(value, location=location)
         definitions: JsonObject = {}
         building: set[tuple[UUID, str]] = set()
 
-        def visit(
+        def _visit(
             node: JsonValue,
             *,
             current_document: JsonObject,
@@ -212,8 +280,16 @@ class OpenApiReferenceResolver:
                     definitions[definition_key] = {}
                     if identity not in building:
                         building.add(identity)
-                        target = self._pointer(target_document, target_pointer)
-                        target_schema = _json_object(target, location=target_pointer)
+                        try:
+                            target = self._pointer(target_document, target_pointer)
+                            target_schema = _json_object(target, location=target_pointer)
+                        except SourceParseError as exc:
+                            _attribute_source_error(
+                                exc,
+                                target_source_id,
+                                pointer=target_pointer,
+                            )
+                            raise
                         definitions[definition_key] = visit(
                             target_schema,
                             current_document=target_document,
@@ -230,6 +306,22 @@ class OpenApiReferenceResolver:
                     current_source_id=current_source_id,
                 )
             return output
+
+        def visit(
+            node: JsonValue,
+            *,
+            current_document: JsonObject,
+            current_source_id: UUID,
+        ) -> JsonValue:
+            try:
+                return _visit(
+                    node,
+                    current_document=current_document,
+                    current_source_id=current_source_id,
+                )
+            except SourceParseError as exc:
+                _attribute_source_error(exc, current_source_id, pointer=location)
+                raise
 
         materialized = visit(
             root,
@@ -249,6 +341,7 @@ def _validate_openapi_spec(
     document: JsonObject,
     *,
     version: str,
+    source_version_id: UUID,
     external_documents: Mapping[str, ExternalOpenApiDocument] | None,
 ) -> None:
     captured = dict(external_documents or {})
@@ -287,7 +380,10 @@ def _validate_openapi_spec(
         ) from exc
     except OpenAPIValidationError as exc:
         location = getattr(exc, "json_path", None)
-        details: JsonObject = {"source_location": str(location or "$")}
+        details: JsonObject = {
+            "source_location": str(location or "$"),
+            "source_version_id": str(source_version_id),
+        }
         raise SourceParseError(
             f"OpenAPI specification validation failed at {location or '$'}: {exc.message}",
             details=details,
@@ -319,6 +415,108 @@ def _http_url(value: str, *, location: str) -> AnyHttpUrl:
         raise SourceParseError(f"Expected an absolute HTTP URL at {location}") from exc
 
 
+def _normalize_openapi_30_schema(
+    schema: JsonObject,
+    *,
+    location: str,
+    transformations: set[tuple[str, str]],
+) -> JsonObject:
+    """Translate the supported OAS 3.0 Schema Object into Draft 2020-12.
+
+    Traversal is deliberately schema-aware. Arbitrary objects such as examples and
+    discriminator mappings must not be mistaken for nested Schema Objects.
+    """
+
+    def nested_schema(value: JsonValue, pointer: str) -> JsonValue:
+        if not isinstance(value, dict):
+            return value
+        return normalize(value, pointer)
+
+    def schema_map(value: JsonValue, pointer: str) -> JsonValue:
+        if not isinstance(value, dict):
+            return value
+        return {
+            key: nested_schema(item, f"{pointer}/{pointer_token(str(key))}")
+            for key, item in value.items()
+        }
+
+    def schema_array(value: JsonValue, pointer: str) -> JsonValue:
+        if not isinstance(value, list):
+            return value
+        return [nested_schema(item, f"{pointer}/{index}") for index, item in enumerate(value)]
+
+    def normalize(node: JsonObject, pointer: str) -> JsonObject:
+        output = deepcopy(node)
+        for key in (
+            "properties",
+            "patternProperties",
+            "dependentSchemas",
+            "$defs",
+            "definitions",
+        ):
+            if key in output:
+                output[key] = schema_map(output[key], f"{pointer}/{key}")
+        for key in ("allOf", "anyOf", "oneOf", "prefixItems"):
+            if key in output:
+                output[key] = schema_array(output[key], f"{pointer}/{key}")
+        for key in (
+            "items",
+            "additionalProperties",
+            "contains",
+            "propertyNames",
+            "not",
+            "if",
+            "then",
+            "else",
+            "unevaluatedItems",
+            "unevaluatedProperties",
+        ):
+            if key in output:
+                output[key] = nested_schema(output[key], f"{pointer}/{key}")
+
+        for keyword, inclusive_keyword in (
+            ("exclusiveMinimum", "minimum"),
+            ("exclusiveMaximum", "maximum"),
+        ):
+            exclusive = output.get(keyword)
+            if isinstance(exclusive, bool):
+                transformations.add((pointer, keyword))
+                output.pop(keyword)
+                if exclusive:
+                    bound = output.pop(inclusive_keyword, None)
+                    if not isinstance(bound, int | float) or isinstance(bound, bool):
+                        raise SourceParseError(
+                            f"OpenAPI 3.0 {keyword}=true at {pointer} requires a numeric "
+                            f"{inclusive_keyword}",
+                            details={"source_pointer": pointer},
+                        )
+                    output[keyword] = bound
+
+        if "example" in output:
+            example = output.pop("example")
+            transformations.add((pointer, "example"))
+            if "examples" not in output:
+                output["examples"] = [example]
+
+        nullable = output.pop("nullable", None)
+        if nullable is not None:
+            transformations.add((pointer, "nullable"))
+        if nullable is True:
+            root_keywords: JsonObject = {
+                key: output.pop(key)
+                for key in ("$schema", "$id", "$anchor", "$dynamicAnchor", "$defs")
+                if key in output
+            }
+            null_schema: JsonObject = {"type": "null"}
+            nullable_alternatives: list[JsonValue] = [output, null_schema]
+            nullable_schema: JsonObject = {**root_keywords}
+            nullable_schema["anyOf"] = nullable_alternatives
+            output = nullable_schema
+        return output
+
+    return normalize(schema, location)
+
+
 def _schema(
     value: JsonValue | None,
     *,
@@ -326,6 +524,8 @@ def _schema(
     document: JsonObject,
     source_version_id: UUID,
     location: str,
+    source_format: OpenApiSourceFormat,
+    transformations: set[tuple[str, str]],
 ) -> JsonObject:
     schema = resolver.materialize_schema(
         value if value is not None else {},
@@ -333,17 +533,212 @@ def _schema(
         source_version_id=source_version_id,
         location=location,
     )
+    if source_format == "openapi-3.0":
+        schema = _normalize_openapi_30_schema(
+            schema,
+            location=location,
+            transformations=transformations,
+        )
+        schema.setdefault("$schema", CANONICAL_SCHEMA_DIALECT)
+    else:
+        _reject_unsupported_schema_resources(schema, location=location)
     try:
         Draft202012Validator.check_schema(schema)
     except SchemaError as exc:
         raise SourceParseError(
             f"Invalid JSON Schema at {location}: {exc.message}",
-            details={"source_pointer": location},
+            details={
+                "source_pointer": location,
+                "source_version_id": str(source_version_id),
+            },
         ) from exc
     return schema
 
 
-def _server_url(raw: JsonObject, pointer: str) -> str:
+def _reject_unsupported_schema_resources(value: JsonValue, *, location: str) -> None:
+    """Fail closed when a schema resource switches to an unimplemented dialect.
+
+    Walk only JSON Schema subschema positions.  Example/default payloads are arbitrary
+    JSON and a literal ``$schema`` property inside them is data, not a dialect switch.
+    """
+
+    if not isinstance(value, dict):
+        return
+    dialect = value.get("$schema")
+    if isinstance(dialect, str) and dialect.rstrip("#") not in {
+        item.rstrip("#") for item in SUPPORTED_OPENAPI_31_SCHEMA_DIALECTS
+    }:
+        raise SourceParseError(
+            f"Unsupported JSON Schema dialect at {location}",
+            details={"source_pointer": location, "schema_dialect": dialect},
+        )
+
+    for keyword in (
+        "properties",
+        "patternProperties",
+        "dependentSchemas",
+        "$defs",
+        "definitions",
+    ):
+        children = value.get(keyword)
+        if not isinstance(children, dict):
+            continue
+        for name, child in children.items():
+            _reject_unsupported_schema_resources(
+                child,
+                location=(f"{location}/{pointer_token(keyword)}/{pointer_token(str(name))}"),
+            )
+    for keyword in ("allOf", "anyOf", "oneOf", "prefixItems"):
+        children = value.get(keyword)
+        if not isinstance(children, list):
+            continue
+        for index, child in enumerate(children):
+            _reject_unsupported_schema_resources(
+                child,
+                location=f"{location}/{pointer_token(keyword)}/{index}",
+            )
+    for keyword in (
+        "items",
+        "additionalProperties",
+        "contains",
+        "propertyNames",
+        "not",
+        "if",
+        "then",
+        "else",
+        "unevaluatedItems",
+        "unevaluatedProperties",
+        "contentSchema",
+    ):
+        child = value.get(keyword)
+        if isinstance(child, dict):
+            _reject_unsupported_schema_resources(
+                child,
+                location=f"{location}/{pointer_token(keyword)}",
+            )
+
+
+def _reject_unsupported_document_schema_dialects(document: JsonObject) -> None:
+    """Inspect schema-bearing OpenAPI fields before the third-party validator.
+
+    openapi-spec-validator can reject an unknown dialect first and erase the
+    precise source location.  This bounded walk deliberately enters only
+    OpenAPI schema containers/fields, so example payloads containing a literal
+    ``$schema`` property are not mistaken for schema resources.
+    """
+
+    def schema(value: JsonValue, location: str) -> None:
+        _reject_unsupported_schema_resources(value, location=location)
+
+    def content(value: JsonValue, location: str) -> None:
+        if not isinstance(value, dict):
+            return
+        for media_type, media in value.items():
+            if not isinstance(media, dict) or "schema" not in media:
+                continue
+            schema(
+                media["schema"],
+                f"{location}/{pointer_token(str(media_type))}/schema",
+            )
+
+    def parameter(value: JsonValue, location: str) -> None:
+        if not isinstance(value, dict):
+            return
+        if "schema" in value:
+            schema(value["schema"], f"{location}/schema")
+        content(value.get("content"), f"{location}/content")
+
+    def request_body(value: JsonValue, location: str) -> None:
+        if isinstance(value, dict):
+            content(value.get("content"), f"{location}/content")
+
+    def header(value: JsonValue, location: str) -> None:
+        parameter(value, location)
+
+    def response(value: JsonValue, location: str) -> None:
+        if not isinstance(value, dict):
+            return
+        content(value.get("content"), f"{location}/content")
+        headers = value.get("headers")
+        if isinstance(headers, dict):
+            for name, item in headers.items():
+                header(item, f"{location}/headers/{pointer_token(str(name))}")
+
+    def callback(value: JsonValue, location: str) -> None:
+        if not isinstance(value, dict):
+            return
+        for expression, item in value.items():
+            path_item(item, f"{location}/{pointer_token(str(expression))}")
+
+    def operation(value: JsonValue, location: str) -> None:
+        if not isinstance(value, dict):
+            return
+        parameters = value.get("parameters")
+        if isinstance(parameters, list):
+            for index, item in enumerate(parameters):
+                parameter(item, f"{location}/parameters/{index}")
+        request_body(value.get("requestBody"), f"{location}/requestBody")
+        responses = value.get("responses")
+        if isinstance(responses, dict):
+            for status, item in responses.items():
+                response(item, f"{location}/responses/{pointer_token(str(status))}")
+        callbacks = value.get("callbacks")
+        if isinstance(callbacks, dict):
+            for name, item in callbacks.items():
+                callback(item, f"{location}/callbacks/{pointer_token(str(name))}")
+
+    def path_item(value: JsonValue, location: str) -> None:
+        if not isinstance(value, dict):
+            return
+        parameters = value.get("parameters")
+        if isinstance(parameters, list):
+            for index, item in enumerate(parameters):
+                parameter(item, f"{location}/parameters/{index}")
+        for method in ("get", "put", "post", "delete", "options", "head", "patch", "trace"):
+            if method in value:
+                operation(value[method], f"{location}/{method}")
+
+    components = document.get("components")
+    if isinstance(components, dict):
+        schemas = components.get("schemas")
+        if isinstance(schemas, dict):
+            for name, item in schemas.items():
+                schema(item, f"#/components/schemas/{pointer_token(str(name))}")
+        for collection_name, visitor in (
+            ("parameters", parameter),
+            ("headers", header),
+            ("requestBodies", request_body),
+            ("responses", response),
+            ("callbacks", callback),
+            ("pathItems", path_item),
+        ):
+            collection = components.get(collection_name)
+            if not isinstance(collection, dict):
+                continue
+            for name, item in collection.items():
+                visitor(
+                    item,
+                    f"#/components/{collection_name}/{pointer_token(str(name))}",
+                )
+
+    for collection_name in ("paths", "webhooks"):
+        collection = document.get(collection_name)
+        if not isinstance(collection, dict):
+            continue
+        for name, item in collection.items():
+            path_item(item, f"#/{collection_name}/{pointer_token(str(name))}")
+
+
+def _resolve_relative_url(value: str, *, base_url: str | None, location: str) -> str:
+    parsed = urlsplit(value)
+    if parsed.scheme and parsed.netloc:
+        return value
+    if base_url is None:
+        raise SourceParseError(f"Relative URL at {location} requires the Project default base URL")
+    return urljoin(base_url.rstrip("/") + "/", value)
+
+
+def _server_url(raw: JsonObject, pointer: str, *, base_url: str | None) -> str:
     value = raw.get("url")
     if not isinstance(value, str) or not value:
         raise SourceParseError(f"OpenAPI server at {pointer} must define url")
@@ -359,13 +754,14 @@ def _server_url(raw: JsonObject, pointer: str) -> str:
         resolved = resolved.replace("{" + name + "}", str(raw_variable["default"]))
     if "{" in resolved or "}" in resolved:
         raise SourceParseError(f"OpenAPI server at {pointer} has unresolved variables")
-    return resolved.rstrip("/")
+    return _resolve_relative_url(resolved, base_url=base_url, location=pointer).rstrip("/")
 
 
 def _security_scheme(
     raw: JsonObject,
     *,
     source_ref: SourceRef,
+    relative_url_base: str | None,
 ) -> CanonicalSecurityScheme:
     scheme_type = raw.get("type")
     if scheme_type == "http":
@@ -409,7 +805,14 @@ def _security_scheme(
         if isinstance(token_url, str):
             return CanonicalSecurityScheme(
                 type=SecuritySchemeType.OAUTH2_CLIENT_CREDENTIALS,
-                token_url=_http_url(token_url, location=f"{source_ref.pointer}/flows"),
+                token_url=_http_url(
+                    _resolve_relative_url(
+                        token_url,
+                        base_url=relative_url_base,
+                        location=f"{source_ref.pointer}/flows/clientCredentials/tokenUrl",
+                    ),
+                    location=f"{source_ref.pointer}/flows/clientCredentials/tokenUrl",
+                ),
                 scopes=scopes,
                 source_ref=source_ref,
             )
@@ -427,6 +830,8 @@ def _media_types(
     document: JsonObject,
     source_version_id: UUID,
     pointer: str,
+    source_format: OpenApiSourceFormat,
+    transformations: set[tuple[str, str]],
 ) -> list[CanonicalMediaType]:
     if content is None:
         return []
@@ -443,6 +848,8 @@ def _media_types(
             document=document,
             source_version_id=source_version_id,
             location=f"{media_pointer}/schema",
+            source_format=source_format,
+            transformations=transformations,
         )
         raw_examples = raw_media.get("examples")
         examples: list[JsonValue] = []
@@ -472,6 +879,7 @@ def parse_openapi(
     source_version_id: UUID,
     content_sha256: str,
     active_server_ref: str | None = None,
+    server_mappings: Mapping[str, str] | None = None,
     default_base_url: str | None = None,
     external_documents: Mapping[str, ExternalOpenApiDocument] | None = None,
 ) -> CanonicalApi:
@@ -488,12 +896,46 @@ def parse_openapi(
     if not isinstance(paths, dict) or not paths:
         raise SourceParseError("OpenAPI paths must be a non-empty object")
 
+    if version.startswith("3.1."):
+        declared_dialect = root_document.get("jsonSchemaDialect")
+        if isinstance(declared_dialect, str) and declared_dialect.rstrip("#") not in {
+            item.rstrip("#") for item in SUPPORTED_OPENAPI_31_SCHEMA_DIALECTS
+        }:
+            raise SourceParseError(
+                "OpenAPI document declares an unsupported JSON Schema dialect",
+                details={
+                    "source_pointer": "#/jsonSchemaDialect",
+                    "schema_dialect": declared_dialect,
+                },
+            )
+        _reject_unsupported_document_schema_dialects(root_document)
+
     _validate_openapi_spec(
         root_document,
         version=version,
+        source_version_id=source_version_id,
         external_documents=external_documents,
     )
 
+    source_format: OpenApiSourceFormat = (
+        "openapi-3.0" if version.startswith("3.0.") else "openapi-3.1"
+    )
+    source_schema_dialect = (
+        OPENAPI_30_SCHEMA_DIALECT
+        if source_format == "openapi-3.0"
+        else str(root_document.get("jsonSchemaDialect") or OPENAPI_31_SCHEMA_DIALECT)
+    )
+    if source_format == "openapi-3.1" and source_schema_dialect.rstrip("#") not in {
+        item.rstrip("#") for item in SUPPORTED_OPENAPI_31_SCHEMA_DIALECTS
+    }:
+        raise SourceParseError(
+            "OpenAPI document declares an unsupported JSON Schema dialect",
+            details={
+                "source_pointer": "#/jsonSchemaDialect",
+                "schema_dialect": source_schema_dialect,
+            },
+        )
+    schema_transformations: set[tuple[str, str]] = set()
     resolver = OpenApiReferenceResolver(root_document, source_version_id, external_documents)
     servers: dict[str, CanonicalServer] = {}
 
@@ -512,7 +954,7 @@ def parse_openapi(
             item_pointer = f"{pointer}/{index}"
             if not isinstance(raw_server, dict):
                 raise SourceParseError(f"OpenAPI server at {item_pointer} must be an object")
-            url = _server_url(raw_server, item_pointer)
+            url = _server_url(raw_server, item_pointer, base_url=default_base_url)
             key = server_key(url)
             servers.setdefault(
                 key,
@@ -552,6 +994,10 @@ def parse_openapi(
             "OpenAPI source has no server URL and the Project has no default base URL"
         )
 
+    oauth_relative_base = default_base_url
+    if oauth_relative_base is None and len(global_server_keys) == 1:
+        oauth_relative_base = str(servers[global_server_keys[0]].url)
+
     components = root_document.get("components") or {}
     if not isinstance(components, dict):
         raise SourceParseError("OpenAPI components must be an object")
@@ -565,6 +1011,7 @@ def parse_openapi(
         security_schemes[str(name)] = _security_scheme(
             resolved.value,
             source_ref=_source_ref(resolved.source_version_id, resolved.pointer),
+            relative_url_base=oauth_relative_base,
         )
 
     raw_schemas = components.get("schemas") or {}
@@ -582,6 +1029,8 @@ def parse_openapi(
                 document=root_document,
                 source_version_id=source_version_id,
                 location=pointer,
+                source_format=source_format,
+                transformations=schema_transformations,
             ),
             source_ref=_source_ref(source_version_id, pointer),
         )
@@ -630,9 +1079,20 @@ def parse_openapi(
                 server_source_version_id=resolved_operation.source_version_id,
             )
             candidates = operation_server_keys or path_server_keys or global_server_keys
-            selected_server = active_server_ref or candidates[0]
-            if selected_server not in servers:
-                raise SourceParseError("Configured active server does not exist in OpenAPI source")
+            selected_server = (server_mappings or {}).get(key)
+            if selected_server is None and not (operation_server_keys or path_server_keys):
+                selected_server = active_server_ref
+            if selected_server is None and len(candidates) == 1:
+                selected_server = candidates[0]
+            if selected_server is not None and selected_server not in candidates:
+                raise SourceParseError(
+                    "Configured server selection is not applicable to the OpenAPI operation",
+                    details={
+                        "operation_key": key,
+                        "selected_server_ref": selected_server,
+                        "candidate_server_refs": candidates,
+                    },
+                )
 
             merged_parameters: dict[
                 tuple[str, str],
@@ -715,6 +1175,8 @@ def parse_openapi(
                         document=parameter_document,
                         source_version_id=parameter_source_id,
                         location=f"{provenance.pointer}/schema",
+                        source_format=source_format,
+                        transformations=schema_transformations,
                     )
                 parameters.append(
                     CanonicalParameter(
@@ -752,6 +1214,8 @@ def parse_openapi(
                     document=raw_body.document,
                     source_version_id=raw_body.source_version_id,
                     pointer=f"{raw_body.pointer}/content",
+                    source_format=source_format,
+                    transformations=schema_transformations,
                 )
                 if not content:
                     raise SourceParseError(
@@ -796,6 +1260,8 @@ def parse_openapi(
                             document=resolved_response.document,
                             source_version_id=resolved_response.source_version_id,
                             pointer=f"{resolved_response.pointer}/content",
+                            source_format=source_format,
+                            transformations=schema_transformations,
                         ),
                         source_ref=_source_ref(
                             resolved_response.source_version_id,
@@ -844,8 +1310,9 @@ def parse_openapi(
                     resolved_operation_pointer,
                 ),
                 "path_template": _source_ref(source_version_id, path_pointer),
-                "server_ref": servers[selected_server].source_ref,
             }
+            if selected_server is not None:
+                executable_fields["server_ref"] = servers[selected_server].source_ref
             raw_tags = operation.get("tags", [])
             if not isinstance(raw_tags, list) or not all(isinstance(tag, str) for tag in raw_tags):
                 raise SourceParseError(f"Tags at {operation_pointer} must be text values")
@@ -857,6 +1324,7 @@ def parse_openapi(
                     method=HttpMethod(method.upper()),
                     path_template=path,
                     server_ref=selected_server,
+                    server_candidates=candidates,
                     summary=(
                         str(operation["summary"]) if operation.get("summary") is not None else None
                     ),
@@ -882,12 +1350,18 @@ def parse_openapi(
 
     if not operations:
         raise SourceParseError("OpenAPI source contains no executable operations")
+    unknown_mapping_keys = set(server_mappings or {}) - {operation.key for operation in operations}
+    if unknown_mapping_keys:
+        raise SourceParseError(
+            "Configured server mappings reference unknown OpenAPI operations",
+            details={"operation_keys": sorted(unknown_mapping_keys)},
+        )
     active_ref = active_server_ref
     if active_ref is None and len(servers) == 1:
         active_ref = next(iter(servers))
     return CanonicalApi(
         project_id=project_id,
-        source_format="openapi-3.0" if version.startswith("3.0.") else "openapi-3.1",
+        source_format=source_format,
         title=str(info["title"]),
         version=str(info["version"]) if info.get("version") is not None else None,
         description=(str(info["description"]) if info.get("description") is not None else None),
@@ -899,5 +1373,24 @@ def parse_openapi(
         provenance=CanonicalProvenance(
             source_version_ids=[source_version_id],
             source_fingerprint=content_sha256,
+            schema_dialect=SchemaDialectProvenance(
+                source=source_schema_dialect,
+                target=CANONICAL_SCHEMA_DIALECT,
+                transformations=[
+                    SchemaTransformationProvenance(
+                        source_pointer=pointer,
+                        transformation=cast(
+                            Literal[
+                                "nullable",
+                                "exclusiveMinimum",
+                                "exclusiveMaximum",
+                                "example",
+                            ],
+                            transformation,
+                        ),
+                    )
+                    for pointer, transformation in sorted(schema_transformations)
+                ],
+            ),
         ),
     )

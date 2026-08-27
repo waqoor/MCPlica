@@ -3,6 +3,7 @@ import type { BuildStatus } from "@/api/contracts";
 import { cn } from "@/lib/utils";
 
 const stages: BuildStatus[] = [
+  "QUEUED",
   "INGESTING",
   "PARSING",
   "INDEXING",
@@ -13,9 +14,18 @@ const stages: BuildStatus[] = [
   "READY",
 ];
 
-export function BuildProgress({ status }: { status: BuildStatus }) {
-  const currentIndex = stages.indexOf(status);
+export function BuildProgress({
+  status,
+  pipelineStage,
+}: {
+  status: BuildStatus;
+  pipelineStage: BuildStatus | null;
+}) {
   const terminalFailure = status === "FAILED" || status === "CANCELLED";
+  const authoritativeStage = terminalFailure ? pipelineStage : status;
+  const currentIndex = authoritativeStage
+    ? stages.indexOf(authoritativeStage)
+    : -1;
   return (
     <div
       aria-label={`Build status: ${status.toLowerCase()}`}
@@ -24,10 +34,9 @@ export function BuildProgress({ status }: { status: BuildStatus }) {
     >
       <ol className="compile-rail flex min-w-[44rem] items-start">
         {stages.map((stage, index) => {
-          const done =
-            status === "READY" || (!terminalFailure && currentIndex > index);
-          const current = currentIndex === index;
-          const failed = terminalFailure && index === Math.max(currentIndex, 0);
+          const done = status === "READY" || currentIndex > index;
+          const current = !terminalFailure && currentIndex === index;
+          const failed = terminalFailure && currentIndex === index;
           const Icon = failed
             ? X
             : done
@@ -72,6 +81,13 @@ export function BuildProgress({ status }: { status: BuildStatus }) {
           );
         })}
       </ol>
+      {terminalFailure && (
+        <p className="mt-3 text-sm text-muted">
+          {pipelineStage
+            ? `${status === "FAILED" ? "Failed" : "Cancelled"} during ${pipelineStage.toLowerCase()}.`
+            : "The exact terminal stage is unavailable for this legacy build."}
+        </p>
+      )}
     </div>
   );
 }

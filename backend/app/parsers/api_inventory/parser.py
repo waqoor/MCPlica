@@ -170,6 +170,7 @@ def parse_api_inventory(
     content_sha256: str,
     default_base_url: str | None = None,
     active_server_ref: str | None = None,
+    server_mappings: Mapping[str, str] | None = None,
 ) -> CanonicalApi:
     try:
         inventory = ApiInventory.model_validate(document)
@@ -323,12 +324,26 @@ def parse_api_inventory(
             )
             for security_index, requirement in enumerate(operation.security)
         ]
-        selected_server = operation.server_id or active_server_ref or servers[0].key
         key = operation_key(
             operation.method.value,
             operation.path,
             operation.operation_id,
         )
+        candidates = [operation.server_id] if operation.server_id else sorted(server_keys)
+        selected_server = (
+            operation.server_id or (server_mappings or {}).get(key) or active_server_ref
+        )
+        if selected_server is None and len(candidates) == 1:
+            selected_server = candidates[0]
+        if selected_server is not None and selected_server not in candidates:
+            raise SourceParseError(
+                "Configured server selection is not applicable to the API Inventory operation",
+                details={
+                    "operation_key": key,
+                    "selected_server_ref": selected_server,
+                    "candidate_server_refs": candidates,
+                },
+            )
         operations.append(
             CanonicalOperation(
                 key=key,
@@ -341,6 +356,7 @@ def parse_api_inventory(
                 method=operation.method,
                 path_template=operation.path,
                 server_ref=selected_server,
+                server_candidates=candidates,
                 summary=operation.summary,
                 description=operation.description,
                 parameters=parameters,
@@ -353,10 +369,20 @@ def parse_api_inventory(
                     executable_fields={
                         "method": _ref(source_version_id, f"{pointer}/method"),
                         "path_template": _ref(source_version_id, f"{pointer}/path"),
-                        "server_ref": _ref(source_version_id, f"{pointer}/server_id"),
+                        **(
+                            {"server_ref": _ref(source_version_id, f"{pointer}/server_id")}
+                            if selected_server is not None
+                            else {}
+                        ),
                     },
                 ),
             )
+        )
+    unknown_mapping_keys = set(server_mappings or {}) - {operation.key for operation in operations}
+    if unknown_mapping_keys:
+        raise SourceParseError(
+            "Configured server mappings reference unknown API Inventory operations",
+            details={"operation_keys": sorted(unknown_mapping_keys)},
         )
     return CanonicalApi(
         project_id=project_id,

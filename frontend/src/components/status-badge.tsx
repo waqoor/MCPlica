@@ -23,14 +23,14 @@ const deploymentTone: Record<
   DeploymentStatus,
   "neutral" | "info" | "success" | "warning" | "danger"
 > = {
-  PENDING: "neutral",
-  DEPLOYING: "info",
-  HEALTHCHECK: "warning",
-  RUNNING: "success",
-  UNHEALTHY: "danger",
-  STOPPING: "warning",
-  STOPPED: "neutral",
-  FAILED: "danger",
+  pending: "neutral",
+  deploying: "info",
+  healthcheck: "warning",
+  running: "success",
+  unhealthy: "danger",
+  stopping: "warning",
+  stopped: "neutral",
+  failed: "danger",
 };
 
 export function BuildStatusBadge({ status }: { status: BuildStatus }) {

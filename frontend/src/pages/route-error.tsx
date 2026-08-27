@@ -1,15 +1,15 @@
 import { isRouteErrorResponse, useRouteError } from "react-router-dom";
 import { BrandLogo } from "@/components/brand-logo";
-import { Alert } from "@/components/ui/alert";
+import { ErrorNotice } from "@/components/error-notice";
 import { Button } from "@/components/ui/button";
 
 export function RouteErrorPage() {
   const error = useRouteError();
-  const message = isRouteErrorResponse(error)
-    ? error.statusText
-    : error instanceof Error
-      ? error.message
-      : "The page could not be rendered.";
+  const renderedError = isRouteErrorResponse(error)
+    ? new Error(
+        error.statusText || "The requested route could not be rendered.",
+      )
+    : error;
   return (
     <main className="mx-auto grid min-h-screen max-w-xl place-items-center p-6">
       <div className="w-full">
@@ -20,8 +20,8 @@ export function RouteErrorPage() {
         >
           <BrandLogo alt="" className="h-10 w-[10.5rem]" loading="eager" />
         </a>
-        <Alert title="Route failed" tone="danger">
-          <p>{message}</p>
+        <div>
+          <ErrorNotice error={renderedError} title="Route failed" />
           <Button
             className="mt-4"
             onClick={() => window.location.assign("/")}
@@ -29,7 +29,7 @@ export function RouteErrorPage() {
           >
             Return to dashboard
           </Button>
-        </Alert>
+        </div>
       </div>
     </main>
   );

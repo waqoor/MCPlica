@@ -111,58 +111,66 @@ class AuthService:
                     event_type="auth.login_failed",
                     entity_type="auth_session",
                     request_id=request_id,
-                    metadata={"reason": "invalid_credentials"},
+                    metadata={
+                        "reason": "invalid_credentials",
+                        "email_sha256": _hash_optional(email.strip().casefold()),
+                        "ip_prefix": _ip_prefix(remote_ip),
+                        "user_agent_sha256": _hash_optional(user_agent),
+                    },
                 )
-                raise AuthenticationError("Email or password is invalid")
+            else:
+                if updated_password_hash is not None:
+                    refreshed = await self._users.update(
+                        session,
+                        user.id,
+                        password_hash=updated_password_hash,
+                    )
+                    if refreshed is not None:
+                        user = refreshed
 
-            if updated_password_hash is not None:
-                refreshed = await self._users.update(
+                session_id = uuid4()
+                refresh_token = self._tokens.new_refresh_token()
+                refresh_expires_at = now + self._refresh_ttl
+                csrf_token = self._tokens.new_csrf_token()
+                await self._sessions.create(
                     session,
-                    user.id,
-                    password_hash=updated_password_hash,
+                    session_id=session_id,
+                    user_id=user.id,
+                    refresh_token_hash=self._tokens.hash_refresh_token(refresh_token),
+                    expires_at=refresh_expires_at,
+                    user_agent_hash=_hash_optional(user_agent),
+                    ip_prefix=_ip_prefix(remote_ip),
+                    now=now,
                 )
-                if refreshed is not None:
-                    user = refreshed
+                await self._users.set_last_login(session, user.id, now)
+                access_token, access_expires_at = self._tokens.issue_access_token(
+                    user_id=user.id,
+                    session_id=session_id,
+                    role=user.role,
+                    csrf_token=csrf_token,
+                    now=now,
+                )
+                await self._audit.append(
+                    session,
+                    actor_user_id=user.id,
+                    event_type="auth.login_succeeded",
+                    entity_type="auth_session",
+                    entity_id=session_id,
+                    request_id=request_id,
+                    metadata={},
+                )
+                return AuthTokens(
+                    access_token=access_token,
+                    refresh_token=refresh_token,
+                    csrf_token=csrf_token,
+                    access_expires_at=access_expires_at,
+                    refresh_expires_at=refresh_expires_at,
+                    user=user,
+                )
 
-            session_id = uuid4()
-            refresh_token = self._tokens.new_refresh_token()
-            refresh_expires_at = now + self._refresh_ttl
-            csrf_token = self._tokens.new_csrf_token()
-            await self._sessions.create(
-                session,
-                session_id=session_id,
-                user_id=user.id,
-                refresh_token_hash=self._tokens.hash_refresh_token(refresh_token),
-                expires_at=refresh_expires_at,
-                user_agent_hash=_hash_optional(user_agent),
-                ip_prefix=_ip_prefix(remote_ip),
-                now=now,
-            )
-            await self._users.set_last_login(session, user.id, now)
-            access_token, access_expires_at = self._tokens.issue_access_token(
-                user_id=user.id,
-                session_id=session_id,
-                role=user.role,
-                csrf_token=csrf_token,
-                now=now,
-            )
-            await self._audit.append(
-                session,
-                actor_user_id=user.id,
-                event_type="auth.login_succeeded",
-                entity_type="auth_session",
-                entity_id=session_id,
-                request_id=request_id,
-                metadata={},
-            )
-            return AuthTokens(
-                access_token=access_token,
-                refresh_token=refresh_token,
-                csrf_token=csrf_token,
-                access_expires_at=access_expires_at,
-                refresh_expires_at=refresh_expires_at,
-                user=user,
-            )
+        # The denial exception is deliberately raised only after the transaction
+        # commits its sanitized audit event. No session or login state is written.
+        raise AuthenticationError("Email or password is invalid")
 
     async def authenticate(self, access_token: str) -> AuthPrincipal:
         claims = self._tokens.decode_access_token(access_token)

@@ -12,7 +12,12 @@ export function formatDate(
 }
 
 export function formatBytes(bytes: number | null | undefined): string {
-  if (bytes === null || bytes === undefined || !Number.isFinite(bytes))
+  if (
+    bytes === null ||
+    bytes === undefined ||
+    !Number.isFinite(bytes) ||
+    bytes < 0
+  )
     return "Unknown size";
   if (bytes === 0) return "0 B";
   const units = ["B", "KB", "MB", "GB"];
@@ -20,7 +25,11 @@ export function formatBytes(bytes: number | null | undefined): string {
     Math.floor(Math.log(bytes) / Math.log(1024)),
     units.length - 1,
   );
-  return `${(bytes / 1024 ** index).toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+  const formatted = new Intl.NumberFormat(undefined, {
+    maximumFractionDigits: index === 0 ? 0 : 1,
+    minimumFractionDigits: 0,
+  }).format(bytes / 1024 ** index);
+  return `${formatted} ${units[index]}`;
 }
 
 export function shortenHash(value: string | null | undefined): string {

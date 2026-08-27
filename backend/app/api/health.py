@@ -3,12 +3,14 @@ from collections.abc import Awaitable
 
 from fastapi import APIRouter, Request, Response, status
 
+from app.schemas.health import HealthRead, ReadinessDependenciesRead, ReadinessRead
+
 router = APIRouter(tags=["system"])
 
 
-@router.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok", "service": "mcplica-api"}
+@router.get("/health", response_model=HealthRead)
+async def health() -> HealthRead:
+    return HealthRead(status="ok", service="mcplica-api")
 
 
 async def _bounded_health(check: Awaitable[bool], timeout_seconds: float) -> bool:
@@ -18,8 +20,8 @@ async def _bounded_health(check: Awaitable[bool], timeout_seconds: float) -> boo
         return False
 
 
-@router.get("/ready")
-async def ready(request: Request, response: Response) -> dict[str, object]:
+@router.get("/ready", response_model=ReadinessRead)
+async def ready(request: Request, response: Response) -> ReadinessRead:
     timeout = request.app.state.settings.readiness_timeout_seconds
     (
         database_ok,
@@ -41,14 +43,14 @@ async def ready(request: Request, response: Response) -> dict[str, object]:
     ready_value = database_ok and redis_ok and storage_ok and queue_ok
     if not ready_value:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-    return {
-        "ready": ready_value,
-        "dependencies": {
-            "postgres": database_ok,
-            "redis": redis_ok,
-            "artifact_storage": storage_ok,
-            "build_queue": queue_ok,
-            "milvus": milvus_ok,
-            "openrouter": openrouter_ok,
-        },
-    }
+    return ReadinessRead(
+        ready=ready_value,
+        dependencies=ReadinessDependenciesRead(
+            postgres=database_ok,
+            redis=redis_ok,
+            artifact_storage=storage_ok,
+            build_queue=queue_ok,
+            milvus=milvus_ok,
+            openrouter=openrouter_ok,
+        ),
+    )

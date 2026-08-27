@@ -432,6 +432,12 @@ Stores secret metadata and encrypted payload.
 
 Plaintext secret fields are never returned from repository reads after creation except through an explicit internal decrypt method available only to authorized execution paths.
 
+`metadata` carries the validated source-security binding (for example scheme identity and
+API-key name/location). That binding is immutable during secret rotation. Rotation uses optimistic
+concurrency and replaces only encrypted secret material; a binding change requires a replacement
+credential and a new Build. Current source discovery is required when establishing the binding,
+not when rotating a still-valid stored binding after source drift.
+
 ### 7.7 `canonical_snapshots`
 
 Immutable per build input.
@@ -695,6 +701,20 @@ json_pointer / YAML path
 
 AI enrichment records its own separate provenance and may not replace the executable provenance.
 
+The build configuration also freezes `runtime_manifest_max_bytes`. The validator compares this
+limit to the byte length of the exact canonical serialization whose SHA-256 is persisted on the
+Build; object estimates or pre-serialization character counts are not authoritative. Equality is
+accepted. One excess byte is a blocking artifact finding and prevents `READY`. Deployment
+preflight reads with `min(build_frozen_limit, current_runtime_limit)` and reports a stable
+`MANIFEST_EXCEEDS_RUNTIME_LIMIT` denial rather than allowing a runtime startup failure.
+
+Source repair evidence follows the same immutable identity rule. `source_findings` is keyed by
+build, `source_version_id`, and a deterministic finding key so worker retries upsert rather than
+duplicate evidence. It stores stage, stable code, severity, message, pointer, one-based line and
+column, and redacted structured details. The source-version metadata endpoint reads only findings
+for that exact version in the selected build; it must not project a build summary onto every bound
+source.
+
 ---
 
 ## 9. API Inventory v1 format
@@ -804,7 +824,7 @@ Swagger/OpenAPI 2.0 is out of core V1 scope; user must convert it first unless a
 
 ### 11.3 Server selection
 
-If the source defines multiple servers, the project stores all candidates but requires an explicit active server mapping for deployment. The compiler never lets an MCP caller choose an arbitrary server URL.
+If the source defines multiple inherited/root servers, the project stores all candidates but requires an explicit active server mapping for deployment. That mapping resolves only ambiguous inherited candidates; explicit path- and operation-scoped OpenAPI servers remain bound to their operations. The compiler never lets an MCP caller choose an arbitrary server URL.
 
 ### 11.4 Unsupported constructs
 
@@ -1082,9 +1102,18 @@ Examples:
 - duplicate tool names;
 - upstream host missing/not allowed;
 - secret mapping unresolved;
-- MCP runtime cannot list generated tools in validation harness.
+- MCP runtime cannot initialize or list generated tools/resources in the validation harness;
+- any enabled tool lacks schema-valid representative arguments or cannot complete a successful
+  schema-valid call through the production runtime factory;
+- actual upstream success status, media type, decoded body, or deterministic MCP response
+  envelope violates the compiled response contract.
 
 Warnings may include sparse descriptions or weak documentation correlation but must not conceal structural failures.
+
+The harness must not substitute a synthetic failure response merely to reach an executor path.
+Probe construction is performed before startup, all enabled tools are called with the official
+client, MCP `is_error` results are blocking, and teardown remains bounded even when one probe
+fails.
 
 ### 16.2 Coverage metrics
 
@@ -1383,7 +1412,12 @@ STOPPING -> STOPPED
 FAILED
 ```
 
-A rollback creates a new Deployment row referencing a previous READY Build; historical deployment rows are immutable except operational status timestamps.
+A rollback creates a new Deployment row referencing a previous READY Build; historical deployment
+rows are immutable except operational status timestamps. Eligibility requires a non-active target
+whose `activated_at` evidence is complete and whose activation proof recomputes against the exact
+project, build, deployment, container, image, hostname, manifest, runtime version, and verification
+time. A deployment stopped or failed before activation is ineligible regardless of its status
+history. The same domain predicate drives the rollback transaction and `DeploymentRead` capability.
 
 ### 22.1 Deploy algorithm
 
@@ -1397,16 +1431,21 @@ A rollback creates a new Deployment row referencing a previous READY Build; hist
 8. start container;
 9. poll container readiness, then probe the Traefik edge route with the expected
    immutable Build ID and Deployment ID;
-10. if healthy, make replacement authoritative and stop old container;
+10. if healthy, persist a content-bound activation proof, make the replacement
+    authoritative, and commit it `RUNNING` before destructive superseded cleanup;
 11. if unhealthy, remove replacement and keep old healthy deployment intact;
 12. persist final state/audit event;
 13. release lock.
 
-During step 10 the candidate remains durably `HEALTHCHECK` with
-`health_status=activating`. The project references the candidate while every superseded
-`RUNNING`/`STOPPING` runtime is retired; only after that cleanup commits may the
-candidate become `RUNNING` and emit its running audit event. A worker retry resumes
-this activation boundary without reprovisioning the already healthy candidate.
+During step 10 the candidate moves through durable `verified` and
+`retiring_previous` activation phases. Each verification is bound to the exact project,
+Build, Deployment, container ID, image digest, hostname, manifest digest, runtime
+version, and verification timestamp. The candidate becomes `RUNNING` in the same
+transaction that records its final activation phase, before destructive cleanup of the
+superseded runtime. A cleanup retry must re-inspect the exact candidate identity and
+probe `/readyz` through the edge again. If that proof fails, the invalid candidate is
+stopped and marked unhealthy; the predecessor is restored only after its exact runtime
+and edge identity are healthy again.
 
 Never stop the currently healthy container before a replacement passes readiness unless Docker resource constraints make zero-downtime impossible and the user explicitly requested a stop-first deployment.
 
@@ -1414,6 +1453,9 @@ Container readiness alone is insufficient for replacement. The edge probe must r
 the candidate through its project hostname/network and receive `/readyz` evidence for
 the exact candidate Build and Deployment. This prevents Docker-provider propagation
 delay, or an older same-Build runtime, from being mistaken for the replacement.
+An activation proof is operational evidence, not a substitute for the live edge probe;
+every resumed activation or cleanup retry obtains a fresh proof before retiring another
+runtime.
 
 ---
 
@@ -1481,7 +1523,9 @@ PATCH  /api/v1/projects/{project_id}
 DELETE /api/v1/projects/{project_id}
 ```
 
-Project deletion is blocked while an active deployment exists unless the explicit delete workflow first stops/removes it. Destructive deletion should support retention/soft-delete policy as defined in settings.
+Project deletion is blocked while an active deployment or nonterminal Build exists. Before relational cascade, the transaction persists a durable cleanup job containing every reachable source blob, manifest, export, chunk manifest, and exact vector generation. The API returns `202` with that job; admin cleanup endpoints expose counts, retry state, bounded errors, and terminal outcome. External workers use expiring leases and live reference checks, so retries are idempotent and content shared by another surviving row is never removed.
+
+Retention is enforced, not decorative: Build retention preserves the newest configured count and every active, deployed, or nonterminal Build; source retention preserves each Source's latest version, the exact cutoff boundary, and every version referenced by a retained Build. Candidate rows and cleanup targets are committed atomically. Source upload staging additionally arms a durable delayed orphan guard before final object commit, closing the storage-before-database failure window.
 
 ### 24.3 Sources
 
@@ -1494,6 +1538,10 @@ GET    /api/v1/projects/{id}/sources/{source_id}/versions
 GET    /api/v1/source-versions/{version_id}/metadata
 ```
 
+Each returned source issue includes `source_version_id`, `stage`, `code`, `severity`, `message`,
+optional `pointer`/`line`/`column`, and redacted `details`. Build error fields are aggregate status
+only and are not a per-source attribution contract.
+
 ### 24.4 Credentials
 
 ```text
@@ -1503,7 +1551,9 @@ POST   /api/v1/projects/{id}/credentials/{credential_id}/rotate
 DELETE /api/v1/projects/{id}/credentials/{credential_id}
 ```
 
-Secret responses return metadata only after creation/rotation.
+Secret responses return metadata only after creation/rotation. Rotation replaces the encrypted
+secret while preserving the credential's immutable security-scheme binding; a supplied metadata
+change is rejected without mutation. Remapping uses a replacement credential and new Build.
 
 ### 24.5 Builds
 

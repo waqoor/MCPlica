@@ -8,6 +8,8 @@ export type AuthContextValue = {
   error: Error | null;
   login: (payload: LoginPayload) => Promise<User>;
   logout: () => Promise<void>;
+  logoutError: Error | null;
+  isLoggingOut: boolean;
   refresh: () => Promise<void>;
 };
 

@@ -50,6 +50,20 @@ class CanonicalRepository:
         model = await session.get(CanonicalSnapshot, snapshot_id)
         return _to_domain(model) if model else None
 
+    async def get_many(
+        self,
+        session: AsyncSession,
+        snapshot_ids: list[UUID],
+    ) -> dict[UUID, CanonicalSnapshotRecord]:
+        if not snapshot_ids:
+            return {}
+        models = list(
+            await session.scalars(
+                select(CanonicalSnapshot).where(CanonicalSnapshot.id.in_(set(snapshot_ids)))
+            )
+        )
+        return {model.id: _to_domain(model) for model in models}
+
     async def latest_for_project(
         self,
         session: AsyncSession,

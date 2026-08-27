@@ -4,12 +4,13 @@ from pathlib import PurePosixPath
 from urllib.parse import urlsplit
 from uuid import UUID
 
-from mcp_contracts import CanonicalApi, CanonicalProvenance, DocumentationRef
+from mcp_contracts import CanonicalApi, DocumentationRef
 
 from app.clients.database import DatabaseClient
 from app.core.canonical_json import canonical_sha256
 from app.core.exceptions import NotFoundError, SourceParseError
 from app.domain.canonicalization import CanonicalSnapshotRecord
+from app.domain.projects import ProjectRoutingConfiguration
 from app.domain.sources import BoundSourceVersionRecord, SourceKind
 from app.parsers.api_inventory import parse_api_inventory
 from app.parsers.openapi.parser import ExternalOpenApiDocument, parse_openapi
@@ -18,6 +19,21 @@ from app.providers.storage import ArtifactStorage
 from app.repositories.canonical import CanonicalRepository
 from app.repositories.projects import ProjectRepository
 from app.repositories.sources import SourceRepository
+
+
+def _attribute_source_error(
+    exc: SourceParseError,
+    source_version_id: UUID,
+    *,
+    pointer: str | None = None,
+) -> None:
+    """Attach immutable source identity without overwriting deeper parser evidence."""
+
+    exc.details.setdefault("source_version_id", str(source_version_id))
+    if pointer is not None and not any(
+        key in exc.details for key in ("source_pointer", "source_location", "pointer")
+    ):
+        exc.details["source_pointer"] = pointer
 
 
 def _source_fingerprint(bindings: list[BoundSourceVersionRecord]) -> str:
@@ -58,6 +74,7 @@ class CanonicalizationService:
         source_version_ids: list[UUID],
         *,
         max_source_bytes: int,
+        routing: ProjectRoutingConfiguration | None = None,
     ) -> CanonicalApi:
         if len(set(source_version_ids)) != len(source_version_ids):
             raise SourceParseError("Source version bindings must be unique")
@@ -72,6 +89,11 @@ class CanonicalizationService:
             )
         if len(bindings) != len(source_version_ids):
             raise SourceParseError("One or more source versions do not belong to the Project")
+        effective_routing = routing or ProjectRoutingConfiguration(
+            default_base_url=project.default_base_url,
+            active_server_ref=project.active_server_ref,
+            server_mappings=project.server_mappings,
+        )
         primary = [
             item
             for item in bindings
@@ -91,7 +113,11 @@ class CanonicalizationService:
         )
         content = {item.version.id: value for item, value in zip(bindings, payloads, strict=True)}
         root = primary[0]
-        _, document = parse_json_or_yaml(content[root.version.id])
+        try:
+            _, document = parse_json_or_yaml(content[root.version.id])
+        except SourceParseError as exc:
+            _attribute_source_error(exc, root.version.id, pointer="#")
+            raise
         if root.source.kind is SourceKind.OPENAPI:
             external_documents: dict[str, ExternalOpenApiDocument] = {}
             for binding in bindings:
@@ -100,7 +126,11 @@ class CanonicalizationService:
                     or binding.source.kind is not SourceKind.OPENAPI
                 ):
                     continue
-                _, external = parse_json_or_yaml(content[binding.version.id])
+                try:
+                    _, external = parse_json_or_yaml(content[binding.version.id])
+                except SourceParseError as exc:
+                    _attribute_source_error(exc, binding.version.id, pointer="#")
+                    raise
                 captured = ExternalOpenApiDocument(external, binding.version.id)
                 keys = {binding.source.name}
                 if binding.source.source_url:
@@ -110,26 +140,42 @@ class CanonicalizationService:
                         keys.add(path_name)
                 for key in keys:
                     if key in external_documents:
-                        raise SourceParseError(f"Ambiguous external OpenAPI dependency name: {key}")
+                        raise SourceParseError(
+                            f"Ambiguous external OpenAPI dependency name: {key}",
+                            details={
+                                "source_version_id": str(binding.version.id),
+                                "source_pointer": "#",
+                            },
+                        )
                     external_documents[key] = captured
-            canonical = parse_openapi(
-                document,
-                project_id=project_id,
-                source_version_id=root.version.id,
-                content_sha256=root.version.content_sha256,
-                active_server_ref=project.active_server_ref,
-                default_base_url=project.default_base_url,
-                external_documents=external_documents,
-            )
+            try:
+                canonical = parse_openapi(
+                    document,
+                    project_id=project_id,
+                    source_version_id=root.version.id,
+                    content_sha256=root.version.content_sha256,
+                    active_server_ref=effective_routing.active_server_ref,
+                    server_mappings=effective_routing.server_mappings,
+                    default_base_url=effective_routing.default_base_url,
+                    external_documents=external_documents,
+                )
+            except SourceParseError as exc:
+                _attribute_source_error(exc, root.version.id, pointer="#")
+                raise
         else:
-            canonical = parse_api_inventory(
-                document,
-                project_id=project_id,
-                source_version_id=root.version.id,
-                content_sha256=root.version.content_sha256,
-                active_server_ref=project.active_server_ref,
-                default_base_url=project.default_base_url,
-            )
+            try:
+                canonical = parse_api_inventory(
+                    document,
+                    project_id=project_id,
+                    source_version_id=root.version.id,
+                    content_sha256=root.version.content_sha256,
+                    active_server_ref=effective_routing.active_server_ref,
+                    server_mappings=effective_routing.server_mappings,
+                    default_base_url=effective_routing.default_base_url,
+                )
+            except SourceParseError as exc:
+                _attribute_source_error(exc, root.version.id, pointer="#")
+                raise
         documentation_refs = [
             DocumentationRef(
                 source_version_id=item.version.id,
@@ -142,9 +188,11 @@ class CanonicalizationService:
         return canonical.model_copy(
             update={
                 "documentation_refs": documentation_refs,
-                "provenance": CanonicalProvenance(
-                    source_version_ids=sorted(source_version_ids, key=str),
-                    source_fingerprint=_source_fingerprint(bindings),
+                "provenance": canonical.provenance.model_copy(
+                    update={
+                        "source_version_ids": sorted(source_version_ids, key=str),
+                        "source_fingerprint": _source_fingerprint(bindings),
+                    }
                 ),
             }
         )
@@ -155,11 +203,13 @@ class CanonicalizationService:
         source_version_ids: list[UUID],
         *,
         max_source_bytes: int,
+        routing: ProjectRoutingConfiguration | None = None,
     ) -> CanonicalSnapshotRecord:
         canonical = await self.canonicalize(
             project_id,
             source_version_ids,
             max_source_bytes=max_source_bytes,
+            routing=routing,
         )
         digest = canonical_sha256(canonical)
         async with self._database.session_scope() as session:

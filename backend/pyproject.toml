@@ -62,6 +62,7 @@ asyncio_mode = "auto"
 pythonpath = ["."]
 markers = [
   "docker_integration: opt-in acceptance against a real Docker daemon and runtime image",
+  "postgres_integration: opt-in transactional acceptance against a disposable PostgreSQL database",
 ]
 
 [tool.ruff]

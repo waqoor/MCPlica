@@ -1,27 +1,33 @@
 import asyncio
 import json
 from collections.abc import AsyncIterator
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import Response, StreamingResponse
+from mcp_contracts import MCPManifest
 
 from app.api.deps import BuilderPrincipal, CsrfProtection, services
 from app.container import ServiceContainer
 from app.domain.builds import TERMINAL_STATUSES, BuildStatus, BuildTrigger
 from app.schemas.build import (
+    BuildAdmissionOverviewRead,
     BuildAIRunRead,
     BuildCreate,
     BuildDiffRead,
+    BuildMetricsRead,
+    BuildPageRead,
     BuildRead,
     OperationExclusionCreate,
     OperationExclusionRead,
-    OperationRead,
+    OperationPageItemRead,
+    OperationPageRead,
     ValidationFindingRead,
     ValidationReportRead,
     ValidationSourceRefRead,
 )
+from app.services.build_admission import BuildAdmissionDispatcher
 from app.services.builds import BuildService
 
 router = APIRouter(tags=["builds"])
@@ -37,7 +43,24 @@ def _read(value: object) -> BuildRead:
     return BuildRead.model_validate(value)
 
 
-@router.get("/builds", response_model=list[BuildRead])
+def _admission(
+    container: Annotated[ServiceContainer, Depends(services)],
+) -> BuildAdmissionDispatcher:
+    return container.build_admission
+
+
+@router.get("/build-admission", response_model=BuildAdmissionOverviewRead)
+async def get_build_admission(
+    _principal: BuilderPrincipal,
+    service: Annotated[BuildAdmissionDispatcher, Depends(_admission)],
+    limit: Annotated[int, Query(ge=1, le=200)] = 200,
+) -> BuildAdmissionOverviewRead:
+    return BuildAdmissionOverviewRead.model_validate(
+        (await service.overview(limit=limit)).model_dump()
+    )
+
+
+@router.get("/builds", response_model=BuildPageRead)
 async def list_builds(
     _principal: BuilderPrincipal,
     service: Annotated[BuildService, Depends(_builds)],
@@ -45,32 +68,51 @@ async def list_builds(
     build_status: Annotated[BuildStatus | None, Query(alias="status")] = None,
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=200)] = 50,
-) -> list[BuildRead]:
-    builds = await service.list_all(
+) -> BuildPageRead:
+    builds, total, has_active = await service.page_all(
         project_id=project_id,
         status=build_status,
         limit=page_size,
         offset=(page - 1) * page_size,
     )
-    return [_read(build) for build in builds]
+    return BuildPageRead(
+        items=[_read(build) for build in builds],
+        total=total,
+        page=page,
+        page_size=page_size,
+        has_active=has_active,
+    )
 
 
-@router.get("/projects/{project_id}/builds", response_model=list[BuildRead])
+@router.get("/builds/metrics", response_model=BuildMetricsRead)
+async def get_build_metrics(
+    _principal: BuilderPrincipal,
+    service: Annotated[BuildService, Depends(_builds)],
+) -> BuildMetricsRead:
+    total, active, failed = await service.metrics()
+    return BuildMetricsRead(total=total, active=active, failed=failed)
+
+
+@router.get("/projects/{project_id}/builds", response_model=BuildPageRead)
 async def list_project_builds(
     project_id: UUID,
     _principal: BuilderPrincipal,
     service: Annotated[BuildService, Depends(_builds)],
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=200)] = 100,
-) -> list[BuildRead]:
-    return [
-        _read(build)
-        for build in await service.list_for_project(
-            project_id,
-            limit=page_size,
-            offset=(page - 1) * page_size,
-        )
-    ]
+) -> BuildPageRead:
+    builds, total, has_active = await service.page_for_project(
+        project_id,
+        limit=page_size,
+        offset=(page - 1) * page_size,
+    )
+    return BuildPageRead(
+        items=[_read(build) for build in builds],
+        total=total,
+        page=page,
+        page_size=page_size,
+        has_active=has_active,
+    )
 
 
 @router.post(
@@ -172,13 +214,18 @@ async def build_events(
     await service.get(build_id)
 
     async def stream() -> AsyncIterator[str]:
-        prior: BuildStatus | None = None
+        prior: tuple[BuildStatus, object, object] | None = None
         while not await request.is_disconnected():
             build = await service.get(build_id)
-            if build.status != prior:
+            state = (
+                build.status,
+                build.cancellation_requested_at,
+                build.cancellation_acknowledged_at,
+            )
+            if state != prior:
                 payload = _read(build).model_dump(mode="json")
                 yield f"event: build\ndata: {json.dumps(payload, separators=(',', ':'))}\n\n"
-                prior = build.status
+                prior = state
             if build.status in TERMINAL_STATUSES:
                 return
             await asyncio.sleep(1)
@@ -199,8 +246,19 @@ async def get_build_diff(
     return BuildDiffRead.model_validate((await service.diff(build_id)).model_dump())
 
 
-@router.get("/builds/{build_id}/manifest")
+@router.get("/builds/{build_id}/manifest", response_model=MCPManifest)
 async def get_build_manifest(
+    build_id: UUID,
+    response: Response,
+    _principal: BuilderPrincipal,
+    service: Annotated[BuildService, Depends(_builds)],
+) -> MCPManifest:
+    response.headers["Content-Disposition"] = f'inline; filename="manifest-{build_id}.json"'
+    return await service.manifest(build_id)
+
+
+@router.get("/builds/{build_id}/manifest/download")
+async def download_build_manifest(
     build_id: UUID,
     _principal: BuilderPrincipal,
     service: Annotated[BuildService, Depends(_builds)],
@@ -209,7 +267,7 @@ async def get_build_manifest(
     return Response(
         content=value,
         media_type="application/json",
-        headers={"Content-Disposition": f'inline; filename="manifest-{build_id}.json"'},
+        headers={"Content-Disposition": f'attachment; filename="manifest-{build_id}.json"'},
     )
 
 
@@ -257,16 +315,63 @@ async def export_build(
     )
 
 
-@router.get("/builds/{build_id}/operations", response_model=list[OperationRead])
+@router.get("/builds/{build_id}/operations", response_model=OperationPageRead)
 async def get_build_operations(
     build_id: UUID,
     _principal: BuilderPrincipal,
     service: Annotated[BuildService, Depends(_builds)],
-) -> list[OperationRead]:
-    return [
-        OperationRead.model_validate(item.model_dump())
-        for item in await service.operations(build_id)
-    ]
+    search: Annotated[str | None, Query(max_length=200)] = None,
+    method: Annotated[
+        Literal[
+            "GET",
+            "POST",
+            "PUT",
+            "PATCH",
+            "DELETE",
+            "HEAD",
+            "OPTIONS",
+            "TRACE",
+        ]
+        | None,
+        Query(),
+    ] = None,
+    scope: Annotated[
+        Literal[
+            "all",
+            "current-included",
+            "current-excluded",
+            "build-excluded",
+            "changed",
+        ],
+        Query(),
+    ] = "all",
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> OperationPageRead:
+    operations, total, policy_change_count = await service.operations_page(
+        build_id,
+        search=search,
+        method=method,
+        scope=scope,
+        limit=page_size,
+        offset=(page - 1) * page_size,
+    )
+    return OperationPageRead(
+        items=[
+            OperationPageItemRead.model_validate(
+                {
+                    **item.operation.model_dump(),
+                    "current_exclusion_id": item.current_exclusion_id,
+                    "current_exclusion_reason": item.current_exclusion_reason,
+                }
+            )
+            for item in operations
+        ],
+        total=total,
+        page=page,
+        page_size=page_size,
+        policy_change_count=policy_change_count,
+    )
 
 
 @router.get("/builds/{build_id}/ai-runs", response_model=list[BuildAIRunRead])
@@ -302,6 +407,21 @@ async def create_operation_exclusion(
         request_id=request.state.request_id,
     )
     return OperationExclusionRead.model_validate(exclusion.model_dump())
+
+
+@router.get(
+    "/projects/{project_id}/operation-exclusions",
+    response_model=list[OperationExclusionRead],
+)
+async def list_operation_exclusions(
+    project_id: UUID,
+    _principal: BuilderPrincipal,
+    service: Annotated[BuildService, Depends(_builds)],
+) -> list[OperationExclusionRead]:
+    return [
+        OperationExclusionRead.model_validate(exclusion.model_dump())
+        for exclusion in await service.list_exclusions(project_id=project_id)
+    ]
 
 
 @router.delete(

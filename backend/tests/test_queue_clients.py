@@ -27,16 +27,22 @@ async def test_build_queue_uses_rq_valid_deterministic_job_id(
         max_attempts=3,
     )
     build_id = uuid4()
+    admission_token = uuid4()
 
-    await client.enqueue_build(build_id)
+    await client.enqueue_build(build_id, admission_token)
 
     job_id = queue.enqueue.call_args.kwargs["job_id"]
     validate_job_id(job_id)
-    assert job_id == f"mcplica-build-{build_id}"
+    assert job_id == f"mcplica-build-{build_id}-{admission_token}"
+    assert queue.enqueue.call_args.args[:3] == (
+        "app.jobs.build.run_build_job",
+        str(build_id),
+        str(admission_token),
+    )
 
 
 @pytest.mark.asyncio
-async def test_deployment_queue_uses_rq_valid_deterministic_job_ids(
+async def test_deployment_queue_uses_attempt_scoped_runtime_command_job_ids(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     queue = Mock()
@@ -51,14 +57,13 @@ async def test_deployment_queue_uses_rq_valid_deterministic_job_ids(
         job_timeout_seconds=60,
         max_attempts=3,
     )
-    deployment_id = uuid4()
+    command_id = uuid4()
 
-    await client.enqueue_deploy(deployment_id)
-    deploy_job_id = queue.enqueue.call_args.kwargs["job_id"]
-    validate_job_id(deploy_job_id)
-    assert deploy_job_id == f"mcplica-deploy-{deployment_id}"
-
-    await client.enqueue_stop(deployment_id)
-    stop_job_id = queue.enqueue.call_args.kwargs["job_id"]
-    validate_job_id(stop_job_id)
-    assert stop_job_id == f"mcplica-stop-{deployment_id}"
+    await client.enqueue_runtime_command(command_id, 3)
+    job_id = queue.enqueue.call_args.kwargs["job_id"]
+    validate_job_id(job_id)
+    assert job_id == f"mcplica-runtime-command-{command_id}-3"
+    assert queue.enqueue.call_args.args[:2] == (
+        "app.jobs.deploy.run_runtime_command_job",
+        str(command_id),
+    )

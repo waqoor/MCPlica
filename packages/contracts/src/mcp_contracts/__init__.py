@@ -15,6 +15,8 @@ from .canonical import (
     OperationProvenance,
     OperationSemanticMetadata,
     ParameterLocation,
+    SchemaDialectProvenance,
+    SchemaTransformationProvenance,
     SecuritySchemeType,
     SemanticProvenance,
     SourceRef,
@@ -49,6 +51,11 @@ from .runtime_secrets import (
     RuntimeSecretBundle,
     StaticTokenDigest,
     UpstreamCredential,
+)
+from .validation import (
+    validate_manifest_contract,
+    validate_operation_path,
+    validate_runtime_compatibility,
 )
 
 __all__ = [
@@ -90,10 +97,15 @@ __all__ = [
     "RuntimeSecurity",
     "RuntimeNetworkPolicy",
     "RuntimeSecretBundle",
+    "SchemaDialectProvenance",
+    "SchemaTransformationProvenance",
     "SecuritySchemeType",
     "SemanticProvenance",
     "ServerDefinition",
     "SourceRef",
     "StaticTokenDigest",
     "UpstreamCredential",
+    "validate_manifest_contract",
+    "validate_operation_path",
+    "validate_runtime_compatibility",
 ]

@@ -1,0 +1,65 @@
+{
+  "openapi": "3.0.3",
+  "info": {"title": "Schema dialect matrix", "version": "1.0.0"},
+  "servers": [{"url": "https://dialect.example.com"}],
+  "paths": {
+    "/items": {
+      "post": {
+        "operationId": "createItem",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/FlexibleItem"}
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/FlexibleItem"}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "FlexibleItem": {
+        "type": "object",
+        "required": ["score", "labels", "choice"],
+        "properties": {
+          "nickname": {"type": "string", "nullable": true},
+          "score": {
+            "type": "number",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 10,
+            "exclusiveMaximum": false
+          },
+          "state": {
+            "type": "string",
+            "enum": ["active", "inactive"],
+            "nullable": true
+          },
+          "labels": {
+            "type": "array",
+            "items": {"type": "string", "nullable": true}
+          },
+          "attributes": {
+            "type": "object",
+            "additionalProperties": {"type": "integer", "nullable": true}
+          },
+          "choice": {
+            "oneOf": [{"type": "string"}, {"type": "integer"}],
+            "nullable": true
+          }
+        }
+      }
+    }
+  }
+}

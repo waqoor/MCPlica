@@ -1,9 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileCode2, FilePlus2, RefreshCw, Upload } from "lucide-react";
-import { useState } from "react";
+import {
+  FileCode2,
+  FilePlus2,
+  RefreshCw,
+  Star,
+  Trash2,
+  Upload,
+} from "lucide-react";
+import { useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { ProjectSource, SourceKind } from "@/api/contracts";
 import { sourceApi } from "@/api/sources";
+import { MutationError } from "@/components/error-notice";
+import { JsonCode } from "@/components/json-code";
 import { QueryError, QueryPending } from "@/components/query-state";
+import { SourceVersionHistory } from "@/components/source-version-history";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,15 +26,24 @@ import { FieldError, FieldHelp, Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { useProject } from "@/features/projects/project-context";
 import { formatBytes, formatDate, shortenHash } from "@/lib/format";
-import { MAX_UPLOAD_LABEL, uploadAccept, uploadFileError } from "@/lib/uploads";
+import {
+  MAX_UPLOAD_LABEL,
+  uploadAccept,
+  uploadFileError,
+  uploadFormatLabel,
+} from "@/lib/uploads";
 
 export function ProjectSourcesPage() {
   const project = useProject();
   const queryClient = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const rawPage = Number(searchParams.get("page") ?? "1");
+  const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1;
   const sources = useQuery({
-    queryKey: ["projects", project.id, "sources"],
-    queryFn: ({ signal }) => sourceApi.list(project.id, signal),
+    queryKey: ["projects", project.id, "sources", { page }],
+    queryFn: ({ signal }) =>
+      sourceApi.listPage(project.id, { page, page_size: 25 }, signal),
   });
   const invalidate = () =>
     queryClient.invalidateQueries({
@@ -57,7 +77,7 @@ export function ProjectSourcesPage() {
           Add source
         </Button>
       </div>
-      {sources.data.length === 0 ? (
+      {sources.data.items.length === 0 ? (
         <EmptyState
           action={
             <Button onClick={() => setAddOpen(true)}>
@@ -70,7 +90,7 @@ export function ProjectSourcesPage() {
         />
       ) : (
         <div className="space-y-4">
-          {sources.data.map((source) => (
+          {sources.data.items.map((source) => (
             <SourceCard
               key={source.id}
               projectId={project.id}
@@ -80,9 +100,36 @@ export function ProjectSourcesPage() {
               onVersionAdded={invalidate}
             />
           ))}
+          <div className="flex items-center justify-between">
+            <Button
+              disabled={page === 1}
+              onClick={() => {
+                const next = new URLSearchParams(searchParams);
+                next.set("page", String(page - 1));
+                setSearchParams(next);
+              }}
+              variant="outline"
+            >
+              Previous
+            </Button>
+            <span className="text-xs text-muted">
+              Page {sources.data.page} · {sources.data.total} sources
+            </span>
+            <Button
+              disabled={page * sources.data.page_size >= sources.data.total}
+              onClick={() => {
+                const next = new URLSearchParams(searchParams);
+                next.set("page", String(page + 1));
+                setSearchParams(next);
+              }}
+              variant="outline"
+            >
+              Next
+            </Button>
+          </div>
         </div>
       )}
-      {refresh.error && <Alert tone="danger">{refresh.error.message}</Alert>}
+      {refresh.error && <MutationError error={refresh.error} />}
       <Dialog
         description="Sources are stored as immutable content-hashed versions."
         onClose={() => setAddOpen(false)}
@@ -116,6 +163,13 @@ function SourceCard({
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const metadata = useQuery({
+    queryKey: ["source-versions", source.latest_version?.id, "metadata"],
+    queryFn: ({ signal }) =>
+      sourceApi.versionMetadata(source.latest_version!.id, signal),
+    enabled: historyOpen && Boolean(source.latest_version),
+  });
   const version = useMutation({
     mutationFn: () => sourceApi.addVersion(projectId, source.id, file!),
     onSuccess: () => {
@@ -124,7 +178,16 @@ function SourceCard({
       onVersionAdded();
     },
   });
-  const latest = source.latest_version;
+  const promote = useMutation({
+    mutationFn: () =>
+      sourceApi.update(projectId, source.id, { is_primary: true }),
+    onSuccess: onVersionAdded,
+  });
+  const remove = useMutation({
+    mutationFn: () => sourceApi.remove(projectId, source.id),
+    onSuccess: onVersionAdded,
+  });
+  const latest = metadata.data ?? source.latest_version;
   return (
     <Card>
       <CardHeader>
@@ -135,30 +198,76 @@ function SourceCard({
               {source.kind}
             </Badge>
             <Badge>{source.origin_type}</Badge>
+            <Badge
+              tone={
+                source.health === "invalid"
+                  ? "danger"
+                  : source.health === "valid"
+                    ? "success"
+                    : "warning"
+              }
+            >
+              {source.health}
+            </Badge>
+            {source.is_primary && <Badge tone="success">Primary</Badge>}
           </div>
           <p className="mt-1 break-all text-xs text-muted">
             {source.source_url ?? "Uploaded source"}
           </p>
         </div>
-        {source.origin_type === "url" && (
+        <div className="flex flex-wrap gap-2">
+          {source.origin_type === "url" && (
+            <Button
+              disabled={refreshing}
+              onClick={onRefresh}
+              size="sm"
+              variant="outline"
+            >
+              <RefreshCw
+                aria-hidden="true"
+                className={
+                  refreshing
+                    ? "size-4 animate-spin motion-reduce:animate-none"
+                    : "size-4"
+                }
+              />
+              Refresh
+            </Button>
+          )}
+          {source.kind !== "documentation" &&
+            source.latest_version &&
+            !source.is_primary && (
+              <Button
+                disabled={promote.isPending}
+                onClick={() => promote.mutate()}
+                size="sm"
+                variant="outline"
+              >
+                <Star aria-hidden="true" className="size-4" />
+                Make primary
+              </Button>
+            )}
           <Button
-            disabled={refreshing}
-            onClick={onRefresh}
+            disabled={remove.isPending}
+            onClick={() => {
+              if (
+                window.confirm(
+                  "Delete this source? Sources referenced by an immutable build are protected.",
+                )
+              )
+                remove.mutate();
+            }}
             size="sm"
-            variant="outline"
+            variant="ghost"
           >
-            <RefreshCw
-              aria-hidden="true"
-              className={
-                refreshing
-                  ? "size-4 animate-spin motion-reduce:animate-none"
-                  : "size-4"
-              }
-            />
-            Refresh
+            <Trash2 aria-hidden="true" className="size-4" />
+            Delete
           </Button>
-        )}
+        </div>
       </CardHeader>
+      {(promote.error || remove.error) && (
+        <MutationError error={promote.error ?? remove.error} />
+      )}
       {latest ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Fact
@@ -214,15 +323,54 @@ function SourceCard({
         >
           <ul className="space-y-1">
             {latest.errors.map((issue) => (
-              <li key={`${issue.code}-${issue.location}`}>
-                {issue.code}: {issue.message}
-                {issue.location ? ` (${issue.location})` : ""}
+              <li
+                className="space-y-1"
+                key={`${issue.stage}-${issue.code}-${issue.pointer ?? "root"}-${issue.line ?? ""}-${issue.column ?? ""}`}
+              >
+                <div>
+                  {issue.code}: {issue.message}
+                </div>
+                <div className="font-mono text-xs opacity-80">
+                  {issue.stage}
+                  {issue.pointer ? ` · ${issue.pointer}` : ""}
+                  {issue.line ? ` · line ${issue.line}` : ""}
+                  {issue.column ? `:${issue.column}` : ""}
+                </div>
+                {issue.details && Object.keys(issue.details).length > 0 && (
+                  <details>
+                    <summary className="cursor-pointer text-xs font-medium">
+                      Structured evidence
+                    </summary>
+                    <JsonCode
+                      label={`${issue.code} source evidence`}
+                      value={issue.details}
+                    />
+                  </details>
+                )}
               </li>
             ))}
           </ul>
         </Alert>
       ) : null}
-      <div className="mt-5 flex flex-col gap-2 border-t border-border pt-4 sm:flex-row sm:items-end">
+      <SourceVersionHistory
+        onOpenChange={setHistoryOpen}
+        projectId={projectId}
+        sourceId={source.id}
+        versionCount={source.version_count}
+      />
+      {metadata.error && historyOpen && (
+        <QueryError
+          error={metadata.error}
+          onRetry={() => void metadata.refetch()}
+        />
+      )}
+      <form
+        className="mt-5 flex flex-col gap-2 border-t border-border pt-4 sm:flex-row sm:items-end"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (file && !fileError && !version.isPending) version.mutate();
+        }}
+      >
         <div className="flex-1 space-y-2">
           <Label htmlFor={`version-${source.id}`}>
             Upload a new immutable version
@@ -245,7 +393,7 @@ function SourceCard({
           ) : (
             <FieldHelp>
               {file
-                ? `${file.name} · ${(file.size / 1_000_000).toFixed(2)} MB`
+                ? `${file.name} · ${formatBytes(file.size)}`
                 : latest
                   ? `Current version created ${formatDate(latest.created_at)} · ${MAX_UPLOAD_LABEL} maximum.`
                   : `No current version · ${MAX_UPLOAD_LABEL} maximum.`}
@@ -254,18 +402,14 @@ function SourceCard({
         </div>
         <Button
           disabled={!file || Boolean(fileError) || version.isPending}
-          onClick={() => version.mutate()}
+          type="submit"
           variant="outline"
         >
           <Upload aria-hidden="true" className="size-4" />
           {version.isPending ? "Uploading…" : "Add version"}
         </Button>
-      </div>
-      {version.error && (
-        <Alert className="mt-4" tone="danger">
-          {version.error.message}
-        </Alert>
-      )}
+      </form>
+      {version.error && <MutationError error={version.error} />}
     </Card>
   );
 }
@@ -310,18 +454,35 @@ function AddSourceForm({
   const [url, setUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  const sourceId = useRef(crypto.randomUUID());
   const create = useMutation({
     mutationFn: () =>
       origin === "url"
-        ? sourceApi.createFromUrl(projectId, { name, kind, source_url: url })
-        : sourceApi.createFromUpload(projectId, { name, kind, file: file! }),
+        ? sourceApi.createFromUrl(projectId, {
+            source_id: sourceId.current,
+            name,
+            kind,
+            source_url: url,
+          })
+        : sourceApi.createFromUpload(projectId, {
+            source_id: sourceId.current,
+            name,
+            kind,
+            file: file!,
+          }),
     onSuccess: onAdded,
   });
   const ready =
     name.trim() &&
     (origin === "url" ? /^https?:\/\//.test(url) : Boolean(file) && !fileError);
   return (
-    <div className="space-y-4">
+    <form
+      className="space-y-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (ready && !create.isPending) create.mutate();
+      }}
+    >
       <div className="space-y-2">
         <Label htmlFor="add-source-name">Name</Label>
         <Input
@@ -391,21 +552,19 @@ function AddSourceForm({
             <FieldError>{fileError}</FieldError>
           ) : (
             <FieldHelp>
-              {kind === "documentation"
-                ? `JSON, Markdown, TXT, CSV, XLSX, DOCX, HTML, or PDF · ${MAX_UPLOAD_LABEL} maximum.`
-                : `OpenAPI 3.x or API Inventory v1 JSON/YAML · ${MAX_UPLOAD_LABEL} maximum.`}
+              {`${uploadFormatLabel(kind)} · ${MAX_UPLOAD_LABEL} maximum.`}
             </FieldHelp>
           )}
         </div>
       )}
-      {create.error && <Alert tone="danger">{create.error.message}</Alert>}
+      {create.error && <MutationError error={create.error} />}
       <Button
         className="w-full"
         disabled={!ready || create.isPending}
-        onClick={() => create.mutate()}
+        type="submit"
       >
         {create.isPending ? "Adding source…" : "Add source"}
       </Button>
-    </div>
+    </form>
   );
 }

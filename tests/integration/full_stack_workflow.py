@@ -14,11 +14,14 @@ import io
 import json
 import os
 import secrets
+import socket
 import time
 import zipfile
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import cast
+from uuid import uuid4
 
 import httpx
 import httpx2
@@ -30,9 +33,23 @@ from mock_upstream.app import app as upstream_app
 from starlette.applications import Starlette
 
 from app.clients.mcp import MCPValidationClient
+from app.core.config import Settings
 
 _TERMINAL_BUILD_STATUSES = {"READY", "FAILED", "CANCELLED"}
 _TERMINAL_DEPLOYMENT_STATUSES = {"running", "unhealthy", "stopped", "failed"}
+
+
+def _configured_default_admin_credentials() -> tuple[str | None, str | None]:
+    settings = Settings(
+        _env_file=Path(__file__).resolve().parents[2] / ".env"  # pyright: ignore[reportCallIssue]
+    )
+    email = str(settings.default_admin_email) if settings.default_admin_email is not None else None
+    password = (
+        settings.default_admin_password.get_secret_value()
+        if settings.default_admin_password is not None
+        else None
+    )
+    return email, password
 
 
 def _assert_superseded_before_running(
@@ -55,8 +72,18 @@ class FixtureServer:
     port: int
     server: uvicorn.Server | None = None
     task: asyncio.Task[None] | None = None
+    listener: socket.socket | None = None
 
     async def start(self) -> None:
+        listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            listener.bind(("0.0.0.0", self.port))
+            listener.listen(socket.SOMAXCONN)
+            listener.setblocking(False)
+        except OSError as exc:
+            listener.close()
+            raise RuntimeError(f"fixture port {self.port} is unavailable") from exc
+        self.listener = listener
         config = uvicorn.Config(
             self.app,
             host="0.0.0.0",
@@ -65,7 +92,7 @@ class FixtureServer:
             access_log=False,
         )
         self.server = uvicorn.Server(config)
-        self.task = asyncio.create_task(self.server.serve())
+        self.task = asyncio.create_task(self.server.serve(sockets=[listener]))
         deadline = time.monotonic() + 20
         async with httpx.AsyncClient(trust_env=False) as client:
             while time.monotonic() < deadline:
@@ -86,8 +113,11 @@ class FixtureServer:
             self.server.should_exit = True
         if self.task is not None:
             await asyncio.wait_for(self.task, timeout=15)
+        if self.listener is not None:
+            self.listener.close()
         self.server = None
         self.task = None
+        self.listener = None
 
 
 class ControlPlaneClient:
@@ -101,6 +131,22 @@ class ControlPlaneClient:
 
     async def close(self) -> None:
         await self._client.aclose()
+
+    @staticmethod
+    def _error_summary(response: httpx.Response) -> str:
+        try:
+            payload = cast(object, response.json())
+        except ValueError:
+            return ""
+        if not isinstance(payload, dict):
+            return ""
+        error = cast(dict[object, object], payload).get("error")
+        if not isinstance(error, dict):
+            return ""
+        code = cast(dict[object, object], error).get("code")
+        message = cast(dict[object, object], error).get("message")
+        values = [str(value) for value in (code, message) if isinstance(value, str)]
+        return f" ({': '.join(values)})" if values else ""
 
     async def login(self, *, email: str, password: str) -> dict[str, object]:
         return await self.json(
@@ -128,7 +174,10 @@ class ControlPlaneClient:
             headers["X-CSRF-Token"] = token
         response = await self._client.request(method, path, headers=headers, json=json_body)
         if response.status_code not in (expected or frozenset({200})):
-            raise RuntimeError(f"{method.upper()} {path} returned HTTP {response.status_code}")
+            raise RuntimeError(
+                f"{method.upper()} {path} returned HTTP {response.status_code}"
+                f"{self._error_summary(response)}"
+            )
         value = cast(object, response.json())
         if not isinstance(value, dict):
             raise RuntimeError(f"{method.upper()} {path} returned a non-object JSON response")
@@ -137,13 +186,28 @@ class ControlPlaneClient:
     async def json_list(self, path: str) -> list[dict[str, object]]:
         response = await self._client.get(path)
         if response.status_code != 200:
-            raise RuntimeError(f"GET {path} returned HTTP {response.status_code}")
+            raise RuntimeError(
+                f"GET {path} returned HTTP {response.status_code}{self._error_summary(response)}"
+            )
         value = cast(object, response.json())
         if not isinstance(value, list) or any(
             not isinstance(item, dict) for item in cast(list[object], value)
         ):
             raise RuntimeError(f"GET {path} returned a malformed list")
         return cast(list[dict[str, object]], value)
+
+    async def json_page_items(self, path: str) -> list[dict[str, object]]:
+        page = await self.json("GET", path, csrf=False)
+        items = page.get("items")
+        total = page.get("total")
+        if (
+            not isinstance(items, list)
+            or any(not isinstance(item, dict) for item in cast(list[object], items))
+            or not isinstance(total, int)
+            or total != len(items)
+        ):
+            raise RuntimeError(f"GET {path} did not return one complete bounded page")
+        return cast(list[dict[str, object]], items)
 
     async def upload(
         self,
@@ -152,6 +216,7 @@ class ControlPlaneClient:
         filename: str,
         media_type: str,
         content: bytes,
+        form: dict[str, str] | None = None,
     ) -> dict[str, object]:
         token = self._client.cookies.get("mcplica_csrf")
         if not token:
@@ -159,10 +224,13 @@ class ControlPlaneClient:
         response = await self._client.post(
             path,
             headers={"X-CSRF-Token": token},
+            data=form,
             files={"file": (filename, content, media_type)},
         )
         if response.status_code != 201:
-            raise RuntimeError(f"POST {path} returned HTTP {response.status_code}")
+            raise RuntimeError(
+                f"POST {path} returned HTTP {response.status_code}{self._error_summary(response)}"
+            )
         value = cast(object, response.json())
         if not isinstance(value, dict):
             raise RuntimeError(f"POST {path} returned malformed JSON")
@@ -234,7 +302,16 @@ def _openapi(*, updated: bool) -> bytes:
                         }
                     },
                 },
-                "responses": {"200": {"description": "Updated"}},
+                "responses": {
+                    "200": {
+                        "description": "Updated",
+                        "content": {
+                            "application/json": {
+                                "schema": {"type": "object", "additionalProperties": True}
+                            }
+                        },
+                    }
+                },
             },
             "delete": {
                 "operationId": "deleteWidget",
@@ -248,7 +325,16 @@ def _openapi(*, updated: bool) -> bytes:
                         "schema": {"type": "string"},
                     }
                 ],
-                "responses": {"200": {"description": "Deleted"}},
+                "responses": {
+                    "200": {
+                        "description": "Deleted",
+                        "content": {
+                            "application/json": {
+                                "schema": {"type": "object", "additionalProperties": True}
+                            }
+                        },
+                    }
+                },
             },
         },
         "/widgets": {
@@ -269,7 +355,16 @@ def _openapi(*, updated: bool) -> bytes:
                         }
                     },
                 },
-                "responses": {"201": {"description": "Created"}},
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "content": {
+                            "application/json": {
+                                "schema": {"type": "object", "additionalProperties": True}
+                            }
+                        },
+                    }
+                },
             }
         },
     }
@@ -280,7 +375,16 @@ def _openapi(*, updated: bool) -> bytes:
                 "summary": "Search widgets",
                 "description": "Search the current widget catalog.",
                 "security": security,
-                "responses": {"200": {"description": "Search results"}},
+                "responses": {
+                    "200": {
+                        "description": "Search results",
+                        "content": {
+                            "application/json": {
+                                "schema": {"type": "object", "additionalProperties": True}
+                            }
+                        },
+                    }
+                },
             }
         }
     document = {
@@ -439,6 +543,13 @@ def _tool_name(operations: list[dict[str, object]], operation_id: str) -> str:
     raise RuntimeError(f"generated tool for {operation_id} was not found")
 
 
+def _tool_body(result: dict[str, object], *, expected_status: int = 200) -> dict[str, object]:
+    body = result.get("body")
+    if result.get("status") != expected_status or not isinstance(body, dict):
+        raise RuntimeError("MCP tool result did not match the successful response envelope")
+    return cast(dict[str, object], body)
+
+
 def _assert_export(bundle: bytes, forbidden: tuple[str, ...]) -> list[str]:
     for value in forbidden:
         if value.encode() in bundle:
@@ -467,6 +578,7 @@ async def run(*, api_base: str, email: str, password: str) -> dict[str, object]:
     openrouter = FixtureServer(openrouter_app, 9010)
     client = ControlPlaneClient(api_base)
     upstream_secret = secrets.token_urlsafe(32)
+    project_slug = f"final-acceptance-{secrets.token_hex(4)}"
     started = time.monotonic()
     try:
         await upstream.start()
@@ -495,7 +607,7 @@ async def run(*, api_base: str, email: str, password: str) -> dict[str, object]:
             expected=frozenset({201}),
             json_body={
                 "name": "MCPlica final acceptance",
-                "slug": "final-acceptance",
+                "slug": project_slug,
                 "description": "Repository-wide real workflow proof",
                 "default_base_url": "http://host.docker.internal:9009/api",
             },
@@ -503,46 +615,44 @@ async def run(*, api_base: str, email: str, password: str) -> dict[str, object]:
         project_id = str(project["id"])
         hostname = str(project["mcp_hostname"])
 
-        source = await client.json(
-            "POST",
-            f"/projects/{project_id}/sources",
-            expected=frozenset({201}),
-            json_body={
-                "kind": "openapi",
-                "name": "Acceptance OpenAPI",
-                "origin_type": "upload",
-                "is_primary": True,
-            },
-        )
-        source_id = str(source["id"])
-        initial_version = await client.upload(
-            f"/projects/{project_id}/sources/{source_id}/versions",
+        source_creation = await client.upload(
+            f"/projects/{project_id}/sources/upload",
             filename="openapi.json",
             media_type="application/json",
             content=_openapi(updated=False),
-        )
-
-        documentation = await client.json(
-            "POST",
-            f"/projects/{project_id}/sources",
-            expected=frozenset({201}),
-            json_body={
-                "kind": "documentation",
-                "name": "Widget operations guide",
-                "origin_type": "upload",
-                "is_primary": False,
+            form={
+                "source_id": str(uuid4()),
+                "kind": "openapi",
+                "name": "Acceptance OpenAPI",
+                "is_primary": "true",
             },
         )
-        documentation_id = str(documentation["id"])
-        await client.upload(
-            f"/projects/{project_id}/sources/{documentation_id}/versions",
+        source = source_creation.get("source")
+        initial_version = source_creation.get("version")
+        if not isinstance(source, dict) or not isinstance(initial_version, dict):
+            raise RuntimeError("atomic executable source creation returned malformed JSON")
+        source = cast(dict[str, object], source)
+        initial_version = cast(dict[str, object], initial_version)
+        source_id = str(source["id"])
+
+        documentation_creation = await client.upload(
+            f"/projects/{project_id}/sources/upload",
             filename="widgets.md",
             media_type="text/markdown",
             content=(
                 b"# Widget API\n\nWidgets are durable catalog records. "
                 b"Use getWidget for exact identifiers and createWidget for new records.\n"
             ),
+            form={
+                "source_id": str(uuid4()),
+                "kind": "documentation",
+                "name": "Widget operations guide",
+                "is_primary": "false",
+            },
         )
+        documentation = documentation_creation.get("source")
+        if not isinstance(documentation, dict):
+            raise RuntimeError("atomic documentation source creation returned malformed JSON")
 
         credential = await client.json(
             "POST",
@@ -575,7 +685,9 @@ async def run(*, api_base: str, email: str, password: str) -> dict[str, object]:
             or validation_one.get("blocking_error_count") != 0
         ):
             raise RuntimeError("initial validation did not prove 100% blocking-clean coverage")
-        operations_one = await client.json_list(f"/builds/{build_one_id}/operations")
+        operations_one = await client.json_page_items(
+            f"/builds/{build_one_id}/operations?page=1&page_size=200"
+        )
         ai_runs_one = await client.json_list(f"/builds/{build_one_id}/ai-runs")
         analysis_runs = [item for item in ai_runs_one if item.get("stage") == "analysis"]
         if not analysis_runs or any(item.get("status") != "succeeded" for item in ai_runs_one):
@@ -629,6 +741,8 @@ async def run(*, api_base: str, email: str, password: str) -> dict[str, object]:
         deployment_one_id = str(deployment_one["id"])
         get_tool = _tool_name(operations_one, "getWidget")
         create_tool = _tool_name(operations_one, "createWidget")
+        update_tool = _tool_name(operations_one, "updateWidget")
+        delete_tool = _tool_name(operations_one, "deleteWidget")
         mcp_started = time.monotonic()
         tools_one, resources_read, call_results = await _mcp_round_trip(
             hostname=hostname,
@@ -636,17 +750,28 @@ async def run(*, api_base: str, email: str, password: str) -> dict[str, object]:
             calls=[
                 (get_tool, {"widget_id": "widget-42", "verbose": True}),
                 (create_tool, {"body": {"name": "Created through MCP"}}),
+                (
+                    update_tool,
+                    {"widget_id": "widget-42", "body": {"name": "Updated through MCP"}},
+                ),
+                (delete_tool, {"widget_id": "widget-42"}),
             ],
         )
         mcp_round_trip_seconds = time.monotonic() - mcp_started
         if len(tools_one) != 4 or not resources_read:
             raise RuntimeError("initial MCP tool/resource surface was incomplete")
-        expected_calls = (("GET", "/api/widgets/widget-42"), ("POST", "/api/widgets"))
-        for result, (method, path) in zip(call_results, expected_calls, strict=True):
+        expected_calls = (
+            ("GET", "/api/widgets/widget-42", 200),
+            ("POST", "/api/widgets", 201),
+            ("PATCH", "/api/widgets/widget-42", 200),
+            ("DELETE", "/api/widgets/widget-42", 200),
+        )
+        for result, (method, path, status_code) in zip(call_results, expected_calls, strict=True):
+            body = _tool_body(result, expected_status=status_code)
             if (
-                result.get("method") != method
-                or result.get("path") != path
-                or result.get("authorization") != f"Bearer {upstream_secret}"
+                body.get("method") != method
+                or body.get("path") != path
+                or body.get("authorization") != f"Bearer {upstream_secret}"
             ):
                 raise RuntimeError("MCP call did not preserve exact mapping/authentication")
 
@@ -660,7 +785,7 @@ async def run(*, api_base: str, email: str, password: str) -> dict[str, object]:
             bearer_token=access_token,
             calls=[(get_tool, {"widget_id": "outage-proof"})],
         )
-        if outage_results[0].get("path") != "/api/widgets/outage-proof":
+        if _tool_body(outage_results[0]).get("path") != "/api/widgets/outage-proof":
             raise RuntimeError("runtime failed while builder-side dependencies were unavailable")
         openrouter = FixtureServer(openrouter_app, 9010)
         await openrouter.start()
@@ -700,7 +825,9 @@ async def run(*, api_base: str, email: str, password: str) -> dict[str, object]:
         validation_two = await client.json("GET", f"/builds/{build_two_id}/validation", csrf=False)
         if float(cast(int | float, validation_two.get("coverage_percent", 0))) != 100:
             raise RuntimeError("updated build did not retain 100% expected coverage")
-        operations_two = await client.json_list(f"/builds/{build_two_id}/operations")
+        operations_two = await client.json_page_items(
+            f"/builds/{build_two_id}/operations?page=1&page_size=200"
+        )
         search_tool = _tool_name(operations_two, "searchWidgets")
 
         deployment_two = await client.json(
@@ -720,7 +847,10 @@ async def run(*, api_base: str, email: str, password: str) -> dict[str, object]:
             bearer_token=access_token,
             calls=[(search_tool, {})],
         )
-        if search_tool not in tools_two or search_result[0].get("path") != "/api/widgets/search":
+        if (
+            search_tool not in tools_two
+            or _tool_body(search_result[0]).get("path") != "/api/widgets/search"
+        ):
             raise RuntimeError("redeployed runtime did not serve the source update")
 
         rollback = await client.json(
@@ -744,7 +874,7 @@ async def run(*, api_base: str, email: str, password: str) -> dict[str, object]:
         )
         if (
             search_tool in rollback_tools
-            or rollback_result[0].get("path") != "/api/widgets/rolled-back"
+            or _tool_body(rollback_result[0]).get("path") != "/api/widgets/rolled-back"
         ):
             raise RuntimeError("rollback did not restore the original MCP surface")
         project_after_rollback = await client.json("GET", f"/projects/{project_id}", csrf=False)
@@ -757,6 +887,7 @@ async def run(*, api_base: str, email: str, password: str) -> dict[str, object]:
         return {
             "status": "passed",
             "project_id": project_id,
+            "project_slug": project_slug,
             "source_versions": [str(initial_version["id"]), str(updated_version["id"])],
             "builds": [build_one_id, build_two_id],
             "deployments": [deployment_one_id, deployment_two_id, rollback_id],
@@ -781,6 +912,7 @@ async def run(*, api_base: str, email: str, password: str) -> dict[str, object]:
 
 
 def main() -> None:
+    default_email, default_password = _configured_default_admin_credentials()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--api-base",
@@ -788,10 +920,15 @@ def main() -> None:
     )
     parser.add_argument(
         "--email",
-        default=os.getenv("E2E_ADMIN_EMAIL", "admin@admin.com"),
+        default=os.getenv("E2E_ADMIN_EMAIL") or default_email,
     )
     args = parser.parse_args()
-    password = os.getenv("E2E_ADMIN_PASSWORD", "admin@321")
+    password = os.getenv("E2E_ADMIN_PASSWORD") or default_password
+    if not args.email or not password:
+        parser.error(
+            "configure DEFAULT_ADMIN_EMAIL and DEFAULT_ADMIN_PASSWORD in .env "
+            "or provide E2E_ADMIN_EMAIL and E2E_ADMIN_PASSWORD"
+        )
     result = asyncio.run(run(api_base=args.api_base, email=args.email, password=password))
     print(json.dumps(result, sort_keys=True, indent=2), flush=True)
 

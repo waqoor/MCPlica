@@ -1,5 +1,24 @@
 # Final integrated implementation and validation evidence
 
+## 2026-08-27 second-round addendum
+
+The `issues_001.md` second implementation round supersedes the historical repository counts
+below for the current working tree. The exact 48-row disposition is in
+`docs/evidence/issues-001-closure.md`: 22 findings are **VERIFIED COMPLETE**, 26 are
+**FIXED IN SECOND ROUND**, none is **BLOCKED**, and no internally resolvable gap remains.
+
+Current proof includes 240 backend/shared-contract passes with one skip and 72.203% aggregate
+line coverage plus all critical-module floors; 54 runtime passes; 152 frontend unit passes; 16
+isolated browser passes with 8 intentional project/viewport/live guards and retries disabled; and
+one separately opted-in real-Compose Chromium pass. PostgreSQL reached `0020 (head)` from an empty
+database, completed the `head -> base -> head` migration cycle, passed autogenerate/schema-drift
+checks, and the current generic-runtime Docker/Traefik replacement, rollback, and two-project
+isolation acceptance passed from the production-equivalent Linux worker boundary.
+Ruff, Ruff format, package-scoped Pyright, TypeScript including E2E, ESLint, Prettier, generated
+API drift, fixture drift, asset budgets, production builds, Compose validation, and locked runtime
+image construction also passed. The dated 2026-08-26 record remains below as historical
+first-round evidence rather than current counts.
+
 **Validated:** 2026-08-26  
 **Scope:** exact merged working tree on `master` at base commit `ac8cd85`  
 **Environment:** Windows 10 / Docker Engine 29.2.0 / Compose 5.0.2 / Python

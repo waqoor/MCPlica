@@ -100,10 +100,13 @@ class MilvusVectorStore(VectorStore):
         generation_id: UUID,
         vector: list[float],
         limit: int,
+        include_documentation: bool = True,
     ) -> list[VectorSearchResult]:
         if not 1 <= limit <= 100:
             raise ValueError("Vector search limit must be between 1 and 100")
         expression = f'project_id == "{project_id}" and generation_id == "{generation_id}"'
+        if not include_documentation:
+            expression += ' and source_kind != "documentation"'
         raw = await self._client.search(
             collection=collection,
             vector=vector,

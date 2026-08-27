@@ -1,13 +1,22 @@
 import { expect, test } from "@playwright/test";
 
 const liveEnabled = process.env.E2E_LIVE === "1";
-const adminEmail = process.env.E2E_ADMIN_EMAIL ?? "admin@admin.com";
-const adminPassword = process.env.E2E_ADMIN_PASSWORD ?? "admin@321";
+const adminEmail =
+  process.env.E2E_ADMIN_EMAIL ?? process.env.DEFAULT_ADMIN_EMAIL;
+const adminPassword =
+  process.env.E2E_ADMIN_PASSWORD ?? process.env.DEFAULT_ADMIN_PASSWORD;
 
 test("authenticates against Compose and exposes the active rollback runtime", async ({
   page,
 }) => {
   test.skip(!liveEnabled, "Live Compose acceptance is opt-in");
+  test.skip(
+    !adminEmail || !adminPassword,
+    "DEFAULT_ADMIN_EMAIL and DEFAULT_ADMIN_PASSWORD are not configured",
+  );
+  if (!adminEmail || !adminPassword) {
+    return;
+  }
   const cspViolations: string[] = [];
   page.on("console", (message) => {
     if (/content-security-policy|unsafe-eval/i.test(message.text())) {
@@ -40,10 +49,14 @@ test("authenticates against Compose and exposes the active rollback runtime", as
   await page
     .getByRole("region", { name: "Project list" })
     .getByRole("link", { name: /MCPlica final acceptance/ })
+    .first()
     .click();
 
   await expect(
-    page.getByRole("heading", { name: "MCPlica final acceptance" }),
+    page.getByRole("heading", {
+      level: 1,
+      name: "MCPlica final acceptance",
+    }),
   ).toBeVisible();
 
   await page.getByRole("link", { name: "Sources", exact: true }).click();
@@ -65,6 +78,9 @@ test("authenticates against Compose and exposes the active rollback runtime", as
   await expect(
     page.getByRole("heading", { name: "Documentation", exact: true }),
   ).toBeVisible();
+  await page
+    .getByText("Load indexing evidence and sanitized preview", { exact: true })
+    .click();
   await expect(
     page.getByText("mcplica-fixture/embedding").first(),
   ).toBeVisible();

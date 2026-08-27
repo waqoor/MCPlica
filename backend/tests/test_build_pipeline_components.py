@@ -4,8 +4,10 @@ import zipfile
 from datetime import UTC, datetime
 from uuid import UUID
 
+import httpx2
 import pytest
 import yaml
+from mcp_contracts import MCPManifest
 
 from app.clients.mcp import MCPValidationClient
 from app.compilers.mcp.compiler import compile_manifest
@@ -70,9 +72,10 @@ def test_credential_mapping_fails_closed_on_ambiguity_and_honors_explicit_bindin
     with pytest.raises(CompilationError, match="ambiguous"):
         map_credentials(canonical, credentials)
     selected = credentials[0].model_copy(update={"metadata": {"security_scheme": "bearerAuth"}})
-    assert map_credentials(canonical, [selected, credentials[1]]) == {
-        "bearerAuth": str(selected.id)
-    }
+    mapped = map_credentials(canonical, [selected, credentials[1]])
+    selection = mapped[canonical.operations[0].key]
+    assert selection.scheme_name == "bearerAuth"
+    assert selection.credential_ref == str(selected.id)
     assert (
         map_credentials(
             canonical,
@@ -81,6 +84,99 @@ def test_credential_mapping_fails_closed_on_ambiguity_and_honors_explicit_bindin
         )
         == {}
     )
+
+
+def test_oauth_profiles_preserve_exact_operation_scopes_method_and_optional_auth() -> None:
+    source: dict[str, object] = {
+        "openapi": "3.0.3",
+        "info": {"title": "Scoped API", "version": "1.0"},
+        "servers": [{"url": "https://api.example.com/v1"}],
+        "components": {
+            "securitySchemes": {
+                "oauth": {
+                    "type": "oauth2",
+                    "flows": {
+                        "clientCredentials": {
+                            "tokenUrl": "/oauth/token",
+                            "scopes": {"read": "Read", "write": "Write"},
+                        }
+                    },
+                }
+            }
+        },
+        "paths": {
+            "/read": {
+                "get": {
+                    "operationId": "read",
+                    "security": [{"oauth": ["read"]}],
+                    "responses": {"200": {"description": "OK"}},
+                }
+            },
+            "/write": {
+                "post": {
+                    "operationId": "write",
+                    "security": [{"oauth": ["write"]}],
+                    "responses": {"204": {"description": "Done"}},
+                }
+            },
+            "/optional": {
+                "get": {
+                    "operationId": "optional",
+                    "security": [{}, {"oauth": ["write"]}],
+                    "responses": {"200": {"description": "OK"}},
+                }
+            },
+        },
+    }
+    canonical = parse_openapi(
+        source,
+        project_id=UUID(int=1),
+        source_version_id=UUID(int=2),
+        content_sha256=hashlib.sha256(b"scoped-api").hexdigest(),
+    )
+    credential = BuildCredentialSnapshot(
+        id=UUID(int=20),
+        scheme_type=CredentialScheme.OAUTH2_CLIENT_CREDENTIALS,
+        metadata={
+            "security_scheme": "oauth",
+            "scope": "read write",
+            "token_auth_method": "client_secret_post",
+        },
+    )
+    selections = map_credentials(canonical, [credential])
+    assert len(selections) == 2
+    assert {tuple(selection.scopes) for selection in selections.values()} == {
+        ("read",),
+        ("write",),
+    }
+    manifest = compile_manifest(
+        canonical,
+        project_id=str(UUID(int=1)),
+        project_name="Scoped API",
+        project_slug="scoped-api",
+        build_id="build-scoped-api",
+        created_at=datetime(2026, 8, 27, tzinfo=UTC),
+        security_selections=selections,
+    )
+    assert {tuple(profile.scopes) for profile in manifest.auth_profiles} == {
+        ("read",),
+        ("write",),
+    }
+    assert {profile.token_auth_method for profile in manifest.auth_profiles} == {
+        "client_secret_post"
+    }
+    assert {str(profile.token_url) for profile in manifest.auth_profiles} == {
+        "https://api.example.com/oauth/token"
+    }
+    optional = next(
+        tool
+        for tool in manifest.tools
+        if next(
+            operation for operation in canonical.operations if operation.key == tool.operation_key
+        ).source_operation_id
+        == "optional"
+    )
+    assert optional.security_profile_ref is None
 
 
 def test_ai_enrichment_schema_has_no_executable_write_surface() -> None:
@@ -179,6 +275,7 @@ async def test_export_is_deterministic_protocol_compatible_and_contains_required
         runtime_timeout_ms=30_000,
         runtime_max_request_bytes=10_000_000,
         runtime_max_response_bytes=2_000_000,
+        runtime_manifest_max_bytes=10_000_000,
         artifact_max_bytes=10_000_000,
     )
     manifest = compile_manifest(
@@ -245,5 +342,30 @@ async def test_export_is_deterministic_protocol_compatible_and_contains_required
         assert service["cap_drop"] == ["ALL"]
         assert service["pids_limit"] == 256
         assert service["security_opt"] == ["no-new-privileges:true"]
-    inspected = await MCPValidationClient().inspect_manifest(manifest)
+
+    async def runtime_validator(request: httpx2.Request) -> httpx2.Response:
+        payload = await request.aread()
+        candidate = MCPManifest.model_validate_json(payload)
+        tools = [tool.name for tool in candidate.enabled_tools()]
+        resources = [str(resource.uri) for resource in candidate.resources]
+        return httpx2.Response(
+            200,
+            json={
+                "runtime_version": "1.0.0",
+                "protocol_version": "2025-11-25",
+                "manifest_sha256": hashlib.sha256(payload).hexdigest(),
+                "tool_count": len(tools),
+                "tools": tools,
+                "resource_count": len(resources),
+                "resources": resources,
+                "exercised_tool_count": len(tools),
+                "exercised_tools": tools,
+                "request_mapping_count": len(tools),
+            },
+        )
+
+    inspected = await MCPValidationClient(
+        validator_endpoint="http://runtime-validator:8090/validate",
+        validator_transport=httpx2.MockTransport(runtime_validator),
+    ).inspect_manifest(manifest, runtime_version="1.0.0")
     assert inspected["tool_count"] == 1

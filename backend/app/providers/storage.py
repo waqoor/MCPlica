@@ -19,6 +19,8 @@ class ArtifactStorage(Protocol):
 
     async def get_staged(self, staged: StagedObject, *, max_bytes: int) -> bytes: ...
 
+    def storage_key_for_staged(self, staged: StagedObject) -> str: ...
+
     async def commit_staged(self, staged: StagedObject) -> StoredObject: ...
 
     async def discard_staged(self, staged: StagedObject) -> None: ...
@@ -65,6 +67,9 @@ class FilesystemArtifactStorage:
 
     async def get_staged(self, staged: StagedObject, *, max_bytes: int) -> bytes:
         return await self._client.read_staged(staged, max_bytes=max_bytes)
+
+    def storage_key_for_staged(self, staged: StagedObject) -> str:
+        return self._client.storage_key_for_staged(staged)
 
     async def commit_staged(self, staged: StagedObject) -> StoredObject:
         return await self._client.commit_staged(staged)

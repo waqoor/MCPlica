@@ -5,6 +5,7 @@ from uuid import UUID
 from mcp_contracts.json_types import JsonObject
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.domain.build_admission import BuildAdmissionState
 from app.domain.builds import BuildStatus, BuildTrigger
 from app.domain.validation import FindingSeverity, ValidationStatus
 
@@ -22,7 +23,10 @@ class BuildRead(BaseModel):
     project_id: UUID
     sequence: int
     status: BuildStatus
+    pipeline_stage: BuildStatus | None
     trigger: BuildTrigger
+    executable_configuration_sha256: str | None
+    canonical_snapshot_id: UUID | None
     previous_build_id: UUID | None
     compiler_version: str
     manifest_schema_version: str
@@ -39,6 +43,54 @@ class BuildRead(BaseModel):
     created_at: datetime
     started_at: datetime | None
     completed_at: datetime | None
+    cancellation_requested_at: datetime | None
+    cancellation_requested_by: UUID | None
+    cancellation_acknowledged_at: datetime | None
+    admission_acquired_at: datetime | None
+    admission_enqueued_at: datetime | None
+    admission_heartbeat_at: datetime | None
+    admission_lease_expires_at: datetime | None
+    admission_released_at: datetime | None
+    admission_attempt_count: int
+
+
+class BuildPageRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[BuildRead]
+    total: int = Field(ge=0)
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=200)
+    has_active: bool
+
+
+class BuildMetricsRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    total: int = Field(ge=0)
+    active: int = Field(ge=0)
+    failed: int = Field(ge=0)
+
+
+class QueuedBuildAdmissionRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    build_id: UUID
+    project_id: UUID
+    status: BuildStatus
+    state: BuildAdmissionState
+    position: int | None
+    admitted_at: datetime | None
+    lease_expires_at: datetime | None
+
+
+class BuildAdmissionOverviewRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    configured_concurrency: int
+    effective_concurrency: int
+    waiting_count: int
+    entries: list[QueuedBuildAdmissionRead]
 
 
 class ValidationSourceRefRead(BaseModel):
@@ -94,9 +146,24 @@ class OperationRead(BaseModel):
     provenance: list[JsonObject]
     semantic_warnings: list[str]
     confidence: float | None
-    excluded: bool
-    exclusion_id: UUID | None
-    exclusion_reason: str | None
+    excluded_in_build: bool
+    build_exclusion_id: UUID | None
+    build_exclusion_reason: str | None
+
+
+class OperationPageItemRead(OperationRead):
+    current_exclusion_id: UUID | None
+    current_exclusion_reason: str | None
+
+
+class OperationPageRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[OperationPageItemRead]
+    total: int = Field(ge=0)
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=200)
+    policy_change_count: int = Field(ge=0)
 
 
 class OperationChangeRead(BaseModel):

@@ -4,7 +4,7 @@ from typing import cast
 from urllib.parse import urlsplit
 
 from jsonschema import Draft202012Validator, SchemaError
-from mcp_contracts import CanonicalApi, MCPManifest
+from mcp_contracts import CanonicalApi, MCPManifest, validate_manifest_contract
 from mcp_contracts.json_types import JsonObject, JsonValue
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
@@ -20,6 +20,33 @@ def coverage_percent(*, expected_operations: int, generated_tools: int) -> float
     return round(generated_tools / expected_operations * 100, 2)
 
 
+def validate_runtime_manifest_size(
+    manifest_bytes: bytes,
+    *,
+    maximum_bytes: int,
+) -> list[ValidationFinding]:
+    """Validate the exact immutable serialization consumed by the generic runtime."""
+
+    if maximum_bytes < 1_024:
+        raise ValueError("Runtime manifest limit must be at least 1024 bytes")
+    actual_bytes = len(manifest_bytes)
+    if actual_bytes <= maximum_bytes:
+        return []
+    return [
+        _finding(
+            "MANIFEST_RUNTIME_SIZE_LIMIT_EXCEEDED",
+            FindingSeverity.ERROR,
+            "artifact",
+            "Serialized manifest exceeds the Build's frozen runtime byte limit",
+            details={
+                "actual_bytes": actual_bytes,
+                "maximum_bytes": maximum_bytes,
+                "excess_bytes": actual_bytes - maximum_bytes,
+            },
+        )
+    ]
+
+
 def validate_build(
     canonical: CanonicalApi,
     manifest: MCPManifest,
@@ -29,6 +56,17 @@ def validate_build(
     runtime_version: str,
 ) -> list[ValidationFinding]:
     findings: list[ValidationFinding] = []
+    try:
+        validate_manifest_contract(manifest, runtime_version=runtime_version)
+    except ValueError as exc:
+        findings.append(
+            _finding(
+                "RUNTIME_MANIFEST_INVALID",
+                FindingSeverity.ERROR,
+                "manifest",
+                str(exc),
+            )
+        )
     operations = {operation.key: operation for operation in canonical.operations}
     unknown_exclusions = excluded_operation_keys - set(operations)
     for operation_key in sorted(unknown_exclusions):

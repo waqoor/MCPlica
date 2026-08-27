@@ -9,7 +9,7 @@ from openpyxl import Workbook
 
 from app.core.exceptions import SourceParseError
 from app.domain.sources import ProjectSourceRecord, SourceKind, SourceOrigin
-from app.services.sources import _detect_format
+from app.services.sources import _detect_format  # pyright: ignore[reportPrivateUsage]
 
 
 def _source() -> ProjectSourceRecord:
@@ -28,7 +28,9 @@ def _source() -> ProjectSourceRecord:
 def _xlsx() -> bytes:
     output = BytesIO()
     workbook = Workbook()
-    workbook.active.append(["GET", "/widgets"])
+    worksheet = workbook.active
+    assert worksheet is not None
+    worksheet.append(["GET", "/widgets"])
     workbook.save(output)
     workbook.close()
     return output.getvalue()
@@ -58,13 +60,17 @@ def test_document_detection_uses_uploaded_filename_and_content(
     value: bytes,
     expected: str,
 ) -> None:
-    assert _detect_format(_source(), value, media_type, filename=filename) == expected
+    source = _source()
+    assert (
+        _detect_format(source.kind, source.name, value, media_type, filename=filename) == expected
+    )
 
 
 def test_office_packages_are_detected_from_content() -> None:
     assert (
         _detect_format(
-            _source(),
+            _source().kind,
+            _source().name,
             _xlsx(),
             "application/octet-stream",
             filename="guide.xlsx",
@@ -73,7 +79,8 @@ def test_office_packages_are_detected_from_content() -> None:
     )
     assert (
         _detect_format(
-            _source(),
+            _source().kind,
+            _source().name,
             _docx(),
             "application/octet-stream",
             filename="guide.docx",
@@ -88,7 +95,8 @@ def test_generic_and_macro_enabled_zip_packages_are_rejected() -> None:
         archive.writestr("notes.txt", "not an Office package")
     with pytest.raises(SourceParseError, match="valid XLSX or DOCX"):
         _detect_format(
-            _source(),
+            _source().kind,
+            _source().name,
             generic.getvalue(),
             "application/octet-stream",
             filename="guide.docx",
@@ -99,7 +107,8 @@ def test_generic_and_macro_enabled_zip_packages_are_rejected() -> None:
         archive.writestr("word/vbaProject.bin", b"macro")
     with pytest.raises(SourceParseError, match="Macro-enabled"):
         _detect_format(
-            _source(),
+            _source().kind,
+            _source().name,
             macro.getvalue(),
             "application/octet-stream",
             filename="guide.docx",

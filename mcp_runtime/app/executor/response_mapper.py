@@ -8,18 +8,22 @@ from app.executor.errors import RuntimeExecutionError
 
 
 def map_upstream_result(result: UpstreamResult) -> types.CallToolResult:
-    if isinstance(result.data, str):
-        text = result.data
-    elif result.data is None:
+    if result.is_error:
+        payload = result.data
+        structured: dict[str, object] | None = None
+    else:
+        payload = {
+            "status": result.status_code,
+            "contentType": result.content_type,
+            "body": result.data,
+        }
+        structured = cast(dict[str, object], payload)
+    if isinstance(payload, str):
+        text = payload
+    elif payload is None:
         text = ""
     else:
-        text = json.dumps(result.data, ensure_ascii=False, separators=(",", ":"))
-    structured: object | None = None
-    data = result.data
-    if isinstance(data, dict):
-        structured = cast(dict[str, object], data)
-    elif isinstance(data, list):
-        structured = cast(list[object], data)
+        text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     return types.CallToolResult(
         content=[types.TextContent(type="text", text=text)],
         structured_content=structured,

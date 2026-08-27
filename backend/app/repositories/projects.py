@@ -3,8 +3,10 @@ from uuid import UUID
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domain.builds import TERMINAL_STATUSES
 from app.domain.deployments import DeploymentStatus
 from app.domain.projects import ProjectRecord
+from app.models.build import Build
 from app.models.deployment import Deployment
 from app.models.project import Project
 
@@ -17,6 +19,7 @@ def _to_domain(model: Project) -> ProjectRecord:
         description=model.description,
         default_base_url=model.default_base_url,
         active_server_ref=model.active_server_ref,
+        server_mappings=model.server_mappings,
         mcp_hostname=model.mcp_hostname,
         is_enabled=model.is_enabled,
         active_build_id=model.active_build_id,
@@ -72,6 +75,7 @@ class ProjectRepository:
             description=description,
             default_base_url=default_base_url,
             active_server_ref=None,
+            server_mappings={},
             mcp_hostname=mcp_hostname,
             is_enabled=True,
             created_by=created_by,
@@ -110,6 +114,17 @@ class ProjectRepository:
             .limit(1)
         )
         return deployment_id is not None
+
+    async def has_nonterminal_build(self, session: AsyncSession, project_id: UUID) -> bool:
+        build_id = await session.scalar(
+            select(Build.id)
+            .where(
+                Build.project_id == project_id,
+                Build.status.not_in(TERMINAL_STATUSES),
+            )
+            .limit(1)
+        )
+        return build_id is not None
 
     async def delete(self, session: AsyncSession, project_id: UUID) -> None:
         model = await session.get(Project, project_id)

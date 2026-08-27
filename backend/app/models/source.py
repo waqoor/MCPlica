@@ -4,14 +4,17 @@ from uuid import UUID
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     Enum,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -26,6 +29,11 @@ def _enum_values(enum_type: type[StrEnum]) -> list[str]:
 class ProjectSource(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "project_sources"
     __table_args__ = (
+        CheckConstraint(
+            "(origin_type = 'url' AND source_url IS NOT NULL) OR "
+            "(origin_type = 'upload' AND source_url IS NULL)",
+            name="ck_project_sources_origin_url",
+        ),
         Index(
             "uq_project_sources_primary_executable",
             "project_id",
@@ -67,6 +75,12 @@ class SourceVersion(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "source_versions"
     __table_args__ = (
         UniqueConstraint("source_id", "content_sha256", name="uq_source_versions_source_hash"),
+        CheckConstraint("byte_size >= 0", name="ck_source_versions_byte_size"),
+        CheckConstraint("byte_size > 0", name="ck_source_versions_nonempty"),
+        CheckConstraint(
+            "content_sha256 ~ '^[a-f0-9]{64}$'",
+            name="ck_source_versions_sha256",
+        ),
         Index("ix_source_versions_source_created", "source_id", "created_at"),
     )
 
@@ -84,4 +98,66 @@ class SourceVersion(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     source_last_modified: Mapped[str | None] = mapped_column(Text(), nullable=True)
     created_by: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+
+
+class SourceFinding(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
+    __tablename__ = "source_findings"
+    __table_args__ = (
+        UniqueConstraint(
+            "build_id",
+            "source_version_id",
+            "finding_key",
+            name="uq_source_findings_build_source_key",
+        ),
+        CheckConstraint(
+            "severity IN ('error', 'warning', 'info')",
+            name="ck_source_findings_severity",
+        ),
+        CheckConstraint(
+            "char_length(btrim(stage)) > 0 AND char_length(btrim(code)) > 0 "
+            "AND char_length(btrim(message)) > 0",
+            name="ck_source_findings_required_text",
+        ),
+        CheckConstraint(
+            "finding_key ~ '^[a-f0-9]{64}$'",
+            name="ck_source_findings_key",
+        ),
+        CheckConstraint(
+            "(line_number IS NULL OR line_number >= 1) "
+            "AND (column_number IS NULL OR column_number >= 1)",
+            name="ck_source_findings_position",
+        ),
+        Index("ix_source_findings_build", "build_id"),
+        Index(
+            "ix_source_findings_source_created",
+            "source_version_id",
+            "created_at",
+        ),
+    )
+
+    build_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("builds.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    source_version_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("source_versions.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    finding_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    stage: Mapped[str] = mapped_column(String(80), nullable=False)
+    code: Mapped[str] = mapped_column(String(128), nullable=False)
+    severity: Mapped[str] = mapped_column(String(16), nullable=False)
+    message: Mapped[str] = mapped_column(Text(), nullable=False)
+    pointer: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    line: Mapped[int | None] = mapped_column("line_number", Integer(), nullable=True)
+    column: Mapped[int | None] = mapped_column("column_number", Integer(), nullable=True)
+    details_json: Mapped[dict[str, object]] = mapped_column(
+        "details",
+        JSONB(),
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+        nullable=False,
     )

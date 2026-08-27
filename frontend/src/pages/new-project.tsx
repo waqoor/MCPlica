@@ -3,23 +3,36 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   ArrowRight,
-  Clipboard,
   FileCode2,
   KeyRound,
   Rocket,
   ShieldCheck,
 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { z } from "@/lib/schemas";
 import { buildApi } from "@/api/builds";
-import type { McpAccessToken, SourceKind } from "@/api/contracts";
-import { credentialApi, credentialSecretFor } from "@/api/credentials";
+import type {
+  Deployment,
+  McpAccessToken,
+  Project,
+  ProjectJourney,
+  SourceKind,
+} from "@/api/contracts";
+import {
+  credentialApi,
+  credentialSchemeForSource,
+  credentialSecretFor,
+} from "@/api/credentials";
 import { deploymentApi } from "@/api/deployments";
 import { projectApi } from "@/api/projects";
 import { sourceApi } from "@/api/sources";
+import { useCapabilities } from "@/auth/capabilities";
 import { BuildProgress } from "@/components/build-progress";
+import { ErrorNotice, MutationError } from "@/components/error-notice";
+import { OneTimeSecretDialog } from "@/components/one-time-secret-dialog";
+import { UnsavedChangesGuard } from "@/components/unsaved-changes-guard";
 import {
   BuildStatusBadge,
   DeploymentStatusBadge,
@@ -33,9 +46,22 @@ import { FieldError, FieldHelp, Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { ValidationSummary } from "@/components/validation-summary";
 import { WizardShell } from "@/features/projects/wizard-shell";
+import {
+  canonicalWizardStep,
+  journeyMatchesRequestedBuild,
+  shouldPollJourney,
+} from "@/features/projects/wizard-state";
+import { formatBytes } from "@/lib/format";
 import { buildIsActive } from "@/lib/lifecycle";
-import { MAX_UPLOAD_LABEL, uploadAccept, uploadFileError } from "@/lib/uploads";
+import { resolveDeploymentState } from "@/lib/deployment-state";
+import {
+  MAX_UPLOAD_LABEL,
+  uploadAccept,
+  uploadFileError,
+  uploadFormatLabel,
+} from "@/lib/uploads";
 
 const identitySchema = z.object({
   name: z.string().trim().min(1, "Enter a project name.").max(160),
@@ -52,12 +78,22 @@ const identitySchema = z.object({
 });
 
 const serverSchema = z.object({
-  default_base_url: z.string().trim().url("Enter a complete http(s) URL."),
+  default_base_url: z
+    .string()
+    .trim()
+    .refine(
+      (value) => !value || z.url().safeParse(value).success,
+      "Enter a complete http(s) URL.",
+    ),
 });
 
 const credentialSchema = z
   .object({
     name: z.string().trim().min(1, "Name this credential."),
+    security_scheme: z
+      .string()
+      .trim()
+      .min(1, "Select a source security scheme."),
     scheme_type: z.enum([
       "bearer",
       "api_key_header",
@@ -68,8 +104,8 @@ const credentialSchema = z
     ]),
     primary_secret: z.string().min(1, "Enter the secret value."),
     secondary_secret: z.string().optional(),
-    token_url: z.string().optional(),
     scope: z.string().optional(),
+    token_auth_method: z.enum(["client_secret_basic", "client_secret_post"]),
     header_name: z.string().optional(),
   })
   .superRefine((value, context) => {
@@ -100,16 +136,6 @@ const credentialSchema = z
             ? "Enter the query parameter name."
             : "Enter the header name.",
       });
-    }
-    if (value.scheme_type === "oauth2_client_credentials") {
-      const parsed = z.url().safeParse(value.token_url);
-      if (!parsed.success) {
-        context.addIssue({
-          code: "custom",
-          path: ["token_url"],
-          message: "Enter a complete token URL.",
-        });
-      }
     }
   });
 
@@ -142,6 +168,8 @@ function StepActions({
 export function NewProjectPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
+  const capabilities = useCapabilities();
+  const hasExplicitStep = params.has("step");
   const step = Math.min(10, Math.max(1, Number(params.get("step")) || 1));
   const projectId = params.get("project");
   const explicitBuildId = params.get("build");
@@ -152,12 +180,21 @@ export function NewProjectPage() {
     queryFn: ({ signal }) => projectApi.get(projectId!, signal),
     enabled: Boolean(projectId),
   });
-  const builds = useQuery({
-    queryKey: ["projects", projectId, "builds"],
-    queryFn: ({ signal }) => buildApi.list(projectId!, signal),
-    enabled: Boolean(projectId) && step >= 6,
+  const journey = useQuery({
+    queryKey: ["projects", projectId, "journey", explicitBuildId],
+    queryFn: ({ signal }) =>
+      projectApi.journey(projectId!, explicitBuildId, signal),
+    enabled: Boolean(projectId),
+    refetchInterval: (query) =>
+      shouldPollJourney(query.state.data) ? 2_000 : false,
   });
-  const buildId = explicitBuildId ?? builds.data?.[0]?.id ?? null;
+  const journeyMatchesUrl = journeyMatchesRequestedBuild(
+    journey.data,
+    explicitBuildId,
+  );
+  const buildId = journeyMatchesUrl
+    ? (journey.data?.selected_build_id ?? null)
+    : null;
   const build = useQuery({
     queryKey: ["builds", buildId],
     queryFn: ({ signal }) => buildApi.get(buildId!, signal),
@@ -172,17 +209,47 @@ export function NewProjectPage() {
     queryFn: ({ signal }) => buildApi.validation(buildId!, signal),
     enabled: Boolean(buildId) && step >= 8 && build.data?.status === "READY",
   });
-  const access = useQuery({
-    queryKey: ["projects", projectId, "mcp-access"],
-    queryFn: ({ signal }) => deploymentApi.access(projectId!, signal),
-    enabled: Boolean(projectId) && step >= 9,
-  });
   const deployments = useQuery({
     queryKey: ["projects", projectId, "deployments"],
     queryFn: ({ signal }) => deploymentApi.list(projectId!, signal),
     enabled: Boolean(projectId) && step >= 10,
-    refetchInterval: 4_000,
+    refetchInterval: (query) =>
+      query.state.data?.some((deployment) =>
+        ["pending", "deploying", "healthcheck"].includes(deployment.status),
+      )
+        ? 4_000
+        : false,
   });
+
+  useEffect(() => {
+    if (!projectId || !journey.data || !journeyMatchesUrl) return;
+    const canonicalStep = canonicalWizardStep(
+      step,
+      hasExplicitStep,
+      journey.data,
+    );
+    const canonicalBuild = journey.data.selected_build_id;
+    if (
+      canonicalStep === step &&
+      hasExplicitStep &&
+      (explicitBuildId ?? null) === canonicalBuild
+    )
+      return;
+    const next = new URLSearchParams({
+      step: String(canonicalStep),
+      project: projectId,
+    });
+    if (canonicalBuild) next.set("build", canonicalBuild);
+    navigate(`/projects/new?${next}`, { replace: true });
+  }, [
+    explicitBuildId,
+    hasExplicitStep,
+    journey.data,
+    journeyMatchesUrl,
+    navigate,
+    projectId,
+    step,
+  ]);
 
   function go(
     nextStep: number,
@@ -197,9 +264,20 @@ export function NewProjectPage() {
   }
 
   const shell = (content: ReactNode) => (
-    <WizardShell buildId={buildId} projectId={projectId} step={step}>
-      {content}
-    </WizardShell>
+    <>
+      <WizardShell
+        buildId={buildId}
+        projectId={projectId}
+        step={step}
+        steps={journey.data?.steps}
+      >
+        {content}
+      </WizardShell>
+      <OneTimeSecretDialog
+        onAcknowledged={() => setOneTimeToken(null)}
+        secret={oneTimeToken?.token ?? null}
+      />
+    </>
   );
 
   if (step > 1 && !projectId)
@@ -211,7 +289,7 @@ export function NewProjectPage() {
         </Button>
       </Alert>,
     );
-  if (projectId && project.isPending)
+  if (projectId && (project.isPending || journey.isPending))
     return shell(
       <Card>
         <Spinner label="Loading durable project state" />
@@ -219,15 +297,29 @@ export function NewProjectPage() {
     );
   if (project.error)
     return shell(
-      <Alert title="Project state could not be loaded" tone="danger">
-        {project.error.message}
-      </Alert>,
+      <ErrorNotice
+        error={project.error}
+        onRetry={() => void project.refetch()}
+        title="Project state could not be loaded"
+      />,
+    );
+  if (journey.error)
+    return shell(
+      <ErrorNotice
+        error={journey.error}
+        nextStep="The project/build relationship was not accepted, so no downstream request was issued."
+        onRetry={() => void journey.refetch()}
+        title="Setup state could not be loaded"
+      />,
     );
 
   return shell(
     <Card className="border-border-strong p-5 sm:p-7">
       {step === 1 && (
-        <IdentityStep onCreated={(id) => go(2, { project: id })} />
+        <IdentityStep
+          existing={project.data}
+          onCreated={(id) => go(2, { project: id })}
+        />
       )}
       {step === 2 && (
         <SourceStep
@@ -235,6 +327,7 @@ export function NewProjectPage() {
           onBack={() => go(1)}
           onComplete={() => go(3)}
           projectId={projectId!}
+          sources={journey.data?.sources ?? []}
         />
       )}
       {step === 3 && (
@@ -243,6 +336,7 @@ export function NewProjectPage() {
           onBack={() => go(2)}
           onComplete={() => go(4)}
           projectId={projectId!}
+          sources={journey.data?.sources ?? []}
         />
       )}
       {step === 4 && (
@@ -255,6 +349,13 @@ export function NewProjectPage() {
       )}
       {step === 5 && (
         <CredentialStep
+          boundSchemes={journey.data?.bound_security_schemes ?? []}
+          canManage={
+            capabilities.canManageCredentials &&
+            Boolean(journey.data?.can_manage_credentials)
+          }
+          mappingComplete={journey.data?.credential_mapping_complete ?? false}
+          mappingRequired={journey.data?.credential_mapping_required ?? false}
           onBack={() => go(4)}
           onComplete={() => go(6)}
           projectId={projectId!}
@@ -262,7 +363,12 @@ export function NewProjectPage() {
       )}
       {step === 6 && (
         <StartBuildStep
-          existingBuildId={buildId}
+          existingBuildId={
+            journey.data?.build_status &&
+            !["FAILED", "CANCELLED"].includes(journey.data.build_status)
+              ? buildId
+              : null
+          }
           onBack={() => go(5)}
           onStarted={(id) => go(7, { build: id })}
           projectId={projectId!}
@@ -286,19 +392,23 @@ export function NewProjectPage() {
       )}
       {step === 9 && (
         <AccessStep
-          accessConfigured={access.data?.configured ?? false}
+          accessConfigured={journey.data?.access_configured ?? false}
+          canManage={
+            capabilities.canManageMcpAccess &&
+            Boolean(journey.data?.can_manage_mcp_access)
+          }
           onBack={() => go(8)}
           onComplete={() => go(10)}
           onToken={setOneTimeToken}
-          oneTimeToken={oneTimeToken}
           projectId={projectId!}
+          remediation={journey.data?.access_remediation ?? null}
         />
       )}
       {step === 10 && (
         <DeployStep
-          accessConfigured={access.data?.configured ?? false}
           buildId={buildId}
           deployments={deployments.data ?? []}
+          journey={journey.data!}
           onBack={() => go(9)}
           projectId={projectId!}
         />
@@ -309,22 +419,42 @@ export function NewProjectPage() {
 
 function IdentityStep({
   onCreated,
+  existing,
 }: {
   onCreated: (projectId: string) => void;
+  existing?: Project;
 }) {
+  const queryClient = useQueryClient();
   const form = useForm<IdentityValues>({
     resolver: zodResolver(identitySchema),
-    defaultValues: { name: "", slug: "", description: "" },
+    defaultValues: {
+      name: existing?.name ?? "",
+      slug: existing?.slug ?? "",
+      description: existing?.description ?? "",
+    },
   });
-  const create = useMutation({
-    mutationFn: projectApi.create,
-    onSuccess: (project) => onCreated(project.id),
+  const save = useMutation({
+    mutationFn: (values: IdentityValues) =>
+      existing
+        ? projectApi.update(existing.id, {
+            name: values.name,
+            description: values.description || null,
+          })
+        : projectApi.create(values),
+    onSuccess: async (saved) => {
+      queryClient.setQueryData(["projects", saved.id], saved);
+      await queryClient.invalidateQueries({
+        queryKey: ["projects", saved.id, "journey"],
+      });
+      onCreated(saved.id);
+    },
   });
   return (
     <form
       noValidate
-      onSubmit={form.handleSubmit((values) => create.mutate(values))}
+      onSubmit={form.handleSubmit((values) => save.mutate(values))}
     >
+      <UnsavedChangesGuard active={form.formState.isDirty && !save.isPending} />
       <CardHeader>
         <div>
           <CardTitle id="wizard-step-title">Name the API product</CardTitle>
@@ -363,6 +493,7 @@ function IdentityStep({
         <div className="space-y-2">
           <Label htmlFor="project-slug">Hostname slug</Label>
           <Input
+            disabled={Boolean(existing)}
             id="project-slug"
             {...form.register("slug")}
             aria-invalid={Boolean(form.formState.errors.slug)}
@@ -388,14 +519,14 @@ function IdentityStep({
           )}
         </div>
       </div>
-      {create.error && (
-        <Alert className="mt-5" tone="danger">
-          {create.error.message}
-        </Alert>
-      )}
+      {save.error && <MutationError error={save.error} />}
       <StepActions>
-        <Button disabled={create.isPending} type="submit">
-          {create.isPending ? "Creating project…" : "Create and continue"}
+        <Button disabled={save.isPending} type="submit">
+          {save.isPending
+            ? "Saving project…"
+            : existing
+              ? "Save and continue"
+              : "Create and continue"}
           <ArrowRight aria-hidden="true" className="size-4" />
         </Button>
       </StepActions>
@@ -408,12 +539,15 @@ function SourceStep({
   kind,
   onBack,
   onComplete,
+  sources,
 }: {
   projectId: string;
   kind: "executable" | "documentation";
   onBack: () => void;
   onComplete: () => void;
+  sources: ProjectJourney["sources"];
 }) {
+  const queryClient = useQueryClient();
   const [origin, setOrigin] = useState<"upload" | "url">("upload");
   const [sourceKind, setSourceKind] = useState<SourceKind>(
     kind === "documentation" ? "documentation" : "openapi",
@@ -426,28 +560,60 @@ function SourceStep({
   const [url, setUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  const sourceId = useRef(crypto.randomUUID());
   const create = useMutation({
     mutationFn: () =>
       origin === "url"
         ? sourceApi.createFromUrl(projectId, {
+            source_id: sourceId.current,
             name,
             kind: sourceKind,
             source_url: url,
             is_primary: kind === "executable",
           })
         : sourceApi.createFromUpload(projectId, {
+            source_id: sourceId.current,
             name,
             kind: sourceKind,
             file: file!,
             is_primary: kind === "executable",
           }),
-    onSuccess: onComplete,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["projects", projectId, "journey"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["projects", projectId, "sources"],
+        }),
+      ]);
+      onComplete();
+    },
   });
+  const existing = sources.filter((source) =>
+    kind === "documentation"
+      ? source.kind === "documentation"
+      : source.is_primary && source.kind !== "documentation",
+  );
   const canSubmit =
     name.trim() &&
     (origin === "url" ? /^https?:\/\//.test(url) : Boolean(file) && !fileError);
   return (
     <div>
+      <UnsavedChangesGuard
+        active={
+          !create.isPending &&
+          (origin !== "upload" ||
+            sourceKind !==
+              (kind === "documentation" ? "documentation" : "openapi") ||
+            name !==
+              (kind === "documentation"
+                ? "Product documentation"
+                : "Primary API specification") ||
+            Boolean(url) ||
+            Boolean(file))
+        }
+      />
       <CardHeader>
         <div>
           <CardTitle id="wizard-step-title">
@@ -462,6 +628,17 @@ function SourceStep({
           </p>
         </div>
       </CardHeader>
+      {existing.length > 0 && (
+        <Alert
+          className="mb-5"
+          title="Durable source already attached"
+          tone="success"
+        >
+          {existing.map((source) => source.name).join(", ")} is loaded from the
+          project record. Continue without creating a duplicate, or attach a new
+          source below.
+        </Alert>
+      )}
       <div className="grid gap-5 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="source-kind">Source format</Label>
@@ -543,22 +720,23 @@ function SourceStep({
             ) : (
               <FieldHelp>
                 {file
-                  ? `${file.name} · ${(file.size / 1_000_000).toFixed(2)} MB`
+                  ? `${file.name} · ${formatBytes(file.size)}`
                   : kind === "documentation"
-                    ? `JSON, Markdown, TXT, CSV, XLSX, DOCX, HTML, or PDF · ${MAX_UPLOAD_LABEL} maximum.`
-                    : `OpenAPI 3.x or API Inventory v1 JSON/YAML · ${MAX_UPLOAD_LABEL} maximum.`}
+                    ? `${uploadFormatLabel("documentation")} · ${MAX_UPLOAD_LABEL} maximum.`
+                    : `${uploadFormatLabel("openapi")} · ${MAX_UPLOAD_LABEL} maximum.`}
               </FieldHelp>
             )}
           </div>
         )}
       </div>
-      {create.error && (
-        <Alert className="mt-5" tone="danger">
-          {create.error.message}
-        </Alert>
-      )}
+      {create.error && <MutationError error={create.error} />}
       <StepActions back={onBack}>
         <div className="flex flex-wrap gap-2">
+          {existing.length > 0 && (
+            <Button onClick={onComplete} variant="outline">
+              Continue with existing source
+            </Button>
+          )}
           {kind === "documentation" && (
             <Button onClick={onComplete} variant="ghost">
               Skip documentation
@@ -588,19 +766,82 @@ function ServerStep({
   onBack: () => void;
   onComplete: () => void;
 }) {
+  const queryClient = useQueryClient();
+  const discovery = useQuery({
+    queryKey: ["projects", projectId, "source-configuration"],
+    queryFn: ({ signal }) => sourceApi.configuration(projectId, signal),
+  });
+  const [mappings, setMappings] = useState<Record<string, string>>({});
   const form = useForm<ServerValues>({
     resolver: zodResolver(serverSchema),
     defaultValues: { default_base_url: defaultValue },
   });
+  useEffect(() => {
+    if (!discovery.data) return;
+    setMappings(
+      Object.fromEntries(
+        discovery.data.operations.flatMap((operation) =>
+          operation.configured_server_ref
+            ? [[operation.operation_key, operation.configured_server_ref]]
+            : [],
+        ),
+      ),
+    );
+  }, [discovery.data]);
   const update = useMutation({
-    mutationFn: (values: ServerValues) => projectApi.update(projectId, values),
-    onSuccess: onComplete,
+    mutationFn: async (values: ServerValues) => {
+      await projectApi.update(projectId, {
+        ...(values.default_base_url
+          ? { default_base_url: values.default_base_url }
+          : {}),
+        server_mappings: mappings,
+      });
+      return sourceApi.configuration(projectId);
+    },
+    onSuccess: async (configured) => {
+      queryClient.setQueryData(
+        ["projects", projectId, "source-configuration"],
+        configured,
+      );
+      void queryClient.invalidateQueries({
+        queryKey: ["projects", projectId],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["projects", projectId, "journey"],
+      });
+      if (configured.routing_complete) onComplete();
+    },
   });
+  const serverByRef = new Map(
+    discovery.data?.servers.map((server) => [server.ref, server]) ?? [],
+  );
+  const unresolved =
+    discovery.data?.operations.filter(
+      (operation) =>
+        (!mappings[operation.operation_key] &&
+          !operation.selected_server_ref) ||
+        (Boolean(mappings[operation.operation_key]) &&
+          !operation.candidate_refs.includes(
+            mappings[operation.operation_key],
+          )),
+    ) ?? [];
   return (
     <form
       noValidate
       onSubmit={form.handleSubmit((values) => update.mutate(values))}
     >
+      <UnsavedChangesGuard
+        active={
+          !update.isPending &&
+          (form.formState.isDirty ||
+            Object.entries(mappings).some(
+              ([operationKey, serverRef]) =>
+                discovery.data?.operations.find(
+                  (operation) => operation.operation_key === operationKey,
+                )?.configured_server_ref !== serverRef,
+            ))
+        }
+      />
       <CardHeader>
         <div>
           <CardTitle id="wizard-step-title">
@@ -613,7 +854,12 @@ function ServerStep({
         </div>
       </CardHeader>
       <div className="space-y-2">
-        <Label htmlFor="base-url">Base URL</Label>
+        <Label htmlFor="base-url">
+          Resolution base URL{" "}
+          <span className="font-normal text-muted">
+            (only for relative URLs)
+          </span>
+        </Label>
         <Input
           id="base-url"
           inputMode="url"
@@ -623,8 +869,8 @@ function ServerStep({
           aria-invalid={Boolean(form.formState.errors.default_base_url)}
         />
         <FieldHelp>
-          Use the exact server selected from the source or an explicitly
-          configured equivalent.
+          Relative source server and OAuth URLs resolve against this stable
+          project base. Absolute source URLs do not require an override.
         </FieldHelp>
         {form.formState.errors.default_base_url && (
           <FieldError>
@@ -632,14 +878,84 @@ function ServerStep({
           </FieldError>
         )}
       </div>
-      {update.error && (
-        <Alert className="mt-5" tone="danger">
-          {update.error.message}
-        </Alert>
+      {discovery.isPending && (
+        <div className="mt-5">
+          <Spinner label="Inspecting source server candidates" />
+        </div>
       )}
+      {discovery.error && (
+        <ErrorNotice
+          error={discovery.error}
+          nextStep="Enter a base URL, then save to inspect the resolved candidates."
+          onRetry={() => void discovery.refetch()}
+          title="Server candidates need a resolution base"
+        />
+      )}
+      {discovery.data && (
+        <div className="mt-5 space-y-4">
+          {discovery.data.operations.map((operation) => (
+            <div
+              className="rounded-lg border border-border bg-input p-4"
+              key={operation.operation_key}
+            >
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <p className="font-mono text-sm text-foreground">
+                  {operation.method} {operation.path}
+                </p>
+                <span className="text-xs text-muted">
+                  {operation.candidate_refs.length} candidate
+                  {operation.candidate_refs.length === 1 ? "" : "s"}
+                </span>
+              </div>
+              {operation.candidate_refs.length === 1 ? (
+                <p className="mt-2 break-all text-sm text-muted">
+                  {serverByRef.get(operation.candidate_refs[0])?.url}
+                </p>
+              ) : (
+                <div className="mt-3 space-y-2">
+                  <Label htmlFor={`server-${operation.operation_key}`}>
+                    Upstream server
+                  </Label>
+                  <Select
+                    id={`server-${operation.operation_key}`}
+                    onChange={(event) =>
+                      setMappings((current) => ({
+                        ...current,
+                        [operation.operation_key]: event.target.value,
+                      }))
+                    }
+                    value={mappings[operation.operation_key] ?? ""}
+                  >
+                    <option value="">Select a source-declared server</option>
+                    {operation.candidate_refs.map((candidate) => {
+                      const server = serverByRef.get(candidate);
+                      return (
+                        <option key={candidate} value={candidate}>
+                          {server?.description
+                            ? `${server.description} — ${server.url}`
+                            : (server?.url ?? candidate)}
+                        </option>
+                      );
+                    })}
+                  </Select>
+                </div>
+              )}
+              {operation.selection_error && (
+                <FieldError>{operation.selection_error}</FieldError>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {update.error && <MutationError error={update.error} />}
       <StepActions back={onBack}>
-        <Button disabled={update.isPending} type="submit">
-          Save server
+        <Button
+          disabled={
+            update.isPending || Boolean(discovery.data && unresolved.length)
+          }
+          type="submit"
+        >
+          {update.isPending ? "Validating routing…" : "Save validated routing"}
           <ArrowRight aria-hidden="true" className="size-4" />
         </Button>
       </StepActions>
@@ -651,32 +967,74 @@ function CredentialStep({
   projectId,
   onBack,
   onComplete,
+  canManage,
+  mappingComplete,
+  mappingRequired,
+  boundSchemes,
 }: {
   projectId: string;
   onBack: () => void;
   onComplete: () => void;
+  canManage: boolean;
+  mappingComplete: boolean;
+  mappingRequired: boolean;
+  boundSchemes: readonly string[];
 }) {
+  const queryClient = useQueryClient();
+  const discovery = useQuery({
+    queryKey: ["projects", projectId, "source-configuration"],
+    queryFn: ({ signal }) => sourceApi.configuration(projectId, signal),
+  });
   const form = useForm<CredentialValues>({
     resolver: zodResolver(credentialSchema),
     defaultValues: {
       name: "Primary upstream credential",
+      security_scheme: "",
       scheme_type: "bearer",
       primary_secret: "",
       secondary_secret: "",
-      token_url: "",
       scope: "",
+      token_auth_method: "client_secret_basic",
       header_name: "",
     },
   });
   const scheme = form.watch("scheme_type");
+  const securitySchemeName = form.watch("security_scheme");
+  const supportedSchemes =
+    discovery.data?.security_schemes.filter(
+      (item) => credentialSchemeForSource(item) !== null,
+    ) ?? [];
+  const sourceScheme = discovery.data?.security_schemes.find(
+    (item) => item.name === securitySchemeName,
+  );
+  const selectSourceScheme = (name: string) => {
+    const selected = supportedSchemes.find((item) => item.name === name);
+    form.setValue("security_scheme", name, { shouldValidate: true });
+    if (!selected) return;
+    const selectedType = credentialSchemeForSource(selected);
+    if (selectedType) form.setValue("scheme_type", selectedType);
+    form.setValue("header_name", selected.parameter_name ?? "");
+  };
+  useEffect(() => {
+    const discovered = discovery.data?.security_schemes.filter(
+      (item) => credentialSchemeForSource(item) !== null,
+    );
+    if (discovered?.length !== 1 || securitySchemeName) return;
+    const selected = discovered[0];
+    form.setValue("security_scheme", selected.name, { shouldValidate: true });
+    const selectedType = credentialSchemeForSource(selected);
+    if (selectedType) form.setValue("scheme_type", selectedType);
+    form.setValue("header_name", selected.parameter_name ?? "");
+  }, [discovery.data, form, securitySchemeName]);
   const create = useMutation({
     mutationFn: (values: CredentialValues) => {
       const credential = credentialSecretFor(values.scheme_type, {
         value: values.primary_secret,
         identity: values.secondary_secret,
-        tokenUrl: values.token_url,
         scope: values.scope,
         headerName: values.header_name,
+        securityScheme: values.security_scheme,
+        tokenAuthMethod: values.token_auth_method,
       });
       return credentialApi.create(projectId, {
         name: values.name,
@@ -684,7 +1042,12 @@ function CredentialStep({
         ...credential,
       });
     },
-    onSuccess: onComplete,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["projects", projectId, "journey"],
+      });
+      onComplete();
+    },
   });
   const secondaryLabel =
     scheme === "basic"
@@ -692,11 +1055,49 @@ function CredentialStep({
       : scheme === "oauth2_client_credentials"
         ? "Client ID"
         : null;
+  if (!canManage) {
+    return (
+      <div>
+        <CardHeader>
+          <div>
+            <CardTitle id="wizard-step-title">
+              Configure upstream authentication
+            </CardTitle>
+            <p className="mt-1 text-sm leading-6 text-muted">
+              Credential values and binding controls are administrator-only.
+            </p>
+          </div>
+          <KeyRound aria-hidden="true" className="size-5 text-warning" />
+        </CardHeader>
+        <Alert
+          title={
+            mappingComplete
+              ? "Upstream authorization is ready"
+              : "Administrator handoff required"
+          }
+          tone={mappingComplete ? "success" : "warning"}
+        >
+          {mappingComplete
+            ? `The server-derived mapping is complete${boundSchemes.length ? ` for ${boundSchemes.join(", ")}` : ""}. Secret metadata remains hidden.`
+            : "Ask an administrator to bind one compatible active credential for every required source security alternative. This page does not call the protected credential API."}
+        </Alert>
+        <StepActions back={onBack}>
+          <Button disabled={!mappingComplete} onClick={onComplete}>
+            Continue with verified mapping
+            <ArrowRight aria-hidden="true" className="size-4" />
+          </Button>
+        </StepActions>
+      </div>
+    );
+  }
   return (
     <form
       noValidate
       onSubmit={form.handleSubmit((values) => create.mutate(values))}
     >
+      <UnsavedChangesGuard
+        active={form.formState.isDirty && !create.isPending}
+      />
       <CardHeader>
         <div>
           <CardTitle id="wizard-step-title">
@@ -709,23 +1110,43 @@ function CredentialStep({
         </div>
         <KeyRound aria-hidden="true" className="size-5 text-warning" />
       </CardHeader>
+      {mappingComplete && (
+        <Alert
+          className="mb-5"
+          title="Existing mapping verified"
+          tone="success"
+        >
+          {boundSchemes.length
+            ? `Active credentials cover ${boundSchemes.join(", ")}.`
+            : "The source permits anonymous upstream access."}{" "}
+          Continue without creating duplicate credentials, or add a deliberate
+          replacement.
+        </Alert>
+      )}
       <div className="grid gap-5 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="credential-name">Credential name</Label>
           <Input id="credential-name" {...form.register("name")} />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="scheme">Authentication scheme</Label>
-          <Select id="scheme" {...form.register("scheme_type")}>
-            <option value="bearer">Bearer token</option>
-            <option value="api_key_header">API key header</option>
-            <option value="api_key_query">API key query</option>
-            <option value="basic">HTTP Basic</option>
-            <option value="oauth2_client_credentials">
-              OAuth client credentials
-            </option>
-            <option value="static_headers">Static secret header</option>
+          <Label htmlFor="source-security-scheme">Source security scheme</Label>
+          <Select
+            id="source-security-scheme"
+            onChange={(event) => selectSourceScheme(event.target.value)}
+            value={securitySchemeName}
+          >
+            <option value="">Select a discovered scheme</option>
+            {supportedSchemes.map((item) => (
+              <option key={item.name} value={item.name}>
+                {item.name} · {item.type}
+              </option>
+            ))}
           </Select>
+          {form.formState.errors.security_scheme && (
+            <FieldError>
+              {form.formState.errors.security_scheme.message}
+            </FieldError>
+          )}
         </div>
         {secondaryLabel && (
           <div className="space-y-2">
@@ -775,18 +1196,26 @@ function CredentialStep({
         )}
         {scheme === "oauth2_client_credentials" && (
           <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="token-url">Token URL</Label>
-            <Input
-              id="token-url"
-              inputMode="url"
-              type="url"
-              {...form.register("token_url")}
-            />
-            {form.formState.errors.token_url && (
-              <FieldError>{form.formState.errors.token_url.message}</FieldError>
-            )}
-            <Label htmlFor="oauth-scope">Scope (optional)</Label>
+            <Label>Source token endpoint</Label>
+            <p className="break-all rounded-md border border-border bg-input px-3 py-2 font-mono text-xs text-muted">
+              {sourceScheme?.token_url ?? "Select an OAuth source scheme"}
+            </p>
+            <Label htmlFor="oauth-scope">Default scope (optional)</Label>
             <Input id="oauth-scope" {...form.register("scope")} />
+            <FieldHelp>
+              Explicit operation scopes remain authoritative. This default is
+              used only for an empty source scope set.
+            </FieldHelp>
+            <Label htmlFor="oauth-token-method">
+              Token endpoint auth method
+            </Label>
+            <Select
+              id="oauth-token-method"
+              {...form.register("token_auth_method")}
+            >
+              <option value="client_secret_basic">client_secret_basic</option>
+              <option value="client_secret_post">client_secret_post</option>
+            </Select>
           </div>
         )}
       </div>
@@ -794,17 +1223,54 @@ function CredentialStep({
         MCP inbound access is configured separately in step 9. Upstream
         credentials never become tool arguments or manifest fields.
       </Alert>
-      {create.error && (
-        <Alert className="mt-5" tone="danger">
-          {create.error.message}
+      {create.error && <MutationError error={create.error} />}
+      {discovery.isPending && (
+        <div className="mt-5">
+          <Spinner label="Loading source security schemes" />
+        </div>
+      )}
+      {discovery.error && (
+        <ErrorNotice
+          error={discovery.error}
+          onRetry={() => void discovery.refetch()}
+          title="Source security schemes could not be loaded"
+        />
+      )}
+      {discovery.data && supportedSchemes.length === 0 && (
+        <Alert
+          className="mt-5"
+          tone={discovery.data.security_schemes.length ? "danger" : "info"}
+        >
+          {discovery.data.security_schemes.length
+            ? "The source requires an authentication scheme this runtime cannot execute."
+            : "The source declares no upstream authentication requirement."}
         </Alert>
       )}
       <StepActions back={onBack}>
         <div className="flex flex-wrap gap-2">
-          <Button onClick={onComplete} variant="ghost">
-            API requires no authentication
-          </Button>
-          <Button disabled={create.isPending} type="submit">
+          {(mappingComplete || !mappingRequired) && (
+            <Button onClick={onComplete} variant="outline">
+              Continue with current mapping
+            </Button>
+          )}
+          {discovery.data &&
+            (discovery.data.security_schemes.length === 0 ||
+              discovery.data.security_schemes.every(
+                (item) => item.optional_for_all_operations,
+              )) && (
+              <Button onClick={onComplete} variant="ghost">
+                Continue without an upstream credential
+              </Button>
+            )}
+          <Button
+            disabled={
+              create.isPending ||
+              discovery.isPending ||
+              Boolean(discovery.error) ||
+              supportedSchemes.length === 0
+            }
+            type="submit"
+          >
             Save credential
             <ArrowRight aria-hidden="true" className="size-4" />
           </Button>
@@ -825,9 +1291,17 @@ function StartBuildStep({
   onBack: () => void;
   onStarted: (id: string) => void;
 }) {
+  const queryClient = useQueryClient();
   const start = useMutation({
     mutationFn: () => buildApi.create(projectId),
-    onSuccess: (build) => onStarted(build.id),
+    onSuccess: (build) => {
+      // Move to a URL bound to the created build first. The new journey query
+      // validates that project/build relationship before any build detail call.
+      onStarted(build.id);
+      void queryClient.invalidateQueries({
+        queryKey: ["projects", projectId, "journey"],
+      });
+    },
   });
   return (
     <div>
@@ -866,11 +1340,7 @@ function StartBuildStep({
           </p>
         </div>
       </div>
-      {start.error && (
-        <Alert className="mt-5" tone="danger">
-          {start.error.message}
-        </Alert>
-      )}
+      {start.error && <MutationError error={start.error} />}
       <StepActions back={onBack}>
         <div className="flex flex-wrap gap-2">
           {existingBuildId && (
@@ -905,9 +1375,7 @@ function BuildProgressStep({
   if (error)
     return (
       <div>
-        <Alert title="Build status is unavailable" tone="danger">
-          {error.message}
-        </Alert>
+        <ErrorNotice error={error} title="Build status is unavailable" />
         <StepActions back={onBack}>
           <span />
         </StepActions>
@@ -926,7 +1394,10 @@ function BuildProgressStep({
         </div>
         <BuildStatusBadge status={build.status} />
       </CardHeader>
-      <BuildProgress status={build.status} />
+      <BuildProgress
+        pipelineStage={build.pipeline_stage}
+        status={build.status}
+      />
       {build.status === "FAILED" && (
         <Alert
           className="mt-5"
@@ -966,9 +1437,7 @@ function ValidationStep({
   if (error)
     return (
       <div>
-        <Alert title="Validation report is unavailable" tone="danger">
-          {error.message}
-        </Alert>
+        <ErrorNotice error={error} title="Validation report is unavailable" />
         <StepActions back={onBack}>
           <span />
         </StepActions>
@@ -995,27 +1464,7 @@ function ValidationStep({
           {report.coverage_percent}%
         </span>
       </CardHeader>
-      <div className="grid gap-3 sm:grid-cols-4">
-        <Metric label="Source" value={report.operation_source_count} />
-        <Metric label="Excluded" value={report.operation_excluded_count} />
-        <Metric label="Generated" value={report.operation_generated_count} />
-        <Metric label="Blocking" value={report.blocking_error_count} />
-      </div>
-      {valid ? (
-        <Alert className="mt-5" title="Validation passed" tone="success">
-          Executable coverage, manifest structure, and runtime compatibility
-          passed the configured checks.
-        </Alert>
-      ) : (
-        <Alert
-          className="mt-5"
-          title="Deployment remains blocked"
-          tone="danger"
-        >
-          Resolve blocking findings or explicitly exclude unsupported operations
-          with a reason.
-        </Alert>
-      )}
+      <ValidationSummary report={report} />
       <StepActions back={onBack}>
         <Button disabled={!valid} onClick={onContinue}>
           Configure MCP access
@@ -1026,28 +1475,79 @@ function ValidationStep({
   );
 }
 
-function Metric({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-lg border border-border bg-input p-4">
-      <p className="font-mono text-[0.65rem] uppercase tracking-[0.1em] text-muted">
-        {label}
-      </p>
-      <p className="mt-2 text-2xl font-semibold text-foreground">{value}</p>
-    </div>
-  );
-}
-
 function AccessStep({
   projectId,
   accessConfigured,
-  oneTimeToken,
+  canManage,
+  remediation,
   onToken,
   onBack,
   onComplete,
 }: {
   projectId: string;
   accessConfigured: boolean;
-  oneTimeToken: McpAccessToken | null;
+  canManage: boolean;
+  remediation: string | null;
+  onToken: (token: McpAccessToken) => void;
+  onBack: () => void;
+  onComplete: () => void;
+}) {
+  if (canManage)
+    return (
+      <AdminAccessControls
+        accessConfigured={accessConfigured}
+        onBack={onBack}
+        onComplete={onComplete}
+        onToken={onToken}
+        projectId={projectId}
+      />
+    );
+  return (
+    <div>
+      <CardHeader>
+        <div>
+          <CardTitle id="wizard-step-title">
+            Protect the published MCP endpoint
+          </CardTitle>
+          <p className="mt-1 text-sm leading-6 text-muted">
+            Inbound token inventory and verifier configuration are
+            administrator-only.
+          </p>
+        </div>
+        <ShieldCheck aria-hidden="true" className="size-5 text-success" />
+      </CardHeader>
+      <Alert
+        title={
+          accessConfigured
+            ? "Inbound access is ready"
+            : "Administrator handoff required"
+        }
+        tone={accessConfigured ? "success" : "warning"}
+      >
+        {accessConfigured
+          ? "The redacted server status confirms that a deployable verifier is configured. Secret details remain hidden."
+          : (remediation ??
+            "Ask an administrator to configure inbound MCP access.")}
+      </Alert>
+      <StepActions back={onBack}>
+        <Button disabled={!accessConfigured} onClick={onComplete}>
+          Continue with verified access
+          <ArrowRight aria-hidden="true" className="size-4" />
+        </Button>
+      </StepActions>
+    </div>
+  );
+}
+
+function AdminAccessControls({
+  projectId,
+  accessConfigured,
+  onToken,
+  onBack,
+  onComplete,
+}: {
+  projectId: string;
+  accessConfigured: boolean;
   onToken: (token: McpAccessToken) => void;
   onBack: () => void;
   onComplete: () => void;
@@ -1057,24 +1557,29 @@ function AccessStep({
   const configure = useMutation({
     mutationFn: () =>
       deploymentApi.setAuthMode(projectId, { mode: "static_bearer" }),
-    onSuccess: () =>
-      queryClient.invalidateQueries({
-        queryKey: ["projects", projectId, "mcp-access"],
-      }),
-  });
-  const token = useMutation({
-    mutationFn: () => deploymentApi.createToken(projectId, { name }),
-    onSuccess: (value) => {
-      onToken(value);
+    onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: ["projects", projectId, "mcp-access"],
       });
+      void queryClient.invalidateQueries({
+        queryKey: ["projects", projectId, "journey"],
+      });
     },
   });
-  const copy = async () => {
-    if (oneTimeToken?.token)
-      await navigator.clipboard.writeText(oneTimeToken.token);
-  };
+  const token = useMutation({
+    mutationFn: () => deploymentApi.createToken(projectId, { name }),
+    onSuccess: async (value) => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["projects", projectId, "mcp-access"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["projects", projectId, "journey"],
+        }),
+      ]);
+      onToken(value);
+    },
+  });
   return (
     <div>
       <CardHeader>
@@ -1122,37 +1627,11 @@ function AccessStep({
           </Button>
         </div>
       </div>
-      {oneTimeToken?.token && (
-        <Alert className="mt-5" title="Copy this token now" tone="warning">
-          <p>
-            This plaintext value is shown once and will not be recoverable
-            later.
-          </p>
-          <div className="mt-3 flex gap-2">
-            <code className="min-w-0 flex-1 overflow-x-auto rounded bg-canvas px-3 py-2 font-mono text-xs text-foreground">
-              {oneTimeToken.token}
-            </code>
-            <Button
-              aria-label="Copy access token"
-              onClick={() => void copy()}
-              size="icon"
-              variant="outline"
-            >
-              <Clipboard aria-hidden="true" className="size-4" />
-            </Button>
-          </div>
-        </Alert>
-      )}
       {(configure.error || token.error) && (
-        <Alert className="mt-5" tone="danger">
-          {configure.error?.message ?? token.error?.message}
-        </Alert>
+        <MutationError error={configure.error ?? token.error} />
       )}
       <StepActions back={onBack}>
-        <Button
-          disabled={!accessConfigured && !oneTimeToken?.token}
-          onClick={onComplete}
-        >
+        <Button disabled={!accessConfigured} onClick={onComplete}>
           Continue to deploy
           <ArrowRight aria-hidden="true" className="size-4" />
         </Button>
@@ -1164,26 +1643,55 @@ function AccessStep({
 function DeployStep({
   projectId,
   buildId,
-  accessConfigured,
   deployments,
+  journey,
   onBack,
 }: {
   projectId: string;
   buildId: string | null;
-  accessConfigured: boolean;
   deployments: Awaited<ReturnType<typeof deploymentApi.list>>;
+  journey: ProjectJourney;
   onBack: () => void;
 }) {
   const queryClient = useQueryClient();
+  const buildsQuery = useQuery({
+    queryKey: ["projects", projectId, "builds"],
+    queryFn: ({ signal }) => buildApi.list(projectId, signal),
+  });
+  const activeQuery = useQuery({
+    queryKey: ["deployments", journey.active_deployment_id],
+    queryFn: ({ signal }) =>
+      deploymentApi.get(journey.active_deployment_id!, signal),
+    enabled: Boolean(journey.active_deployment_id),
+  });
   const deploy = useMutation({
     mutationFn: () => deploymentApi.deploy(projectId, buildId!),
     onSuccess: () =>
-      queryClient.invalidateQueries({
-        queryKey: ["projects", projectId, "deployments"],
-      }),
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["projects", projectId, "deployments"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["projects", projectId, "journey"],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["projects", projectId],
+        }),
+      ]),
   });
-  const latest = deployments[0];
-  const canDeploy = Boolean(buildId) && accessConfigured;
+  const { active, newestCandidate: candidate } =
+    resolveDeploymentState<Deployment>(
+      journey.active_deployment_id,
+      deployments,
+      activeQuery.data,
+    );
+  const canDeploy = Boolean(buildId) && journey.deployable;
+  const buildLabel = (id: string) => {
+    const sequence = buildsQuery.data?.find(
+      (build) => build.id === id,
+    )?.sequence;
+    return sequence === undefined ? "Build unavailable" : `Build #${sequence}`;
+  };
   return (
     <div>
       <CardHeader>
@@ -1199,33 +1707,57 @@ function DeployStep({
         </div>
         <Rocket aria-hidden="true" className="size-5 text-accent" />
       </CardHeader>
-      {latest && (
+      {active && (
         <div className="rounded-lg border border-border bg-input p-4">
+          <p className="mb-2 font-mono text-[0.64rem] uppercase tracking-[0.1em] text-success-soft">
+            Active runtime
+          </p>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-sm font-medium text-foreground">
-                {latest.hostname}
+                {active.hostname}
               </p>
               <p className="mt-1 font-mono text-xs text-muted">
-                Build {latest.build_sequence ?? latest.build_id}
+                {buildLabel(active.build_id)}
               </p>
             </div>
-            <DeploymentStatusBadge status={latest.status} />
+            <DeploymentStatusBadge status={active.status} />
           </div>
         </div>
       )}
-      {!accessConfigured && (
-        <Alert className="mt-5" tone="danger">
-          Inbound MCP authentication is not configured. Return to step 9 before
-          deploying.
+      {candidate && (
+        <Alert className="mt-5" title="Newest deployment candidate" tone="info">
+          {buildLabel(candidate.build_id)} is {candidate.status.toLowerCase()}.
+          It does not replace the active runtime unless activation commits
+          successfully.
         </Alert>
       )}
-      {deploy.error && (
-        <Alert className="mt-5" tone="danger">
-          {deploy.error.message}
-        </Alert>
+      {!journey.deployable &&
+        !(
+          journey.active_build_id === buildId &&
+          journey.active_deployment_status === "running"
+        ) && (
+          <Alert
+            className="mt-5"
+            title={
+              journey.deployability_reason_code ?? "Deployment is not ready"
+            }
+            tone="danger"
+          >
+            {journey.deployability_remediation ??
+              "Complete the current authoritative setup step before deploying."}
+          </Alert>
+        )}
+      {deploy.error && <MutationError error={deploy.error} />}
+      {buildsQuery.error && (
+        <ErrorNotice
+          error={buildsQuery.error}
+          nextStep="Deployment readiness still comes from the server-derived journey state."
+          onRetry={() => void buildsQuery.refetch()}
+          title="Build display identity could not be loaded"
+        />
       )}
-      {latest?.status === "RUNNING" && (
+      {active?.status === "running" && (
         <Alert className="mt-5" title="MCP runtime is healthy" tone="success">
           The endpoint is ready for an authenticated external MCP client.
           Builder OpenRouter and Milvus availability do not affect runtime
@@ -1234,7 +1766,7 @@ function DeployStep({
       )}
       <StepActions back={onBack}>
         <div className="flex flex-wrap gap-2">
-          {latest?.status === "RUNNING" && (
+          {active?.status === "running" && (
             <Link
               className={buttonVariants({ variant: "outline" })}
               to={`/projects/${projectId}/deployment`}
@@ -1246,15 +1778,13 @@ function DeployStep({
             disabled={
               !canDeploy ||
               deploy.isPending ||
-              ["PENDING", "DEPLOYING", "HEALTHCHECK"].includes(
-                latest?.status ?? "",
-              )
+              journey.deployment_transition_in_progress
             }
             onClick={() => deploy.mutate()}
           >
             {deploy.isPending
               ? "Starting deployment…"
-              : latest
+              : active
                 ? "Deploy replacement"
                 : "Deploy runtime"}
             <Rocket aria-hidden="true" className="size-4" />

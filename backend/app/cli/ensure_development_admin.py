@@ -2,13 +2,11 @@ import asyncio
 
 from app.clients.database import DatabaseClient
 from app.core.auth import PasswordManager
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.domain.auth import UserRole
 from app.repositories.audit import AuditRepository
 from app.repositories.users import UserRepository
 
-DEFAULT_DEVELOPMENT_ADMIN_EMAIL = "admin@admin.com"
-DEFAULT_DEVELOPMENT_ADMIN_PASSWORD = "admin@321"
 DEFAULT_DEVELOPMENT_ADMIN_DISPLAY_NAME = "MCPlica Admin"
 
 
@@ -20,9 +18,22 @@ def _require_development_environment(environment: str) -> None:
         )
 
 
+def _development_admin_credentials(settings: Settings) -> tuple[str, str]:
+    _require_development_environment(settings.env)
+    if settings.default_admin_email is None or settings.default_admin_password is None:
+        raise RuntimeError(
+            "DEFAULT_ADMIN_EMAIL and DEFAULT_ADMIN_PASSWORD must be configured "
+            "for the development administrator"
+        )
+    return (
+        str(settings.default_admin_email),
+        settings.default_admin_password.get_secret_value(),
+    )
+
+
 async def _ensure() -> None:
     settings = get_settings()
-    _require_development_environment(settings.env)
+    email, password = _development_admin_credentials(settings)
     database = DatabaseClient(
         settings.database_url,
         pool_size=settings.database_pool_size,
@@ -33,16 +44,16 @@ async def _ensure() -> None:
     try:
         async with database.session_scope() as session:
             await users.lock_admin_mutations(session)
-            await users.lock_email(session, DEFAULT_DEVELOPMENT_ADMIN_EMAIL)
-            existing = await users.get_by_email(session, DEFAULT_DEVELOPMENT_ADMIN_EMAIL)
+            await users.lock_email(session, email)
+            existing = await users.get_by_email(session, email)
             if existing is not None:
                 print(f"Development administrator {existing.email} already exists")
                 return
             user = await users.create(
                 session,
-                email=DEFAULT_DEVELOPMENT_ADMIN_EMAIL,
+                email=email,
                 display_name=DEFAULT_DEVELOPMENT_ADMIN_DISPLAY_NAME,
-                password_hash=PasswordManager().hash(DEFAULT_DEVELOPMENT_ADMIN_PASSWORD),
+                password_hash=PasswordManager().hash(password),
                 role=UserRole.ADMIN,
             )
             await AuditRepository().append(

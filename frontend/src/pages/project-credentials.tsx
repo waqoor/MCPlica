@@ -4,10 +4,13 @@ import { useState } from "react";
 import type { Credential } from "@/api/contracts";
 import {
   credentialApi,
+  credentialSchemeForSource,
   credentialSecretFor,
   type CredentialScheme,
 } from "@/api/credentials";
-import { useAuth } from "@/auth/use-auth";
+import { sourceApi } from "@/api/sources";
+import { useCapabilities } from "@/auth/capabilities";
+import { MutationError } from "@/components/error-notice";
 import { QueryError, QueryPending } from "@/components/query-state";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +26,7 @@ import { formatDate } from "@/lib/format";
 
 export function ProjectCredentialsPage() {
   const project = useProject();
-  const { user } = useAuth();
+  const capabilities = useCapabilities();
   const queryClient = useQueryClient();
   const [dialog, setDialog] = useState<{
     mode: "create" | "rotate" | "revoke";
@@ -32,11 +35,23 @@ export function ProjectCredentialsPage() {
   const credentials = useQuery({
     queryKey: ["projects", project.id, "credentials"],
     queryFn: ({ signal }) => credentialApi.list(project.id, signal),
+    refetchInterval: (query) =>
+      query.state.data?.some(
+        (credential) => credential.runtime_effect_state === "pending",
+      )
+        ? 5_000
+        : false,
+    enabled: capabilities.canManageCredentials,
   });
   const invalidate = () =>
-    queryClient.invalidateQueries({
-      queryKey: ["projects", project.id, "credentials"],
-    });
+    Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: ["projects", project.id, "credentials"],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ["projects", project.id, "journey"],
+      }),
+    ]);
   const revoke = useMutation({
     mutationFn: (id: string) => credentialApi.revoke(project.id, id),
     onSuccess: () => {
@@ -44,6 +59,14 @@ export function ProjectCredentialsPage() {
       void invalidate();
     },
   });
+  if (!capabilities.canManageCredentials)
+    return (
+      <Alert title="Administrator handoff required" tone="info">
+        Upstream authorization records contain security-sensitive metadata and
+        are available only to administrators. Ask an administrator to bind the
+        discovered source schemes, then return to Builds.
+      </Alert>
+    );
   if (credentials.isPending)
     return <QueryPending label="Loading credential metadata" />;
   if (credentials.error)
@@ -53,7 +76,7 @@ export function ProjectCredentialsPage() {
         onRetry={() => void credentials.refetch()}
       />
     );
-  const admin = user?.role === "admin";
+  const admin = capabilities.canManageCredentials;
   return (
     <div className="space-y-5">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
@@ -73,12 +96,6 @@ export function ProjectCredentialsPage() {
           </Button>
         )}
       </div>
-      {!admin && (
-        <Alert tone="info">
-          Builder access can inspect credential configuration status but cannot
-          create, rotate, reveal, or revoke secrets.
-        </Alert>
-      )}
       {credentials.data.length === 0 ? (
         <EmptyState
           action={
@@ -105,21 +122,37 @@ export function ProjectCredentialsPage() {
                 </div>
                 <Badge
                   tone={
-                    credential.revoked_at
+                    credential.runtime_effect_state === "failed"
                       ? "danger"
-                      : credential.configured
-                        ? "success"
-                        : "warning"
+                      : credential.runtime_effect_state === "pending"
+                        ? "warning"
+                        : credential.revoked_at
+                          ? "danger"
+                          : credential.configured
+                            ? "success"
+                            : "warning"
                   }
                 >
-                  {credential.revoked_at
-                    ? "Revoked"
-                    : credential.configured
-                      ? "Configured"
-                      : "Incomplete"}
+                  {credential.runtime_effect_state === "failed"
+                    ? "Runtime update failed"
+                    : credential.runtime_effect_state === "pending"
+                      ? "Runtime update pending"
+                      : credential.revoked_at
+                        ? "Revoked and effective"
+                        : credential.configured
+                          ? "Configured"
+                          : "Incomplete"}
                 </Badge>
               </CardHeader>
               <dl className="space-y-2 text-sm">
+                <div className="flex justify-between gap-4">
+                  <dt className="text-muted">Source scheme</dt>
+                  <dd className="font-mono text-xs text-foreground">
+                    {typeof credential.metadata.security_scheme === "string"
+                      ? credential.metadata.security_scheme
+                      : "Unbound"}
+                  </dd>
+                </div>
                 <div className="flex justify-between gap-4">
                   <dt className="text-muted">Created</dt>
                   <dd className="text-foreground">
@@ -133,6 +166,20 @@ export function ProjectCredentialsPage() {
                   </dd>
                 </div>
               </dl>
+              {credential.runtime_effect_state !== "effective" && (
+                <Alert
+                  className="mt-4"
+                  tone={
+                    credential.runtime_effect_state === "failed"
+                      ? "danger"
+                      : "warning"
+                  }
+                >
+                  {credential.runtime_effect_state === "failed"
+                    ? `The runtime change failed${credential.runtime_error_code ? ` (${credential.runtime_error_code})` : ""}. The previous runtime state may still be effective.`
+                    : "The control-plane change is saved, but runtime replacement or shutdown is still pending."}
+                </Alert>
+              )}
               {admin && !credential.revoked_at && (
                 <div className="mt-5 flex gap-2 border-t border-border pt-4">
                   <Button
@@ -179,9 +226,7 @@ export function ProjectCredentialsPage() {
               Confirm revocation only after coordinating any active runtime
               replacement.
             </Alert>
-            {revoke.error && (
-              <Alert tone="danger">{revoke.error.message}</Alert>
-            )}
+            {revoke.error && <MutationError error={revoke.error} />}
             <Button
               className="w-full"
               disabled={revoke.isPending}
@@ -224,20 +269,47 @@ function CredentialSecretForm({
   );
   const [secret, setSecret] = useState("");
   const [identity, setIdentity] = useState("");
-  const [tokenUrl, setTokenUrl] = useState("");
-  const [scope, setScope] = useState("");
+  const [scope, setScope] = useState(
+    typeof credential?.metadata.scope === "string"
+      ? credential.metadata.scope
+      : "",
+  );
+  const [sourceSchemeName, setSourceSchemeName] = useState(
+    typeof credential?.metadata.security_scheme === "string"
+      ? credential.metadata.security_scheme
+      : "",
+  );
+  const [tokenAuthMethod, setTokenAuthMethod] = useState<
+    "client_secret_basic" | "client_secret_post"
+  >(
+    credential?.metadata.token_auth_method === "client_secret_post"
+      ? "client_secret_post"
+      : "client_secret_basic",
+  );
   const [headerName, setHeaderName] = useState(
     typeof credential?.metadata.name === "string"
       ? credential.metadata.name
       : "",
   );
+  const discovery = useQuery({
+    queryKey: ["projects", projectId, "source-configuration"],
+    queryFn: ({ signal }) => sourceApi.configuration(projectId, signal),
+  });
+  const supportedSchemes =
+    discovery.data?.security_schemes.filter(
+      (item) => credentialSchemeForSource(item) !== null,
+    ) ?? [];
+  const sourceScheme = discovery.data?.security_schemes.find(
+    (item) => item.name === sourceSchemeName,
+  );
   const parts = () =>
     credentialSecretFor(scheme, {
       value: secret,
       identity,
-      tokenUrl,
       scope,
       headerName,
+      securityScheme: sourceSchemeName,
+      tokenAuthMethod,
     });
   const save = useMutation({
     mutationFn: () =>
@@ -247,11 +319,35 @@ function CredentialSecretForm({
             scheme_type: scheme,
             ...parts(),
           })
-        : credentialApi.rotate(projectId, credential!.id, parts().secret),
+        : credentialApi.rotate(projectId, credential!.id, {
+            secret: parts().secret,
+          }),
     onSuccess: onSaved,
   });
+  const canSave = Boolean(
+    secret &&
+    (mode !== "create" || (name.trim() && sourceSchemeName)) &&
+    (!["basic", "oauth2_client_credentials"].includes(scheme) ||
+      identity.trim()) &&
+    (!["api_key_header", "api_key_query", "static_headers"].includes(scheme) ||
+      headerName.trim()) &&
+    (mode !== "create" || !discovery.error),
+  );
   return (
-    <div className="space-y-4">
+    <form
+      className="space-y-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (canSave && !save.isPending) save.mutate();
+      }}
+    >
+      {mode === "rotate" && (
+        <Alert tone="info">
+          Source binding, API parameter, OAuth scope, and token method are
+          immutable Build inputs. Rotation changes secret material only. Create
+          a replacement credential and a new Build to remap authorization.
+        </Alert>
+      )}
       {mode === "create" && (
         <>
           <div className="space-y-2">
@@ -264,22 +360,30 @@ function CredentialSecretForm({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="credential-dialog-scheme">Scheme</Label>
+            <Label htmlFor="credential-dialog-scheme">
+              Source security scheme
+            </Label>
             <Select
               id="credential-dialog-scheme"
-              onChange={(event) =>
-                setScheme(event.target.value as CredentialScheme)
-              }
-              value={scheme}
+              onChange={(event) => {
+                setSourceSchemeName(event.target.value);
+                const selected = supportedSchemes.find(
+                  (item) => item.name === event.target.value,
+                );
+                const selectedType = selected
+                  ? credentialSchemeForSource(selected)
+                  : null;
+                if (selectedType) setScheme(selectedType);
+                setHeaderName(selected?.parameter_name ?? "");
+              }}
+              value={sourceSchemeName}
             >
-              <option value="bearer">Bearer token</option>
-              <option value="api_key_header">API key header</option>
-              <option value="api_key_query">API key query</option>
-              <option value="basic">HTTP Basic</option>
-              <option value="oauth2_client_credentials">
-                OAuth client credentials
-              </option>
-              <option value="static_headers">Static secret header</option>
+              <option value="">Select a discovered scheme</option>
+              {supportedSchemes.map((item) => (
+                <option key={item.name} value={item.name}>
+                  {item.name} · {item.type}
+                </option>
+              ))}
             </Select>
           </div>
         </>
@@ -306,25 +410,56 @@ function CredentialSecretForm({
           <Input
             id="credential-dialog-header"
             onChange={(event) => setHeaderName(event.target.value)}
+            readOnly={mode === "rotate" && scheme !== "static_headers"}
             value={headerName}
           />
+          {mode === "rotate" && scheme !== "static_headers" && (
+            <FieldHelp>
+              The source API parameter is fixed for this credential binding.
+            </FieldHelp>
+          )}
         </div>
       )}
       {scheme === "oauth2_client_credentials" && (
         <div className="space-y-2">
-          <Label htmlFor="credential-dialog-token-url">Token URL</Label>
-          <Input
-            id="credential-dialog-token-url"
-            onChange={(event) => setTokenUrl(event.target.value)}
-            type="url"
-            value={tokenUrl}
-          />
+          <Label>Source token endpoint</Label>
+          <p className="break-all rounded-md border border-border bg-input px-3 py-2 font-mono text-xs text-muted">
+            {sourceScheme?.token_url ??
+              "Bound by the immutable source manifest"}
+          </p>
           <Label htmlFor="credential-dialog-scope">Scope (optional)</Label>
           <Input
             id="credential-dialog-scope"
             onChange={(event) => setScope(event.target.value)}
+            readOnly={mode === "rotate"}
             value={scope}
           />
+          {mode === "rotate" && (
+            <FieldHelp>
+              OAuth scope and token authentication method are fixed for this
+              credential binding.
+            </FieldHelp>
+          )}
+          {mode === "create" && (
+            <>
+              <Label htmlFor="credential-dialog-token-method">
+                Token endpoint auth method
+              </Label>
+              <Select
+                id="credential-dialog-token-method"
+                onChange={(event) =>
+                  setTokenAuthMethod(
+                    event.target.value as
+                      "client_secret_basic" | "client_secret_post",
+                  )
+                }
+                value={tokenAuthMethod}
+              >
+                <option value="client_secret_basic">client_secret_basic</option>
+                <option value="client_secret_post">client_secret_post</option>
+              </Select>
+            </>
+          )}
         </div>
       )}
       <div className="space-y-2">
@@ -339,23 +474,11 @@ function CredentialSecretForm({
         />
         <FieldHelp>Saved values cannot be revealed later.</FieldHelp>
       </div>
-      {save.error && <Alert tone="danger">{save.error.message}</Alert>}
+      {save.error && <MutationError error={save.error} />}
       <Button
         className="w-full"
-        disabled={
-          !secret ||
-          (mode === "create" && !name.trim()) ||
-          (["basic", "oauth2_client_credentials"].includes(scheme) &&
-            !identity.trim()) ||
-          (["api_key_header", "api_key_query", "static_headers"].includes(
-            scheme,
-          ) &&
-            !headerName.trim()) ||
-          (scheme === "oauth2_client_credentials" &&
-            !/^https?:\/\//.test(tokenUrl)) ||
-          save.isPending
-        }
-        onClick={() => save.mutate()}
+        disabled={!canSave || save.isPending}
+        type="submit"
       >
         {save.isPending
           ? "Saving…"
@@ -363,6 +486,6 @@ function CredentialSecretForm({
             ? "Save credential"
             : "Rotate credential"}
       </Button>
-    </div>
+    </form>
   );
 }

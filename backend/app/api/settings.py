@@ -38,13 +38,15 @@ async def update_settings(
     request: Request,
     principal: AdminPrincipal,
     _csrf: CsrfProtection,
-    service: Annotated[SettingsService, Depends(_settings)],
+    container: Annotated[ServiceContainer, Depends(services)],
 ) -> SystemSettingsRead:
-    return await service.update_operational(
+    result = await container.settings.update_operational(
         payload,
         actor_user_id=principal.user.id,
         request_id=request.state.request_id,
     )
+    container.build_admission.wake()
+    return result
 
 
 @router.get("/models", response_model=ModelSettingsRead)

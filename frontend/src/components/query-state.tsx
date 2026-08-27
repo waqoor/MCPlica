@@ -1,6 +1,4 @@
-import { AlertCircle, RefreshCw } from "lucide-react";
-import { Button } from "./ui/button";
-import { EmptyState } from "./ui/empty-state";
+import { ErrorNotice } from "./error-notice";
 import { PageSpinner } from "./ui/spinner";
 
 export function QueryError({
@@ -12,21 +10,7 @@ export function QueryError({
   onRetry?: () => void;
   title?: string;
 }) {
-  return (
-    <EmptyState
-      action={
-        onRetry ? (
-          <Button onClick={onRetry} variant="outline">
-            <RefreshCw aria-hidden="true" className="size-4" />
-            Try again
-          </Button>
-        ) : undefined
-      }
-      description={error.message || "Check the service status and try again."}
-      icon={AlertCircle}
-      title={title}
-    />
-  );
+  return <ErrorNotice error={error} onRetry={onRetry} title={title} />;
 }
 
 export function QueryPending({ label = "Loading data" }: { label?: string }) {

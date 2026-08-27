@@ -43,6 +43,17 @@ async def test_vector_search_is_always_project_and_generation_scoped() -> None:
     assert "project_id" in client.filter_expression
     assert "generation_id" in client.filter_expression
 
+    await store.search(
+        collection=store.collection_name(2),
+        project_id=UUID(int=30),
+        generation_id=UUID(int=31),
+        vector=[0.1, 0.2],
+        limit=5,
+        include_documentation=False,
+    )
+    assert client.filter_expression is not None
+    assert 'source_kind != "documentation"' in client.filter_expression
+
 
 async def test_vector_store_rejects_cross_project_result_even_if_backend_misbehaves() -> None:
     client = _FakeMilvusClient()

@@ -5,6 +5,7 @@ from typing import cast
 from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
+from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clients.database import DatabaseClient
@@ -13,13 +14,18 @@ from app.core.exceptions import InvalidStateError, MCPlicaError, NotFoundError, 
 from app.domain.deployments import (
     IssuedMCPAccessToken,
     MCPAccessSnapshot,
+    MCPAccessStatusRecord,
     MCPAccessTokenRecord,
     MCPAuthConfigRecord,
     MCPAuthMode,
+    RuntimeEffectState,
 )
 from app.repositories.audit import AuditRepository
 from app.repositories.deployments import DeploymentRepository
 from app.repositories.mcp_access import MCPAccessRepository
+from app.repositories.runtime_commands import RuntimeCommandRepository
+from app.services.deployment.effect_state import runtime_effect_update
+from app.services.deployment.secret_materializer import materialize_inbound_auth
 from app.services.deployment.service import DeploymentService
 
 
@@ -29,6 +35,7 @@ class MCPAccessService:
         database: DatabaseClient,
         access: MCPAccessRepository,
         deployments: DeploymentRepository,
+        commands: RuntimeCommandRepository,
         audit: AuditRepository,
         deployment_service: DeploymentService,
         settings: Settings,
@@ -36,6 +43,7 @@ class MCPAccessService:
         self._database = database
         self._access = access
         self._deployments = deployments
+        self._commands = commands
         self._audit = audit
         self._deployment_service = deployment_service
         self._settings = settings
@@ -44,9 +52,74 @@ class MCPAccessService:
         async with self._database.session_scope() as session:
             if await self._deployments.get_project(session, project_id) is None:
                 raise NotFoundError("Project was not found")
+            auth_config = await self._access.get_config(session, project_id)
+            tokens = await self._access.list_tokens(session, project_id)
             return MCPAccessSnapshot(
-                auth_config=await self._access.get_config(session, project_id),
-                tokens=await self._access.list_tokens(session, project_id),
+                auth_config=(
+                    await self._config_with_runtime_state(session, auth_config)
+                    if auth_config is not None
+                    else None
+                ),
+                tokens=[await self._token_with_runtime_state(session, token) for token in tokens],
+            )
+
+    async def get_status(self, project_id: UUID) -> MCPAccessStatusRecord:
+        """Return non-secret readiness state safe for Builder workflows."""
+
+        async with self._database.session_scope() as session:
+            project = await self._deployments.get_project(session, project_id)
+            if project is None:
+                raise NotFoundError("Project was not found")
+            config = await self._access.get_config(session, project_id)
+            verifiers = await self._access.active_verifiers(session, project_id)
+            tokens = await self._access.list_tokens(session, project_id)
+            configured = False
+            remediation: str | None = None
+            if config is None:
+                remediation = "Ask an administrator to configure inbound MCP access."
+            else:
+                try:
+                    materialize_inbound_auth(
+                        hostname=project.hostname,
+                        config=config,
+                        verifiers=verifiers,
+                        settings=self._settings,
+                    )
+                    configured = True
+                except (PydanticValidationError, MCPlicaError, ValueError):
+                    remediation = (
+                        "Ask an administrator to add an active access token."
+                        if config.mode is MCPAuthMode.STATIC_BEARER
+                        else "Ask an administrator to complete the OIDC access configuration."
+                    )
+
+            effects: list[MCPAuthConfigRecord | MCPAccessTokenRecord] = []
+            if config is not None:
+                effects.append(await self._config_with_runtime_state(session, config))
+            effects.extend(
+                [await self._token_with_runtime_state(session, token) for token in tokens]
+            )
+            selected = next(
+                (
+                    effect
+                    for state in (RuntimeEffectState.FAILED, RuntimeEffectState.PENDING)
+                    for effect in reversed(effects)
+                    if effect.runtime_effect_state is state
+                ),
+                None,
+            )
+            return MCPAccessStatusRecord(
+                project_id=project_id,
+                mode=config.mode if config is not None else None,
+                configured=configured,
+                remediation=remediation,
+                runtime_effect_state=(
+                    selected.runtime_effect_state
+                    if selected is not None
+                    else RuntimeEffectState.EFFECTIVE
+                ),
+                runtime_command_id=(selected.runtime_command_id if selected is not None else None),
+                runtime_error_code=(selected.runtime_error_code if selected is not None else None),
             )
 
     async def configure(
@@ -85,7 +158,6 @@ class MCPAccessService:
         async with self._database.session_scope() as session:
             if await self._deployments.lock_project(session, project_id) is None:
                 raise NotFoundError("Project was not found")
-            previous = await self._access.get_config(session, project_id)
             config = await self._access.upsert_config(
                 session,
                 project_id=project_id,
@@ -106,22 +178,21 @@ class MCPAccessService:
                 request_id=request_id,
                 metadata={"mode": mode.value},
             )
-        previous_mode = previous.mode if previous is not None else MCPAuthMode.STATIC_BEARER
-        if previous_mode != mode:
-            await self._deployment_service.stop_project(
+            await self._deployment_service.schedule_redeploy_active(
+                session,
                 project_id=project_id,
                 actor_user_id=actor_user_id,
                 request_id=request_id,
-            )
-        else:
-            await self._redeploy(
-                project_id,
-                actor_user_id,
-                request_id,
-                stop_old_first=mode == MCPAuthMode.EXTERNAL_OAUTH_OIDC,
+                # The current runtime remains authoritative until the separately
+                # hashed auth overlay is healthy at the edge. Runtime effect state
+                # makes this bounded transition explicit to the caller.
+                stop_old_first=False,
                 event_type="deployment.mcp_auth_change_requested",
+                subject_type="mcp_auth_config",
+                subject_id=project_id,
             )
-        return config
+        self._deployment_service.notify_runtime_commands()
+        return await self._load_config_runtime_state(config)
 
     async def create_token(
         self,
@@ -157,23 +228,20 @@ class MCPAccessService:
                 request_id=request_id,
                 metadata={"name": issued.token.name},
             )
-        try:
-            await self._redeploy(
-                project_id,
-                actor_user_id,
-                request_id,
-                stop_old_first=False,
-                event_type="deployment.mcp_token_change_requested",
-            )
-        except MCPlicaError:
-            await self._invalidate_unpublished_token(
+            await self._deployment_service.schedule_redeploy_active(
+                session,
                 project_id=project_id,
-                token_id=issued.token.id,
                 actor_user_id=actor_user_id,
                 request_id=request_id,
+                stop_old_first=False,
+                event_type="deployment.mcp_token_change_requested",
+                subject_type="mcp_access_token",
+                subject_id=issued.token.id,
             )
-            raise
-        return issued
+        self._deployment_service.notify_runtime_commands()
+        return issued.model_copy(
+            update={"token": await self._load_token_runtime_state(issued.token)}
+        )
 
     async def rotate_token(
         self,
@@ -198,7 +266,6 @@ class MCPAccessService:
                 raise InvalidStateError("Revoked MCP access tokens cannot be rotated")
             if current.expires_at is not None and current.expires_at <= now:
                 raise InvalidStateError("Expired MCP access tokens cannot be rotated")
-            original_expires_at = current.expires_at
             expires_at = now + timedelta(seconds=overlap_seconds)
             if current.expires_at is not None:
                 expires_at = min(expires_at, current.expires_at)
@@ -228,33 +295,20 @@ class MCPAccessService:
                     "overlap_seconds": overlap_seconds,
                 },
             )
-        try:
-            await self._redeploy(
-                project_id,
-                actor_user_id,
-                request_id,
-                stop_old_first=overlap_seconds == 0,
+            await self._deployment_service.schedule_redeploy_active(
+                session,
+                project_id=project_id,
+                actor_user_id=actor_user_id,
+                request_id=request_id,
+                stop_old_first=False,
                 event_type="deployment.mcp_token_rotation_requested",
+                subject_type="mcp_access_token",
+                subject_id=issued.token.id,
             )
-        except MCPlicaError:
-            async with self._database.session_scope() as session:
-                await self._access.revoke(session, issued.token.id, datetime.now(UTC))
-                await self._access.restore_rotation(
-                    session,
-                    token_id,
-                    expires_at=original_expires_at,
-                )
-                await self._audit.append(
-                    session,
-                    actor_user_id=actor_user_id,
-                    event_type="mcp_access.token_rotation_aborted",
-                    entity_type="mcp_access_token",
-                    entity_id=token_id,
-                    project_id=project_id,
-                    request_id=request_id,
-                )
-            raise
-        return issued
+        self._deployment_service.notify_runtime_commands()
+        return issued.model_copy(
+            update={"token": await self._load_token_runtime_state(issued.token)}
+        )
 
     async def revoke_token(
         self,
@@ -282,14 +336,54 @@ class MCPAccessService:
                 project_id=project_id,
                 request_id=request_id,
             )
-        await self._redeploy(
-            project_id,
-            actor_user_id,
-            request_id,
-            stop_old_first=True,
-            event_type="deployment.mcp_token_revocation_requested",
+            await self._deployment_service.schedule_redeploy_active(
+                session,
+                project_id=project_id,
+                actor_user_id=actor_user_id,
+                request_id=request_id,
+                stop_old_first=False,
+                event_type="deployment.mcp_token_revocation_requested",
+                subject_type="mcp_access_token",
+                subject_id=token_id,
+            )
+        self._deployment_service.notify_runtime_commands()
+        return await self._load_token_runtime_state(revoked)
+
+    async def _load_config_runtime_state(self, config: MCPAuthConfigRecord) -> MCPAuthConfigRecord:
+        async with self._database.session_scope() as session:
+            return await self._config_with_runtime_state(session, config)
+
+    async def _config_with_runtime_state(
+        self,
+        session: AsyncSession,
+        config: MCPAuthConfigRecord,
+    ) -> MCPAuthConfigRecord:
+        update = await runtime_effect_update(
+            session,
+            self._commands,
+            project_id=config.project_id,
+            subject_type="mcp_auth_config",
+            subject_id=config.project_id,
         )
-        return revoked
+        return config.model_copy(update=update)
+
+    async def _load_token_runtime_state(self, token: MCPAccessTokenRecord) -> MCPAccessTokenRecord:
+        async with self._database.session_scope() as session:
+            return await self._token_with_runtime_state(session, token)
+
+    async def _token_with_runtime_state(
+        self,
+        session: AsyncSession,
+        token: MCPAccessTokenRecord,
+    ) -> MCPAccessTokenRecord:
+        update = await runtime_effect_update(
+            session,
+            self._commands,
+            project_id=token.project_id,
+            subject_type="mcp_access_token",
+            subject_id=token.id,
+        )
+        return token.model_copy(update=update)
 
     async def _issue_token(
         self,
@@ -325,43 +419,6 @@ class MCPAccessService:
         config = await self._access.get_config(session, project_id)
         if config is not None and config.mode != MCPAuthMode.STATIC_BEARER:
             raise InvalidStateError("Static access tokens require static bearer auth mode")
-
-    async def _redeploy(
-        self,
-        project_id: UUID,
-        actor_user_id: UUID,
-        request_id: str | None,
-        *,
-        stop_old_first: bool,
-        event_type: str,
-    ) -> None:
-        await self._deployment_service.redeploy_active(
-            project_id=project_id,
-            actor_user_id=actor_user_id,
-            request_id=request_id,
-            stop_old_first=stop_old_first,
-            event_type=event_type,
-        )
-
-    async def _invalidate_unpublished_token(
-        self,
-        *,
-        project_id: UUID,
-        token_id: UUID,
-        actor_user_id: UUID,
-        request_id: str | None,
-    ) -> None:
-        async with self._database.session_scope() as session:
-            await self._access.revoke(session, token_id, datetime.now(UTC))
-            await self._audit.append(
-                session,
-                actor_user_id=actor_user_id,
-                event_type="mcp_access.token_issue_aborted",
-                entity_type="mcp_access_token",
-                entity_id=token_id,
-                project_id=project_id,
-                request_id=request_id,
-            )
 
     def _validate_auth_configuration(
         self,

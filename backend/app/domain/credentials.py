@@ -3,10 +3,11 @@ from collections.abc import Mapping
 from datetime import datetime
 from enum import StrEnum
 from typing import cast
-from urllib.parse import urlsplit
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
+
+from app.domain.deployments import RuntimeEffectState
 
 
 class CredentialScheme(StrEnum):
@@ -44,6 +45,8 @@ def validate_credential_secret(
     allowed_metadata = {"security_scheme"}
     if scheme in {CredentialScheme.API_KEY_HEADER, CredentialScheme.API_KEY_QUERY}:
         allowed_metadata.add("name")
+    if scheme is CredentialScheme.OAUTH2_CLIENT_CREDENTIALS:
+        allowed_metadata.update({"scope", "token_auth_method"})
     unknown_metadata = set(metadata) - allowed_metadata
     if unknown_metadata:
         raise ValueError(
@@ -65,15 +68,12 @@ def validate_credential_secret(
         CredentialScheme.OAUTH2_CLIENT_CREDENTIALS: {
             "client_id",
             "client_secret",
-            "token_url",
         },
         CredentialScheme.STATIC_HEADERS: {"headers"},
     }
     required = expected[scheme]
     supplied = set(secret)
-    allowed = required | (
-        {"scope"} if scheme is CredentialScheme.OAUTH2_CLIENT_CREDENTIALS else set[str]()
-    )
+    allowed = required
     if not required <= supplied:
         raise ValueError(f"{scheme.value} credential requires: {', '.join(sorted(required))}")
     if supplied - allowed:
@@ -82,8 +82,7 @@ def validate_credential_secret(
         )
     for name in supplied - {"headers"}:
         value = secret[name]
-        limit = 2_048 if name == "token_url" else 10_000
-        if not isinstance(value, str) or not value or len(value) > limit:
+        if not isinstance(value, str) or not value or len(value) > 10_000:
             raise ValueError(f"credential field {name} must be non-empty text")
     if scheme in {CredentialScheme.API_KEY_HEADER, CredentialScheme.API_KEY_QUERY}:
         name = metadata.get("name")
@@ -94,12 +93,18 @@ def validate_credential_secret(
         ):
             raise ValueError("API key header name is invalid or forbidden")
     if scheme is CredentialScheme.OAUTH2_CLIENT_CREDENTIALS:
-        token_url = str(secret["token_url"])
-        parsed = urlsplit(token_url)
-        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-            raise ValueError("OAuth token_url must be an absolute HTTP(S) URL")
-        if parsed.username is not None or parsed.password is not None or parsed.fragment:
-            raise ValueError("OAuth token_url cannot contain credentials or a fragment")
+        method = metadata.get("token_auth_method", "client_secret_basic")
+        if method not in {"client_secret_basic", "client_secret_post"}:
+            raise ValueError("OAuth token_auth_method is invalid")
+        raw_scope = metadata.get("scope")
+        if raw_scope is not None:
+            if not isinstance(raw_scope, str):
+                raise ValueError("OAuth scope metadata must be text")
+            scopes = raw_scope.split()
+            if not scopes or len(scopes) != len(set(scopes)) or len(scopes) > 100:
+                raise ValueError("OAuth scope metadata must contain unique scope tokens")
+            if any(len(scope) > 200 for scope in scopes):
+                raise ValueError("OAuth scope metadata contains an invalid scope token")
     if scheme is CredentialScheme.STATIC_HEADERS:
         raw_headers = secret.get("headers")
         if not isinstance(raw_headers, dict) or not raw_headers:
@@ -133,3 +138,6 @@ class CredentialRecord(BaseModel):
     created_at: datetime
     rotated_at: datetime | None
     revoked_at: datetime | None
+    runtime_effect_state: RuntimeEffectState = RuntimeEffectState.EFFECTIVE
+    runtime_command_id: UUID | None = None
+    runtime_error_code: str | None = None

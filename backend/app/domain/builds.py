@@ -51,18 +51,38 @@ class BuildCredentialSnapshot(BaseModel):
     metadata: JsonObject = Field(default_factory=dict)
 
 
+class BuildSecuritySelection(BaseModel):
+    """The exact executable auth alternative frozen for one operation."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    scheme_name: str
+    credential_ref: str
+    scopes: list[str] = Field(default_factory=list)
+    token_auth_method: Literal["client_secret_basic", "client_secret_post"] = "client_secret_basic"
+
+
 class BuildConfiguration(BaseModel):
     """All mutable installation/project inputs that affect reproducible compilation."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
+    executable_configuration_sha256: str | None = Field(
+        default=None,
+        pattern=r"^[a-f0-9]{64}$",
+    )
     excluded_operations: list[BuildExclusionSnapshot] = Field(
         default_factory=lambda: list[BuildExclusionSnapshot]()
     )
     credentials: list[BuildCredentialSnapshot] = Field(
         default_factory=lambda: list[BuildCredentialSnapshot]()
     )
-    inbound_auth_mode: Literal["static_bearer", "oidc", "none"]
+    # Legacy build rows may contain the former build-bound access mode. It is
+    # deliberately ignored for new builds and at deployment time.
+    inbound_auth_mode: Literal["static_bearer", "oidc", "none"] | None = None
+    default_base_url: str | None = None
+    active_server_ref: str | None = None
+    server_mappings: dict[str, str] = Field(default_factory=dict)
     include_documentation_in_analysis: bool
     max_operations: int = Field(ge=1)
     max_context_chars: int = Field(ge=1_000)
@@ -81,6 +101,7 @@ class BuildConfiguration(BaseModel):
     runtime_timeout_ms: int = Field(ge=100, le=300_000)
     runtime_max_request_bytes: int = Field(ge=1_024, le=100_000_000)
     runtime_max_response_bytes: int = Field(ge=1_024, le=50_000_000)
+    runtime_manifest_max_bytes: int = Field(ge=1_024, le=50_000_000)
     artifact_max_bytes: int = Field(ge=1_024)
 
     @model_validator(mode="after")
@@ -117,7 +138,9 @@ class BuildRecord(BaseModel):
     project_id: UUID
     sequence: int = Field(ge=1)
     status: BuildStatus
+    pipeline_stage: BuildStatus | None = None
     trigger: BuildTrigger
+    executable_configuration_sha256: str | None = None
     canonical_snapshot_id: UUID | None
     previous_build_id: UUID | None
     compiler_version: str
@@ -139,6 +162,16 @@ class BuildRecord(BaseModel):
     created_at: datetime
     started_at: datetime | None
     completed_at: datetime | None
+    cancellation_requested_at: datetime | None = None
+    cancellation_requested_by: UUID | None = None
+    cancellation_acknowledged_at: datetime | None = None
+    admission_token: UUID | None = None
+    admission_acquired_at: datetime | None = None
+    admission_enqueued_at: datetime | None = None
+    admission_heartbeat_at: datetime | None = None
+    admission_lease_expires_at: datetime | None = None
+    admission_released_at: datetime | None = None
+    admission_attempt_count: int = Field(default=0, ge=0)
 
 
 class BuildAIRunRecord(BaseModel):
@@ -204,6 +237,14 @@ class BuildOperationView(BaseModel):
     provenance: list[JsonObject] = Field(default_factory=lambda: list[JsonObject]())
     semantic_warnings: list[str] = Field(default_factory=lambda: list[str]())
     confidence: float | None
-    excluded: bool
-    exclusion_id: UUID | None
-    exclusion_reason: str | None
+    excluded_in_build: bool
+    build_exclusion_id: UUID | None
+    build_exclusion_reason: str | None
+
+
+class BuildOperationPageItem(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    operation: BuildOperationView
+    current_exclusion_id: UUID | None
+    current_exclusion_reason: str | None

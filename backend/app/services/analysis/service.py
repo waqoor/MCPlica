@@ -1,6 +1,6 @@
 import hashlib
 import json
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from typing import Any
 from uuid import UUID
 
@@ -52,8 +52,11 @@ class AnalysisService:
         max_concurrency: int,
         retrieval_top_k: int,
         reusable: Mapping[str, OperationEnrichment] | None = None,
+        cancellation_check: Callable[[], Awaitable[None]] | None = None,
     ) -> EnrichmentSnapshot:
         async def one(operation: CanonicalOperation) -> OperationEnrichment:
+            if cancellation_check is not None:
+                await cancellation_check()
             return await self._analyze_operation(
                 build_id=build_id,
                 operation=operation,
@@ -63,6 +66,7 @@ class AnalysisService:
                 max_context_chars=max_context_chars,
                 retrieval_top_k=retrieval_top_k,
                 reusable=(reusable or {}).get(operation.key),
+                cancellation_check=cancellation_check,
             )
 
         operations = sorted(canonical.operations, key=lambda item: item.key)
@@ -80,6 +84,7 @@ class AnalysisService:
         max_context_chars: int,
         retrieval_top_k: int,
         reusable: OperationEnrichment | None,
+        cancellation_check: Callable[[], Awaitable[None]] | None,
     ) -> OperationEnrichment:
         run_key = "operation:" + hashlib.sha256(operation.key.encode()).hexdigest()[:32]
         async with self._database.session_scope() as session:
@@ -93,6 +98,8 @@ class AnalysisService:
                 raise AIAnalysisError("Successful AI audit row has no structured response")
             result = OperationEnrichmentResult.model_validate(previous.response)
             self._validate_result(operation, result, set(previous.retrieved_chunk_ids))
+            if cancellation_check is not None:
+                await cancellation_check()
             return _enrichment(
                 result,
                 model=previous.model,
@@ -123,18 +130,23 @@ class AnalysisService:
                 error_code=None,
                 stage="analysis_reuse",
             )
+            if cancellation_check is not None:
+                await cancellation_check()
             return reusable
 
         retrieval = await self._retrieval.retrieve(
             operation,
             generation=generation,
-            enabled=include_documentation,
+            include_documentation=include_documentation,
             limit=retrieval_top_k,
             max_context_chars=max(1_000, max_context_chars // 2),
+            cancellation_check=cancellation_check,
         )
         context = _context(operation, retrieval, max_context_chars=max_context_chars)
         context_sha256 = hashlib.sha256(context.encode()).hexdigest()
         chunk_ids = [chunk.chunk_id for chunk in retrieval.chunks]
+        if cancellation_check is not None:
+            await cancellation_check()
         try:
             generated = await self._ai.structured_generate(
                 model=model,
@@ -178,6 +190,8 @@ class AnalysisService:
             status="succeeded",
             error_code=None,
         )
+        if cancellation_check is not None:
+            await cancellation_check()
         return _enrichment(
             generated.value,
             model=generated.model,

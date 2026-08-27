@@ -14,6 +14,7 @@ from app.observability import observe_http_request, observe_openrouter_usage, re
 
 def _production_settings() -> Settings:
     return Settings(
+        _env_file=None,  # pyright: ignore[reportCallIssue]
         env="production",
         frontend_origin="https://ui.example.com",
         api_domain="api.example.com",
@@ -22,6 +23,8 @@ def _production_settings() -> Settings:
         secret_encryption_key=SecretStr("encryption-key"),
         auth_signing_key=SecretStr("signing-key"),
         refresh_token_pepper=SecretStr("refresh-pepper"),
+        default_admin_email=None,
+        default_admin_password=None,
         traefik_tls=True,
         mcp_runtime_image="mcplica/runtime@sha256:" + "a" * 64,
     )

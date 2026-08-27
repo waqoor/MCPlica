@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 COMPOSE := docker compose --env-file .env -f infra/compose.yaml
 
-.PHONY: install-python install-frontend lock backend-dev frontend-dev migrate test lint typecheck format compose-up compose-down compose-logs runtime-build validate
+.PHONY: install-python install-frontend lock backend-dev frontend-dev migrate test critical-coverage lint typecheck format api-contract api-contract-check compose-up compose-down compose-logs runtime-build validate
 
 install-python:
 	UV_PROJECT_ENVIRONMENT=backend/.venv uv sync --project backend
@@ -28,6 +28,10 @@ test:
 	cd mcp_runtime && UV_PROJECT_ENVIRONMENT=.venv uv run pytest
 	cd frontend && corepack enable && pnpm test:run
 
+critical-coverage:
+	cd backend && UV_PROJECT_ENVIRONMENT=.venv uv run pytest -c pyproject.toml tests ../packages/contracts/tests --cov=app --cov-report=json:coverage-critical.json
+	cd backend && UV_PROJECT_ENVIRONMENT=.venv uv run python scripts/check_critical_coverage.py coverage-critical.json
+
 lint:
 	cd backend && UV_PROJECT_ENVIRONMENT=.venv uv run ruff check app tests ../packages/contracts/src ../packages/contracts/tests
 	cd mcp_runtime && UV_PROJECT_ENVIRONMENT=.venv uv run ruff check app tests
@@ -43,9 +47,16 @@ format:
 	cd mcp_runtime && UV_PROJECT_ENVIRONMENT=.venv uv run ruff format app tests
 	cd frontend && corepack enable && pnpm format
 
+api-contract:
+	cd backend && UV_PROJECT_ENVIRONMENT=.venv uv run python generate_openapi.py
+	cd frontend && corepack enable && pnpm generate:api
+
+api-contract-check:
+	cd backend && UV_PROJECT_ENVIRONMENT=.venv uv run python generate_openapi.py --check
+	cd frontend && corepack enable && pnpm check:api
+
 compose-up:
 	$(COMPOSE) up --build -d --wait --wait-timeout 300
-	$(COMPOSE) exec -T api alembic -c ../migrations/alembic.ini upgrade head
 	$(COMPOSE) exec -T api python -m app.cli.ensure_development_admin
 
 compose-down:

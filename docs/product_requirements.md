@@ -295,7 +295,7 @@ Requirements are normative. IDs must be referenced by implementation/tests where
 
 **FR-NORM-004** — Canonical executable fields shall retain source provenance.
 
-**FR-NORM-005** — Multiple source servers shall require an explicit deployment server selection/mapping; downstream MCP callers shall not choose arbitrary base URLs.
+**FR-NORM-005** — Multiple inherited/root source servers shall require an explicit deployment server selection/mapping. Explicit path- or operation-scoped servers shall remain attached to their operations, and downstream MCP callers shall not choose arbitrary base URLs.
 
 ### Documentation/Milvus
 
@@ -355,7 +355,11 @@ Requirements are normative. IDs must be referenced by implementation/tests where
 
 **FR-VAL-005** — Validation shall detect dropped required parameters, duplicate tool names, invalid schemas, missing auth mapping, invalid upstream hosts, and runtime/manifest incompatibility.
 
-**FR-VAL-006** — Validation shall include an MCP protocol/runtime harness proving the manifest can be loaded and listed by the generic runtime.
+**FR-VAL-006** — Validation shall start the production generic-runtime factory for the exact
+candidate manifest and use an official MCP client to initialize, list tools/resources, and
+successfully call every enabled tool with schema-valid representative arguments and a
+schema-valid successful response. An MCP error result or inability to construct a successful
+probe is blocking.
 
 **FR-VAL-007** — Semantic AI validation findings shall not override failing deterministic validation.
 
@@ -419,7 +423,7 @@ Requirements are normative. IDs must be referenced by implementation/tests where
 
 **FR-SEC-002** — Roles shall include Admin and Builder as specified by `design_document.md`.
 
-**FR-SEC-003** — Product API credentials shall be encrypted at rest and never redisplayed in plaintext after creation/rotation.
+**FR-SEC-003** — Product API credentials shall be encrypted at rest and never redisplayed in plaintext after creation/rotation. Secret rotation shall preserve the validated source-security binding; remapping scheme identity/location requires a replacement credential and a new immutable Build.
 
 **FR-SEC-004** — MCP inbound authentication and product API outbound authentication shall be separate configurations.
 
@@ -496,6 +500,9 @@ The design shall support at least:
 - 10,000 documentation chunks per project;
 
 without changing architecture. Actual throughput depends on host resources and OpenRouter limits.
+The documentation-chunk target covers ingestion, indexing, and bounded retrieval. Runtime
+publication remains subject to the Build-frozen exact manifest byte limit; an oversized
+serialization must fail validation before `READY` rather than fail during runtime startup.
 
 ### NFR-008 — Resource bounds
 

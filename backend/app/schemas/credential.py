@@ -4,6 +4,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 from app.domain.credentials import CredentialScheme, validate_credential_secret
+from app.domain.deployments import RuntimeEffectState
 
 
 class CredentialSecretInput(BaseModel):
@@ -15,8 +16,6 @@ class CredentialSecretInput(BaseModel):
     password: SecretStr | None = None
     client_id: SecretStr | None = None
     client_secret: SecretStr | None = None
-    token_url: SecretStr | None = None
-    scope: SecretStr | None = None
     headers: dict[str, SecretStr] | None = None
 
     def plaintext(self) -> dict[str, object]:
@@ -28,8 +27,6 @@ class CredentialSecretInput(BaseModel):
             "password",
             "client_id",
             "client_secret",
-            "token_url",
-            "scope",
         )
         for name in scalar_names:
             value = getattr(self, name)
@@ -88,3 +85,6 @@ class CredentialRead(BaseModel):
     created_at: datetime
     rotated_at: datetime | None
     revoked_at: datetime | None
+    runtime_effect_state: RuntimeEffectState
+    runtime_command_id: UUID | None
+    runtime_error_code: str | None

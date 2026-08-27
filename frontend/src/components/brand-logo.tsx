@@ -31,10 +31,10 @@ export function BrandLogo({
         alt={alt}
         decoding="async"
         draggable={false}
-        height={compact ? 1254 : 941}
+        height={compact ? 887 : 941}
         loading={loading}
         src={compact ? compactLogo : primaryLogo}
-        width={compact ? 1254 : 1672}
+        width={compact ? 1774 : 1672}
       />
     </span>
   );

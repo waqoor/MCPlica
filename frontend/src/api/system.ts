@@ -1,16 +1,24 @@
 import { api } from "./client";
 import type { Readiness } from "./contracts";
+import type { components } from "./generated/schema";
+import { endpointResponses } from "./generated/zod";
 
-type ReadyResponse = {
-  ready: boolean;
-  dependencies: Record<string, boolean>;
-};
+type HealthResponse = components["schemas"]["HealthRead"];
+type ReadyResponse = components["schemas"]["ReadinessRead"];
 
 export const systemApi = {
   health: (signal?: AbortSignal) =>
-    api<{ status: string; service: string }>("/api/v1/health", { signal }),
+    api<HealthResponse>(
+      "/api/v1/health",
+      endpointResponses["get /api/v1/health"],
+      { signal },
+    ),
   readiness: async (signal?: AbortSignal): Promise<Readiness> => {
-    const response = await api<ReadyResponse>("/api/v1/ready", { signal });
+    const response = await api<ReadyResponse>(
+      "/api/v1/ready",
+      endpointResponses["get /api/v1/ready"],
+      { signal },
+    );
     const checks = Object.entries(response.dependencies).map(
       ([name, ready]) => ({
         name,

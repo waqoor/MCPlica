@@ -1,8 +1,9 @@
+import math
 from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class IndexGenerationStatus(StrEnum):
@@ -29,3 +30,25 @@ class DocumentIndexGenerationRecord(BaseModel):
     error_summary: str | None
     created_at: datetime
     completed_at: datetime | None
+
+
+class CachedEmbeddingRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    id: UUID
+    project_id: UUID
+    model_identity: str = Field(min_length=1, max_length=300)
+    content_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    resolved_model: str = Field(min_length=1, max_length=300)
+    dimensions: int = Field(gt=0)
+    vector: list[float] = Field(min_length=1)
+    created_at: datetime
+    last_used_at: datetime
+
+    @model_validator(mode="after")
+    def validate_vector(self) -> "CachedEmbeddingRecord":
+        if len(self.vector) != self.dimensions or not all(
+            math.isfinite(value) for value in self.vector
+        ):
+            raise ValueError("Cached embedding vector metadata is invalid")
+        return self

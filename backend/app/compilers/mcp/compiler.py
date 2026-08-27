@@ -31,6 +31,7 @@ from mcp_contracts.manifest import ParameterTarget
 
 from app.core.canonical_json import canonical_json_bytes, canonical_sha256
 from app.core.exceptions import CompilationError
+from app.domain.builds import BuildSecuritySelection
 
 COMPILER_VERSION = "1.0.0"
 type SupportedMediaType = Literal[
@@ -73,20 +74,28 @@ def _compile_error(operation: CanonicalOperation, message: str) -> CompilationEr
 def _profile(
     name: str,
     scheme: CanonicalSecurityScheme,
-    credential_ref: str,
+    selection: BuildSecuritySelection,
 ) -> AuthProfile:
-    profile_id = f"auth_{hashlib.sha256(name.encode()).hexdigest()[:16]}"
+    profile_identity = canonical_json_bytes(
+        {
+            "scheme": name,
+            "credential_ref": selection.credential_ref,
+            "scopes": selection.scopes,
+            "token_auth_method": selection.token_auth_method,
+        }
+    )
+    profile_id = f"auth_{hashlib.sha256(profile_identity).hexdigest()[:16]}"
     if scheme.type is SecuritySchemeType.HTTP_BEARER:
-        return AuthProfile(id=profile_id, type="bearer", credential_ref=credential_ref)
+        return AuthProfile(id=profile_id, type="bearer", credential_ref=selection.credential_ref)
     if scheme.type is SecuritySchemeType.HTTP_BASIC:
-        return AuthProfile(id=profile_id, type="basic", credential_ref=credential_ref)
+        return AuthProfile(id=profile_id, type="basic", credential_ref=selection.credential_ref)
     if scheme.type is SecuritySchemeType.API_KEY:
         if scheme.location not in {"header", "query"} or not scheme.name:
             raise CompilationError(f"Security scheme {name!r} is not executable")
         return AuthProfile(
             id=profile_id,
             type="api_key",
-            credential_ref=credential_ref,
+            credential_ref=selection.credential_ref,
             location=cast(Literal["header", "query"], scheme.location),
             name=scheme.name,
         )
@@ -96,9 +105,10 @@ def _profile(
         return AuthProfile(
             id=profile_id,
             type="oauth2_client_credentials",
-            credential_ref=credential_ref,
+            credential_ref=selection.credential_ref,
             token_url=scheme.token_url,
-            scopes=scheme.scopes,
+            scopes=selection.scopes,
+            token_auth_method=selection.token_auth_method,
         )
     if scheme.type is SecuritySchemeType.STATIC_HEADERS:
         if not scheme.name:
@@ -106,7 +116,7 @@ def _profile(
         return AuthProfile(
             id=profile_id,
             type="static_header",
-            credential_ref=credential_ref,
+            credential_ref=selection.credential_ref,
             name=scheme.name,
         )
     raise CompilationError(f"Security scheme {name!r} is unsupported")
@@ -114,56 +124,47 @@ def _profile(
 
 def _auth_profiles(
     api: CanonicalApi,
-    credential_refs: Mapping[str, str],
+    security_selections: Mapping[str, BuildSecuritySelection],
     operations: Iterable[CanonicalOperation],
 ) -> tuple[list[AuthProfile], dict[str, str]]:
-    profiles: list[AuthProfile] = []
+    profiles_by_id: dict[str, AuthProfile] = {}
     profile_refs: dict[str, str] = {}
-    referenced_names = {
-        name
-        for operation in operations
-        for requirement in operation.security
-        for name in requirement.scheme_scopes
-    }
-    for name in sorted(referenced_names):
+    for operation in sorted(operations, key=lambda item: item.key):
+        anonymous_allowed = not operation.security or any(
+            not requirement.scheme_scopes for requirement in operation.security
+        )
+        selection = security_selections.get(operation.key)
+        if selection is None:
+            if anonymous_allowed:
+                continue
+            raise _compile_error(operation, "security alternative is unresolved")
+        if anonymous_allowed:
+            raise _compile_error(operation, "anonymous operation has an unnecessary credential")
+        name = selection.scheme_name
+        matching_requirements = [
+            requirement
+            for requirement in operation.security
+            if len(requirement.scheme_scopes) == 1 and name in requirement.scheme_scopes
+        ]
+        if not matching_requirements:
+            raise _compile_error(operation, "security selection is not a declared alternative")
+        required_scopes = matching_requirements[0].scheme_scopes[name]
+        if required_scopes and sorted(set(required_scopes)) != selection.scopes:
+            raise _compile_error(operation, "OAuth security selection changed required scopes")
         scheme = api.security_schemes.get(name)
         if scheme is None:
             raise CompilationError(f"Security scheme {name!r} is not defined")
-        credential_ref = credential_refs.get(name)
-        if not credential_ref:
-            raise CompilationError(
-                f"Security scheme {name!r} has no configured project credential",
-                details={"security_scheme": name},
-            )
-        profile = _profile(name, scheme, credential_ref)
-        profiles.append(profile)
-        profile_refs[name] = profile.id
-    return profiles, profile_refs
+        profile = _profile(name, scheme, selection)
+        profiles_by_id.setdefault(profile.id, profile)
+        profile_refs[operation.key] = profile.id
+    return [profiles_by_id[key] for key in sorted(profiles_by_id)], profile_refs
 
 
 def _operation_auth_ref(
     operation: CanonicalOperation,
     profile_refs: Mapping[str, str],
 ) -> str | None:
-    if not operation.security:
-        return None
-    if any(not requirement.scheme_scopes for requirement in operation.security):
-        return None
-    if len(operation.security) != 1:
-        raise _compile_error(
-            operation,
-            "alternative security requirements cannot be represented safely",
-        )
-    names = list(operation.security[0].scheme_scopes)
-    if len(names) != 1:
-        raise _compile_error(
-            operation,
-            "combined security requirements cannot be represented safely",
-        )
-    profile_ref = profile_refs.get(names[0])
-    if profile_ref is None:
-        raise _compile_error(operation, "security profile is unresolved")
-    return profile_ref
+    return profile_refs.get(operation.key)
 
 
 def _unique_field_name(
@@ -239,7 +240,8 @@ def _hoist_definitions(
 
 def _responses(operation: CanonicalOperation) -> tuple[list[ResponseDefinition], JsonObject | None]:
     definitions: list[ResponseDefinition] = []
-    output_schema: JsonObject | None = None
+    success_body_schemas: list[JsonObject] = []
+    envelope_definitions: JsonObject = {}
     for response in sorted(operation.responses, key=lambda item: item.status_code):
         if not response.content:
             definitions.append(
@@ -248,23 +250,86 @@ def _responses(operation: CanonicalOperation) -> tuple[list[ResponseDefinition],
                     description=response.description,
                 )
             )
+            if _response_can_be_success(response.status_code):
+                success_body_schemas.append({"type": "null"})
             continue
         for media in sorted(response.content, key=lambda item: item.media_type):
+            normalized_media = media.media_type.split(";", 1)[0].strip().casefold()
+            if _response_can_be_success(response.status_code) and not _supported_response_media(
+                normalized_media
+            ):
+                raise _compile_error(
+                    operation,
+                    f"successful response media type {normalized_media!r} is unsupported",
+                )
             definitions.append(
                 ResponseDefinition(
                     status_code=response.status_code,
-                    media_type=media.media_type,
+                    media_type=normalized_media,
                     schema=media.schema_,
                     description=response.description,
                 )
             )
-            if (
-                output_schema is None
-                and response.status_code.startswith("2")
-                and media.media_type.casefold() == "application/json"
-            ):
-                output_schema = media.schema_
-    return definitions, output_schema
+            if _response_can_be_success(response.status_code):
+                if media.schema_:
+                    envelope_schema: JsonObject = deepcopy(media.schema_)
+                elif normalized_media.startswith("text/"):
+                    envelope_schema = {"type": "string"}
+                else:
+                    envelope_schema = {}
+                _hoist_definitions(envelope_schema, envelope_definitions, operation)
+                success_body_schemas.append(envelope_schema)
+    return definitions, _response_envelope_schema(
+        success_body_schemas,
+        definitions=envelope_definitions,
+    )
+
+
+def _response_can_be_success(status_code: str) -> bool:
+    normalized = status_code.upper()
+    return normalized == "DEFAULT" or normalized.startswith("2")
+
+
+def _supported_response_media(media_type: str) -> bool:
+    return (
+        media_type == "application/json"
+        or media_type.endswith("+json")
+        or media_type.startswith("text/")
+    )
+
+
+def _response_envelope_schema(
+    body_schemas: list[JsonObject],
+    *,
+    definitions: JsonObject,
+) -> JsonObject | None:
+    if not body_schemas:
+        return None
+    unique: list[JsonObject] = []
+    seen: set[bytes] = set()
+    for schema in body_schemas:
+        identity = canonical_json_bytes(schema)
+        if identity not in seen:
+            seen.add(identity)
+            unique.append(schema)
+    # Response dispatch has already selected the exact status/media schema.
+    # The public envelope is therefore an inclusive union: overlapping source
+    # schemas are valid and must not become impossible through JSON Schema's
+    # exclusive ``oneOf`` semantics.
+    body_schema = unique[0] if len(unique) == 1 else cast(JsonObject, {"anyOf": unique})
+    envelope: JsonObject = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["status", "contentType", "body"],
+        "properties": {
+            "status": {"type": "integer", "minimum": 200, "maximum": 299},
+            "contentType": {"type": "string"},
+            "body": body_schema,
+        },
+    }
+    if definitions:
+        envelope["$defs"] = definitions
+    return envelope
 
 
 def _compile_tool(
@@ -276,6 +341,11 @@ def _compile_tool(
     max_request_bytes: int,
     max_response_bytes: int,
 ) -> MCPTool:
+    if operation.server_ref is None:
+        raise _compile_error(
+            operation,
+            "upstream server selection is unresolved; configure an applicable server mapping",
+        )
     properties: JsonObject = {}
     definitions: JsonObject = {}
     required: list[str] = []
@@ -422,10 +492,9 @@ def compile_manifest(
     project_slug: str,
     build_id: str,
     created_at: datetime,
-    credential_refs: Mapping[str, str] | None = None,
+    security_selections: Mapping[str, BuildSecuritySelection] | None = None,
     excluded_operation_keys: frozenset[str] = frozenset(),
     resources: Sequence[MCPResource] = (),
-    inbound_auth_mode: Literal["static_bearer", "oidc", "none"] = "static_bearer",
     source_digest: str | None = None,
     canonical_digest: str | None = None,
     compiler_version: str = COMPILER_VERSION,
@@ -449,7 +518,7 @@ def compile_manifest(
     executable = [
         operation for operation in api.operations if operation.key not in excluded_operation_keys
     ]
-    profiles, profile_refs = _auth_profiles(api, credential_refs or {}, executable)
+    profiles, profile_refs = _auth_profiles(api, security_selections or {}, executable)
     names = _tool_names(executable)
     tools = [
         _compile_tool(
@@ -462,7 +531,9 @@ def compile_manifest(
         )
         for operation in sorted(executable, key=lambda item: item.key)
     ]
-    referenced_server_refs = {operation.server_ref for operation in executable}
+    referenced_server_refs = {
+        operation.server_ref for operation in executable if operation.server_ref is not None
+    }
     known_server_refs = {server.key for server in api.servers}
     missing_servers = referenced_server_refs - known_server_refs
     if missing_servers:
@@ -501,7 +572,6 @@ def compile_manifest(
         embedding_model=embedding_model,
     )
     security = RuntimeSecurity(
-        inbound_auth_mode=inbound_auth_mode,
         allowed_upstream_hosts=sorted(hosts),
         default_timeout_ms=timeout_ms,
         default_max_response_bytes=max_response_bytes,

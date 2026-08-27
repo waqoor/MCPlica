@@ -1,5 +1,6 @@
 import hashlib
 import json
+from collections.abc import Awaitable, Callable
 from typing import Any
 from uuid import UUID
 
@@ -32,11 +33,14 @@ class SemanticReviewService:
         manifest: MCPManifest,
         model: str,
         max_context_chars: int,
+        cancellation_check: Callable[[], Awaitable[None]] | None = None,
     ) -> list[SemanticReviewFinding]:
         contexts = _batched_contexts(canonical, manifest, max_context_chars)
         findings: list[SemanticReviewFinding] = []
         known_operations = {operation.key for operation in canonical.operations}
         for context in contexts:
+            if cancellation_check is not None:
+                await cancellation_check()
             context_sha256 = hashlib.sha256(context.encode()).hexdigest()
             run_key = f"semantic-review:{context_sha256[:32]}"
             async with self._database.session_scope() as session:

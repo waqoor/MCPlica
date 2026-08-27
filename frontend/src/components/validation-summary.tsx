@@ -1,4 +1,5 @@
 import type { ValidationReport } from "@/api/contracts";
+import { JsonCode } from "./json-code";
 import { Alert } from "./ui/alert";
 import { Badge } from "./ui/badge";
 import { Card } from "./ui/card";
@@ -10,12 +11,14 @@ export function ValidationSummary({ report }: { report: ValidationReport }) {
     report.blocking_error_count === 0;
   return (
     <div className="space-y-5">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
         <Metric label="Coverage" value={`${report.coverage_percent}%`} />
         <Metric label="Source" value={report.operation_source_count} />
         <Metric label="Excluded" value={report.operation_excluded_count} />
+        <Metric label="Expected" value={report.operation_expected_count} />
         <Metric label="Generated" value={report.operation_generated_count} />
         <Metric label="Blocking" value={report.blocking_error_count} />
+        <Metric label="Warnings" value={report.warning_count} />
       </div>
       {valid ? (
         <Alert title="Validation passed" tone="success">
@@ -58,11 +61,30 @@ export function ValidationSummary({ report }: { report: ValidationReport }) {
                 </p>
                 {finding.operation_key && (
                   <p className="mt-1 font-mono text-xs text-muted">
-                    {finding.operation_key}
+                    Operation: {finding.operation_key}
+                  </p>
+                )}
+                {finding.source_ref && (
+                  <p className="mt-1 break-all font-mono text-xs text-muted">
+                    Source {finding.source_ref.source_version_id} at{" "}
+                    {finding.source_ref.path}
                   </p>
                 )}
               </div>
             </div>
+            {finding.details && Object.keys(finding.details).length > 0 && (
+              <details className="mt-3 border-t border-border pt-3">
+                <summary className="cursor-pointer text-xs font-medium text-accent">
+                  Inspect finding details
+                </summary>
+                <div className="mt-3">
+                  <JsonCode
+                    label={`${finding.code} finding details`}
+                    value={finding.details}
+                  />
+                </div>
+              </details>
+            )}
           </Card>
         ))}
         {report.findings.length === 0 && (

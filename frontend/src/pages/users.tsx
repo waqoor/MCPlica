@@ -3,9 +3,10 @@ import { Plus, Users as UsersIcon } from "lucide-react";
 import { useState } from "react";
 import type { User, UserRole } from "@/api/contracts";
 import { userApi } from "@/api/settings";
+import { useAuth } from "@/auth/use-auth";
+import { MutationError } from "@/components/error-notice";
 import { QueryError, QueryPending } from "@/components/query-state";
 import { PageHeader } from "@/components/page-header";
-import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -22,16 +23,6 @@ export function UsersPage() {
   const users = useQuery({
     queryKey: ["users"],
     queryFn: ({ signal }) => userApi.list(signal),
-  });
-  const update = useMutation({
-    mutationFn: ({
-      id,
-      payload,
-    }: {
-      id: string;
-      payload: Partial<Pick<User, "role" | "is_active">>;
-    }) => userApi.update(id, payload),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["users"] }),
   });
   if (users.isPending)
     return <QueryPending label="Loading installation users" />;
@@ -66,61 +57,16 @@ export function UsersPage() {
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
           {users.data.map((user) => (
-            <Card key={user.id}>
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="font-medium text-foreground">
-                    {user.display_name}
-                  </p>
-                  <p className="mt-1 text-sm text-muted">{user.email}</p>
-                </div>
-                <Badge tone={user.is_active ? "success" : "danger"}>
-                  {user.is_active ? "Active" : "Disabled"}
-                </Badge>
-              </div>
-              <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor={`role-${user.id}`}>Role</Label>
-                  <Select
-                    id={`role-${user.id}`}
-                    onChange={(event) =>
-                      update.mutate({
-                        id: user.id,
-                        payload: { role: event.target.value as UserRole },
-                      })
-                    }
-                    value={user.role}
-                  >
-                    <option value="admin">Admin</option>
-                    <option value="builder">Builder</option>
-                  </Select>
-                </div>
-                <div>
-                  <p className="text-xs text-muted">Last sign in</p>
-                  <p className="mt-2 text-sm text-foreground">
-                    {formatDate(user.last_login_at)}
-                  </p>
-                </div>
-              </div>
-              <Button
-                className="mt-4"
-                disabled={update.isPending}
-                onClick={() =>
-                  update.mutate({
-                    id: user.id,
-                    payload: { is_active: !user.is_active },
-                  })
-                }
-                size="sm"
-                variant={user.is_active ? "destructive" : "outline"}
-              >
-                {user.is_active ? "Disable access" : "Enable access"}
-              </Button>
-            </Card>
+            <UserCard
+              key={user.id}
+              onChanged={() =>
+                queryClient.invalidateQueries({ queryKey: ["users"] })
+              }
+              user={user}
+            />
           ))}
         </div>
       )}
-      {update.error && <Alert tone="danger">{update.error.message}</Alert>}
       <Dialog
         description="The user signs in locally. Passwords are never emailed or exposed through audit metadata."
         onClose={() => setCreateOpen(false)}
@@ -138,6 +84,197 @@ export function UsersPage() {
   );
 }
 
+type UserUpdatePayload = {
+  display_name?: string;
+  role?: UserRole;
+  is_active?: boolean;
+  password?: string;
+};
+
+function UserCard({ user, onChanged }: { user: User; onChanged: () => void }) {
+  const auth = useAuth();
+  const queryClient = useQueryClient();
+  const [displayName, setDisplayName] = useState(user.display_name);
+  const [password, setPassword] = useState("");
+  const [confirmation, setConfirmation] = useState<{
+    payload: UserUpdatePayload;
+    title: string;
+    description: string;
+  } | null>(null);
+  const update = useMutation({
+    mutationFn: (payload: UserUpdatePayload) =>
+      userApi.update(user.id, payload),
+    onSuccess: async (updated) => {
+      setDisplayName(updated.display_name);
+      setPassword("");
+      setConfirmation(null);
+      onChanged();
+      if (auth.user?.id === user.id) {
+        await queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+      }
+    },
+  });
+  const pending = update.isPending;
+  const self = auth.user?.id === user.id;
+  const request = (
+    payload: UserUpdatePayload,
+    title: string,
+    description: string,
+  ) => setConfirmation({ payload, title, description });
+
+  return (
+    <Card>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="font-medium text-foreground">{user.display_name}</p>
+          <p className="mt-1 text-sm text-muted">{user.email}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {self && <Badge tone="info">You</Badge>}
+          <Badge tone={user.is_active ? "success" : "danger"}>
+            {user.is_active ? "Active" : "Disabled"}
+          </Badge>
+        </div>
+      </div>
+      <div className="mt-5 grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor={`role-${user.id}`}>Role</Label>
+          <Select
+            disabled={pending}
+            id={`role-${user.id}`}
+            onChange={(event) => {
+              const role = event.target.value as UserRole;
+              if (role === user.role) return;
+              request(
+                { role },
+                role === "builder"
+                  ? "Demote administrator?"
+                  : "Promote builder?",
+                `Changing the role revokes this user's active sessions.${
+                  self ? " Your own session may end immediately." : ""
+                } The backend also prevents removal of the last active administrator.`,
+              );
+            }}
+            value={user.role}
+          >
+            <option value="admin">Admin</option>
+            <option value="builder">Builder</option>
+          </Select>
+        </div>
+        <div>
+          <p className="text-xs text-muted">Last sign in</p>
+          <p className="mt-2 text-sm text-foreground">
+            {formatDate(user.last_login_at)}
+          </p>
+        </div>
+      </div>
+      <form
+        className="mt-4 grid gap-3 border-t border-border pt-4 sm:grid-cols-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const payload: UserUpdatePayload = {
+            ...(displayName.trim() !== user.display_name
+              ? { display_name: displayName.trim() }
+              : {}),
+            ...(password ? { password } : {}),
+          };
+          if (!Object.keys(payload).length) return;
+          if (password) {
+            request(
+              payload,
+              "Reset password?",
+              `Resetting the password revokes every active session for this user.${
+                self ? " Your own session may end immediately." : ""
+              }`,
+            );
+          } else update.mutate(payload);
+        }}
+      >
+        <div className="space-y-2">
+          <Label htmlFor={`display-name-${user.id}`}>Display name</Label>
+          <Input
+            disabled={pending}
+            id={`display-name-${user.id}`}
+            maxLength={160}
+            onChange={(event) => setDisplayName(event.target.value)}
+            value={displayName}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor={`password-${user.id}`}>New password (optional)</Label>
+          <Input
+            autoComplete="new-password"
+            disabled={pending}
+            id={`password-${user.id}`}
+            minLength={12}
+            onChange={(event) => setPassword(event.target.value)}
+            type="password"
+            value={password}
+          />
+        </div>
+        <Button
+          disabled={
+            pending ||
+            !displayName.trim() ||
+            (Boolean(password) && password.length < 12) ||
+            (displayName.trim() === user.display_name && !password)
+          }
+          type="submit"
+          variant="outline"
+        >
+          Save account details
+        </Button>
+      </form>
+      <Button
+        className="mt-4"
+        disabled={pending}
+        onClick={() =>
+          request(
+            { is_active: !user.is_active },
+            user.is_active ? "Disable user access?" : "Enable user access?",
+            user.is_active
+              ? `Disabling access revokes every active session.${
+                  self ? " Your own session may end immediately." : ""
+                } The last active administrator cannot be disabled.`
+              : "Enabling access allows this identity to sign in with its current password.",
+          )
+        }
+        size="sm"
+        variant={user.is_active ? "destructive" : "outline"}
+      >
+        {user.is_active ? "Disable access" : "Enable access"}
+      </Button>
+      {update.error && <MutationError error={update.error} />}
+      <Dialog
+        description={confirmation?.description}
+        onClose={() => setConfirmation(null)}
+        open={Boolean(confirmation)}
+        title={confirmation?.title ?? "Confirm account change"}
+      >
+        <div className="flex justify-end gap-2">
+          <Button
+            disabled={pending}
+            onClick={() => setConfirmation(null)}
+            variant="outline"
+          >
+            Cancel
+          </Button>
+          <Button
+            disabled={pending}
+            onClick={() => {
+              if (!update.isPending && confirmation)
+                update.mutate(confirmation.payload);
+            }}
+            variant="destructive"
+          >
+            Confirm and revoke sessions
+          </Button>
+        </div>
+      </Dialog>
+    </Card>
+  );
+}
+
 function CreateUserForm({ onCreated }: { onCreated: () => void }) {
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -149,7 +286,13 @@ function CreateUserForm({ onCreated }: { onCreated: () => void }) {
     onSuccess: onCreated,
   });
   return (
-    <div className="space-y-4">
+    <form
+      className="space-y-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+        create.mutate();
+      }}
+    >
       <div className="space-y-2">
         <Label htmlFor="new-user-name">Display name</Label>
         <Input
@@ -189,16 +332,16 @@ function CreateUserForm({ onCreated }: { onCreated: () => void }) {
           value={password}
         />
       </div>
-      {create.error && <Alert tone="danger">{create.error.message}</Alert>}
+      {create.error && <MutationError error={create.error} />}
       <Button
         className="w-full"
         disabled={
           !email || !displayName || password.length < 12 || create.isPending
         }
-        onClick={() => create.mutate()}
+        type="submit"
       >
         {create.isPending ? "Creating…" : "Create user"}
       </Button>
-    </div>
+    </form>
   );
 }
