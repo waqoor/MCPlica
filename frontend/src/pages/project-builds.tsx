@@ -41,7 +41,7 @@ export function ProjectBuildsPage() {
     );
   const error = create.error ?? review.error ?? rebuild.error;
   return (
-    <div className="space-y-5">
+    <div className="min-w-0 space-y-5">
       <div className="flex flex-col justify-between gap-3 xl:flex-row xl:items-center">
         <div>
           <h2 className="text-xl font-semibold text-foreground">Builds</h2>
@@ -84,7 +84,7 @@ export function ProjectBuildsPage() {
           title="No builds yet"
         />
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border">
+        <div className="max-w-full overflow-x-auto rounded-xl border border-border">
           <table className="w-full min-w-[48rem] border-collapse text-left">
             <thead className="bg-panel-raised font-mono text-[0.65rem] uppercase tracking-[0.1em] text-muted">
               <tr>

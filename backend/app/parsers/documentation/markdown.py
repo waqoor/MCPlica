@@ -4,6 +4,7 @@ from markdown_it import MarkdownIt
 
 from app.core.exceptions import SourceParseError
 
+from .common import decode_utf8, ensure_text_limit
 from .models import DocumentSection, NormalizedDocument
 
 
@@ -12,11 +13,9 @@ def parse_markdown(
     *,
     source_version_id: UUID,
     title: str | None,
+    max_text_chars: int,
 ) -> NormalizedDocument:
-    try:
-        decoded = value.decode("utf-8-sig")
-    except UnicodeDecodeError as exc:
-        raise SourceParseError("Markdown documentation must be UTF-8") from exc
+    decoded = decode_utf8(value, label="Markdown", max_text_chars=max_text_chars)
     tokens = MarkdownIt("commonmark", {"html": False}).parse(decoded)
     headings: list[str] = []
     sections: list[DocumentSection] = []
@@ -63,6 +62,7 @@ def parse_markdown(
         "\n".join([*(section.path[-1:] if section.heading else []), section.text])
         for section in sections
     )
+    ensure_text_limit(full_text, label="Markdown", max_text_chars=max_text_chars)
     return NormalizedDocument(
         source_version_id=source_version_id,
         title=inferred_title,

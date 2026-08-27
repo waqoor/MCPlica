@@ -3,16 +3,20 @@ from uuid import UUID
 
 from app.core.exceptions import SourceParseError
 
+from .common import decode_utf8
 from .models import DocumentSection, NormalizedDocument
 
 _BLANK_LINES = re.compile(r"\n\s*\n+")
 
 
-def parse_text(value: bytes, *, source_version_id: UUID, title: str | None) -> NormalizedDocument:
-    try:
-        decoded = value.decode("utf-8-sig")
-    except UnicodeDecodeError as exc:
-        raise SourceParseError("Text documentation must be UTF-8") from exc
+def parse_text(
+    value: bytes,
+    *,
+    source_version_id: UUID,
+    title: str | None,
+    max_text_chars: int,
+) -> NormalizedDocument:
+    decoded = decode_utf8(value, label="Text", max_text_chars=max_text_chars)
     normalized = decoded.replace("\r\n", "\n").replace("\r", "\n").strip()
     if not normalized:
         raise SourceParseError("Documentation contains no text")

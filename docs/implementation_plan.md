@@ -666,6 +666,10 @@ Create:
 ```text
 backend/app/parsers/documentation/markdown.py
 backend/app/parsers/documentation/text.py
+backend/app/parsers/documentation/json_document.py
+backend/app/parsers/documentation/csv_document.py
+backend/app/parsers/documentation/xlsx.py
+backend/app/parsers/documentation/docx.py
 backend/app/parsers/documentation/html.py
 backend/app/parsers/documentation/pdf.py
 backend/app/parsers/documentation/models.py
@@ -675,6 +679,7 @@ backend/app/parsers/documentation/chunker.py
 Requirements:
 
 - safe bounded parsing;
+- hostile Office archive/package validation before XLSX or DOCX parsing;
 - preserve headings/sections/source provenance;
 - report image-only PDF as insufficient text; no OCR.
 

@@ -16,6 +16,7 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { systemApi } from "@/api/system";
 import { useAuth } from "@/auth/use-auth";
 import { cn } from "@/lib/utils";
+import { BrandLogo } from "./brand-logo";
 import { HealthBadge } from "./status-badge";
 import { Button } from "./ui/button";
 
@@ -38,23 +39,21 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-border px-5 py-5">
+      <div aria-hidden="true" className="brand-flow h-0.5 shrink-0" />
+      <div className="border-b border-border px-5 pb-4 pt-5">
         <NavLink
           aria-label="MCPlica dashboard"
-          className="group flex items-center gap-3"
+          className="group block w-fit rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
           onClick={onNavigate}
           to="/"
         >
-          <span className="grid size-9 place-items-center rounded-lg border border-accent/40 bg-accent/10 font-mono text-sm font-bold text-accent transition group-hover:bg-accent/15">
-            M
-          </span>
-          <span>
-            <span className="block text-base font-semibold tracking-tight text-foreground">
-              MCPlica
-            </span>
-            <span className="block font-mono text-[0.62rem] uppercase tracking-[0.13em] text-muted">
-              API → MCP control plane
-            </span>
+          <BrandLogo
+            alt=""
+            className="h-10 w-[10.5rem] transition duration-200 group-hover:border-accent/45 group-hover:shadow-action"
+            loading="eager"
+          />
+          <span className="mt-2 block font-mono text-[0.6rem] uppercase tracking-[0.13em] text-muted">
+            API → MCP control plane
           </span>
         </NavLink>
       </div>
@@ -69,7 +68,8 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               cn(
                 "group flex min-h-11 items-center gap-3 rounded-md border border-transparent px-3 text-sm font-medium text-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                 "hover:bg-panel-hover hover:text-foreground",
-                isActive && "border-border bg-panel-raised text-foreground",
+                isActive &&
+                  "nav-active border-border bg-panel-raised text-foreground",
               )
             }
             end={end}
@@ -120,7 +120,7 @@ export function Layout() {
       <a className="skip-link" href="#main-content">
         Skip to main content
       </a>
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-border bg-canvas/95 backdrop-blur lg:block">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-border bg-canvas/92 backdrop-blur-xl lg:block">
         <Sidebar />
       </aside>
 
@@ -128,7 +128,7 @@ export function Layout() {
         <div className="fixed inset-0 z-50 lg:hidden">
           <button
             aria-label="Close navigation"
-            className="absolute inset-0 cursor-default bg-black/65"
+            className="absolute inset-0 cursor-default bg-scrim/68"
             onClick={() => setMenuOpen(false)}
             type="button"
           />
@@ -148,7 +148,7 @@ export function Layout() {
       )}
 
       <div className="lg:pl-64">
-        <header className="sticky top-0 z-20 flex min-h-16 items-center justify-between border-b border-border bg-canvas/88 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
+        <header className="sticky top-0 z-20 flex min-h-16 items-center justify-between border-b border-border bg-canvas/82 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
             <Button
               aria-label="Open navigation"
@@ -159,7 +159,19 @@ export function Layout() {
             >
               <Menu aria-hidden="true" className="size-5" />
             </Button>
-            <div>
+            <NavLink
+              aria-label="MCPlica dashboard"
+              className="-m-1.5 rounded-lg p-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:hidden"
+              to="/"
+            >
+              <BrandLogo
+                alt=""
+                className="h-8 w-[3.25rem]"
+                loading="eager"
+                variant="compact"
+              />
+            </NavLink>
+            <div className="hidden sm:block">
               <p className="text-sm font-medium text-foreground">
                 {user?.display_name}
               </p>
@@ -168,7 +180,12 @@ export function Layout() {
               </p>
             </div>
           </div>
-          <Button onClick={() => void logout()} size="sm" variant="ghost">
+          <Button
+            aria-label="Sign out"
+            onClick={() => void logout()}
+            size="sm"
+            variant="ghost"
+          >
             <LogOut aria-hidden="true" className="size-4" />
             <span className="hidden sm:inline">Sign out</span>
           </Button>

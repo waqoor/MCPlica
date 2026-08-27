@@ -1,0 +1,245 @@
+- generic [ref=e41]:
+  - link "Skip to main content" [ref=e42] [cursor=pointer]:
+    - /url: "#main-content"
+  - complementary [ref=e43]:
+    - generic [ref=e44]:
+      - link "MCPlica dashboard" [ref=e46] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e47]: M
+        - generic [ref=e48]:
+          - generic [ref=e49]: MCPlica
+          - generic [ref=e50]: API → MCP control plane
+      - navigation "Primary" [ref=e51]:
+        - link "Dashboard" [ref=e52] [cursor=pointer]:
+          - /url: /
+        - link "Projects" [ref=e59] [cursor=pointer]:
+          - /url: /projects
+        - link "Builds" [ref=e76] [cursor=pointer]:
+          - /url: /builds
+        - link "Deployments" [ref=e84] [cursor=pointer]:
+          - /url: /deployments
+        - link "Activity" [ref=e93] [cursor=pointer]:
+          - /url: /activity
+        - link "Settings" [ref=e99] [cursor=pointer]:
+          - /url: /settings
+      - generic [ref=e106]:
+        - generic [ref=e107]:
+          - generic [ref=e108]: Control plane
+          - generic [ref=e109]: Ready
+        - paragraph [ref=e110]: MCPlica Admin
+        - paragraph [ref=e111]: admin@admin.com
+  - generic [ref=e112]:
+    - banner [ref=e113]:
+      - generic [ref=e115]:
+        - paragraph [ref=e116]: MCPlica Admin
+        - paragraph [ref=e117]: admin access
+      - button "Sign out" [ref=e118] [cursor=pointer]
+    - main [ref=e124]:
+      - generic [ref=e272]:
+        - generic [ref=e273]:
+          - generic [ref=e274]:
+            - link "Projects" [ref=e275] [cursor=pointer]:
+              - /url: /projects
+            - generic [ref=e276]: /
+            - generic [ref=e277]: MCPlica final acceptance
+            - generic [ref=e278]: Enabled
+          - generic [ref=e279]:
+            - generic [ref=e280]:
+              - heading "MCPlica final acceptance" [level=1] [ref=e281]
+              - paragraph [ref=e282]: final-acceptance.mcp.localhost
+            - paragraph [ref=e283]: Repository-wide real workflow proof
+          - navigation "Project sections" [ref=e284]:
+            - generic [ref=e285]:
+              - link "Overview" [ref=e286] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b
+              - link "Sources" [ref=e287] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/sources
+              - link "Operations" [ref=e288] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/tools
+              - link "Documentation" [ref=e289] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/documentation
+              - link "Builds" [ref=e290] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/builds
+              - link "Deployment" [ref=e291] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/deployment
+              - link "Credentials" [ref=e292] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/credentials
+              - link "Settings" [ref=e293] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/settings
+        - generic [ref=e294]:
+          - generic [ref=e295]:
+            - heading "Deployment and MCP access" [level=2] [ref=e296]
+            - paragraph [ref=e297]: Runtime lifecycle, endpoint authentication, and build selection remain explicit and independently auditable.
+          - generic [ref=e298]:
+            - generic [ref=e299]:
+              - generic [ref=e300]:
+                - generic [ref=e301]:
+                  - heading "Current runtime" [level=2] [ref=e302]
+                  - paragraph [ref=e303]: Health-before-switch protects the active build during replacement.
+                - generic [ref=e304]: Running
+              - generic [ref=e305]:
+                - generic [ref=e306]:
+                  - term [ref=e307]: Endpoint
+                  - definition [ref=e308]: http://final-acceptance.mcp.localhost/mcp
+                - generic [ref=e309]:
+                  - term [ref=e310]: Health
+                  - definition [ref=e311]:
+                    - generic [ref=e312]: Healthy
+                - generic [ref=e313]:
+                  - term [ref=e314]: Build
+                  - definition [ref=e315]: "#7f8f3088-eabd-4f32-b524-dad95a2ad5aa"
+                - generic [ref=e316]:
+                  - term [ref=e317]: Image
+                  - definition [ref=e318]: sha256:7e919e58ac55f4c1ae06d21fba42c2fea28f39eeae97f1cc0860feada373073e
+                - generic [ref=e319]:
+                  - term [ref=e320]: Manifest
+                  - definition [ref=e321]: 1128a7f22a…b15a42
+              - generic [ref=e322]:
+                - button "Restart" [ref=e323] [cursor=pointer]
+                - button "Stop" [ref=e329] [cursor=pointer]
+                - button "Copy endpoint" [ref=e332] [cursor=pointer]
+            - generic [ref=e336]:
+              - generic [ref=e338]:
+                - heading "Deploy a READY build" [level=2] [ref=e339]
+                - paragraph [ref=e340]: A failed build can never replace a healthy deployment.
+              - generic [ref=e344]:
+                - text: Build
+                - combobox "Build" [ref=e346]:
+                  - 'option "Build #3 · Aug 27, 2026, 1:49 AM" [selected]'
+                  - 'option "Build #2 · Aug 26, 2026, 9:06 PM"'
+                  - 'option "Build #1 · Aug 26, 2026, 9:05 PM"'
+              - generic [ref=e347]:
+                - button "Deploy replacement" [ref=e348] [cursor=pointer]
+                - generic [ref=e349]: Ready
+          - generic [ref=e350]:
+            - generic [ref=e351]:
+              - generic [ref=e352]:
+                - heading "MCP inbound access" [level=2] [ref=e353]
+                - paragraph [ref=e354]: Saved token values are never redisplayed. Rotate instead of revealing.
+              - generic [ref=e355]: Configured
+            - generic [ref=e357]:
+              - text: Authentication mode
+              - combobox "Authentication mode" [ref=e359]:
+                - option "Static bearer" [selected]
+                - option "External OAuth/OIDC"
+            - button "Save auth mode" [ref=e360] [cursor=pointer]
+            - generic [ref=e361]:
+              - generic [ref=e362]:
+                - generic [ref=e363]:
+                  - generic [ref=e364]: Token name
+                  - textbox "Token name" [ref=e365]: Primary MCP client
+                - button "Create token" [ref=e366] [cursor=pointer]
+              - generic [ref=e367]:
+                - generic [ref=e368]:
+                  - generic [ref=e369]:
+                    - paragraph [ref=e370]: Manual testing token
+                    - paragraph [ref=e371]: mcp_uQxzNdmx… · rotated Aug 26, 2026, 9:37 PM
+                  - button "Revoke Manual testing token" [ref=e372] [cursor=pointer]
+                - generic [ref=e379]:
+                  - generic [ref=e380]:
+                    - paragraph [ref=e381]: Final acceptance MCP client
+                    - paragraph [ref=e382]: mcp_lK-kEv3a… · rotated Aug 26, 2026, 9:05 PM
+                  - button "Revoke Final acceptance MCP client" [ref=e383] [cursor=pointer]
+          - generic [ref=e390]:
+            - generic [ref=e392]:
+              - heading "Deployment history" [level=2] [ref=e393]
+              - paragraph [ref=e394]: Rollback creates a new deployment and never mutates historical builds.
+            - table [ref=e396]:
+              - rowgroup [ref=e397]:
+                - row [ref=e398]:
+                  - columnheader "Created" [ref=e399]
+                  - columnheader "Build" [ref=e400]
+                  - columnheader "Status" [ref=e401]
+                  - columnheader "Health" [ref=e402]
+                  - columnheader "Actions" [ref=e403]
+              - rowgroup [ref=e405]:
+                - row [ref=e406]:
+                  - cell "Aug 27, 2026, 11:25 AM" [ref=e407]
+                  - cell "#7f8f3088" [ref=e408]
+                  - cell "Running" [ref=e409]
+                  - cell "Healthy" [ref=e411]
+                  - cell [ref=e413]
+                - row [ref=e414]:
+                  - cell "Aug 27, 2026, 11:25 AM" [ref=e415]
+                  - cell "#7f8f3088" [ref=e416]
+                  - cell "Stopped" [ref=e417]
+                  - cell "Stopped" [ref=e419]
+                  - cell [ref=e421]:
+                    - button "Rollback" [ref=e422] [cursor=pointer]
+                - row [ref=e426]:
+                  - cell "Aug 27, 2026, 11:12 AM" [ref=e427]
+                  - cell "#7f8f3088" [ref=e428]
+                  - cell "Stopped" [ref=e429]
+                  - cell "Stopped" [ref=e431]
+                  - cell [ref=e433]:
+                    - button "Rollback" [ref=e434] [cursor=pointer]
+                - row [ref=e438]:
+                  - cell "Aug 27, 2026, 11:12 AM" [ref=e439]
+                  - cell "#7f8f3088" [ref=e440]
+                  - cell "Stopped" [ref=e441]
+                  - cell "Stopped" [ref=e443]
+                  - cell [ref=e445]:
+                    - button "Rollback" [ref=e446] [cursor=pointer]
+                - row [ref=e450]:
+                  - cell "Aug 27, 2026, 1:54 AM" [ref=e451]
+                  - cell "#7f8f3088" [ref=e452]
+                  - cell "Stopped" [ref=e453]
+                  - cell "Stopped" [ref=e455]
+                  - cell [ref=e457]:
+                    - button "Rollback" [ref=e458] [cursor=pointer]
+                - row [ref=e462]:
+                  - cell "Aug 27, 2026, 1:54 AM" [ref=e463]
+                  - cell "#7f8f3088" [ref=e464]
+                  - cell "Stopped" [ref=e465]
+                  - cell "Stopped" [ref=e467]
+                  - cell [ref=e469]:
+                    - button "Rollback" [ref=e470] [cursor=pointer]
+                - row [ref=e474]:
+                  - cell "Aug 27, 2026, 1:53 AM" [ref=e475]
+                  - cell "#7f8f3088" [ref=e476]
+                  - cell "Stopped" [ref=e477]
+                  - cell "Stopped" [ref=e479]
+                  - cell [ref=e481]:
+                    - button "Rollback" [ref=e482] [cursor=pointer]
+                - row [ref=e486]:
+                  - cell "Aug 27, 2026, 1:53 AM" [ref=e487]
+                  - cell "#7f8f3088" [ref=e488]
+                  - cell "Stopped" [ref=e489]
+                  - cell "Stopped" [ref=e491]
+                  - cell [ref=e493]:
+                    - button "Rollback" [ref=e494] [cursor=pointer]
+                - row [ref=e498]:
+                  - cell "Aug 27, 2026, 1:50 AM" [ref=e499]
+                  - cell "#7f8f3088" [ref=e500]
+                  - cell "Stopped" [ref=e501]
+                  - cell "Stopped" [ref=e503]
+                  - cell [ref=e505]:
+                    - button "Rollback" [ref=e506] [cursor=pointer]
+                - row [ref=e510]:
+                  - cell "Aug 26, 2026, 9:37 PM" [ref=e511]
+                  - cell "#e234a9ee" [ref=e512]
+                  - cell "Stopped" [ref=e513]
+                  - cell "Stopped" [ref=e515]
+                  - cell [ref=e517]:
+                    - button "Rollback" [ref=e518] [cursor=pointer]
+                - row [ref=e522]:
+                  - cell "Aug 26, 2026, 9:06 PM" [ref=e523]
+                  - cell "#e234a9ee" [ref=e524]
+                  - cell "Stopped" [ref=e525]
+                  - cell "Stopped" [ref=e527]
+                  - cell [ref=e529]:
+                    - button "Rollback" [ref=e530] [cursor=pointer]
+                - row [ref=e534]:
+                  - cell "Aug 26, 2026, 9:06 PM" [ref=e535]
+                  - cell "#399a2e5b" [ref=e536]
+                  - cell "Stopped" [ref=e537]
+                  - cell "Stopped" [ref=e539]
+                  - cell [ref=e541]:
+                    - button "Rollback" [ref=e542] [cursor=pointer]
+                - row [ref=e546]:
+                  - cell "Aug 26, 2026, 9:05 PM" [ref=e547]
+                  - cell "#e234a9ee" [ref=e548]
+                  - cell "Stopped" [ref=e549]
+                  - cell "Stopped" [ref=e551]
+                  - cell [ref=e553]:
+                    - button "Rollback" [ref=e554] [cursor=pointer]

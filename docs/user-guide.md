@@ -10,7 +10,7 @@ Admins manage users, installation/model settings, credentials, MCP access, deplo
 
 1. **Project identity:** choose a durable name/slug and optional description. The slug becomes part of the MCP hostname; changing source content never creates a duplicate project.
 2. **Primary API source:** upload an OpenAPI document or structured API inventory, or configure an allowlisted HTTPS URL. MCPlica creates a source record, then an immutable version.
-3. **Documentation:** add optional Markdown, HTML, text, or PDF product/API evidence. Documentation enriches semantics but cannot define executable behavior that is absent from the API source.
+3. **Documentation:** add optional JSON, Markdown, TXT, CSV, XLSX, DOCX, HTML, or text-extractable PDF product/API evidence, up to 100 MB per upload by default. Documentation is indexed and supplied as bounded evidence to build-time AI when documentation analysis is enabled, but it cannot define executable behavior that is absent from the API source.
 4. **Server selection:** review the detected base URL and choose the intended upstream. Private/HTTP destinations require explicit operator policy and are rejected by default.
 5. **Upstream authentication:** configure the API credential scheme or explicitly record that the upstream needs none. Secret values are write-only; rotate rather than reveal.
 6. **Build:** start the canonical asynchronous build. One build ingests, parses, indexes, analyzes, compiles, validates, and packages; do not submit duplicate jobs when polling is slow.

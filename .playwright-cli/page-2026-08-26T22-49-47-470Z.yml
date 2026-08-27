@@ -1,0 +1,135 @@
+- generic [ref=f5e8]:
+  - link "Skip to main content" [ref=f5e9] [cursor=pointer]:
+    - /url: "#main-content"
+  - generic [ref=f5e10]:
+    - banner [ref=f5e11]:
+      - generic [ref=f5e12]:
+        - button "Open navigation" [ref=f5e13] [cursor=pointer]
+        - generic [ref=f5e18]:
+          - paragraph [ref=f5e19]: MCPlica Admin
+          - paragraph [ref=f5e20]: admin access
+      - button "Sign out" [ref=f5e21] [cursor=pointer]
+    - main [ref=f5e27]:
+      - generic [ref=f5e28]:
+        - generic [ref=f5e29]:
+          - generic [ref=f5e30]:
+            - link "Projects" [ref=f5e31] [cursor=pointer]:
+              - /url: /projects
+            - generic [ref=f5e32]: /
+            - generic [ref=f5e33]: MCPlica final acceptance
+            - generic [ref=f5e34]: Enabled
+          - generic [ref=f5e35]:
+            - generic [ref=f5e36]:
+              - heading "MCPlica final acceptance" [level=1] [ref=f5e37]
+              - paragraph [ref=f5e38]: final-acceptance.mcp.localhost
+            - paragraph [ref=f5e39]: Repository-wide real workflow proof
+          - navigation "Project sections" [ref=f5e40]:
+            - generic [ref=f5e41]:
+              - link "Overview" [ref=f5e42] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b
+              - link "Sources" [ref=f5e43] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/sources
+              - link "Operations" [ref=f5e44] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/tools
+              - link "Documentation" [ref=f5e45] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/documentation
+              - link "Builds" [ref=f5e46] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/builds
+              - link "Deployment" [ref=f5e47] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/deployment
+              - link "Credentials" [ref=f5e48] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/credentials
+              - link "Settings" [ref=f5e49] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/settings
+        - generic [ref=f5e425]:
+          - generic [ref=f5e426]:
+            - generic [ref=f5e427]:
+              - generic [ref=f5e428]:
+                - 'heading "Build #3" [level=2] [ref=f5e429]'
+                - generic [ref=f5e430]: Ready
+              - paragraph [ref=f5e431]: Source Change · created Aug 27, 2026, 1:49 AM
+            - generic [ref=f5e432]:
+              - button "Cancel" [disabled] [ref=f5e433]
+              - button "Export bundle" [ref=f5e437] [cursor=pointer]
+          - 'group "Build status: ready" [ref=f5e443]':
+            - list [ref=f5e444]:
+              - listitem [ref=f5e445]:
+                - generic [ref=f5e449]: INGESTING
+              - listitem [ref=f5e450]:
+                - generic [ref=f5e454]: PARSING
+              - listitem [ref=f5e455]:
+                - generic [ref=f5e459]: INDEXING
+              - listitem [ref=f5e460]:
+                - generic [ref=f5e464]: ANALYZING
+              - listitem [ref=f5e465]:
+                - generic [ref=f5e469]: COMPILING
+              - listitem [ref=f5e470]:
+                - generic [ref=f5e474]: VALIDATING
+              - listitem [ref=f5e475]:
+                - generic [ref=f5e479]: PACKAGING
+              - listitem [ref=f5e480]:
+                - generic [ref=f5e484]: READY
+          - generic [ref=f5e485]:
+            - generic [ref=f5e486]:
+              - heading "Reproducibility" [level=2] [ref=f5e488]
+              - generic [ref=f5e492]:
+                - generic [ref=f5e493]:
+                  - term [ref=f5e494]: Compiler
+                  - definition [ref=f5e495]: 1.0.0
+                - generic [ref=f5e496]:
+                  - term [ref=f5e497]: Manifest schema
+                  - definition [ref=f5e498]: mcp-manifest/v1
+                - generic [ref=f5e499]:
+                  - term [ref=f5e500]: Runtime compatibility
+                  - definition [ref=f5e501]: ">=1.0,<2.0"
+                - generic [ref=f5e502]:
+                  - term [ref=f5e503]: Prompt bundle
+                  - definition [ref=f5e504]: 1.0.0
+                - generic [ref=f5e505]:
+                  - term [ref=f5e506]: Manifest SHA-256
+                  - definition [ref=f5e507]: 1128a7f22a…b15a42
+            - generic [ref=f5e508]:
+              - generic [ref=f5e509]:
+                - heading "Build-time intelligence" [level=2] [ref=f5e510]
+                - generic [ref=f5e511]: No chain-of-thought
+              - generic [ref=f5e512]:
+                - generic [ref=f5e513]:
+                  - term [ref=f5e514]: Analysis model
+                  - definition [ref=f5e515]: mcplica-fixture/analysis
+                - generic [ref=f5e516]:
+                  - term [ref=f5e517]: Validation model
+                  - definition [ref=f5e518]: mcplica-fixture/validation
+                - generic [ref=f5e519]:
+                  - term [ref=f5e520]: Embedding model
+                  - definition [ref=f5e521]: mcplica-fixture/embedding
+                - generic [ref=f5e522]:
+                  - term [ref=f5e523]: Embedding dimensions
+                  - definition [ref=f5e524]: "8"
+          - generic [ref=f5e525]:
+            - heading "Validation evidence" [level=3] [ref=f5e526]
+            - generic [ref=f5e527]:
+              - generic [ref=f5e528]:
+                - generic [ref=f5e529]:
+                  - paragraph [ref=f5e530]: Coverage
+                  - paragraph [ref=f5e531]: 100%
+                - generic [ref=f5e532]:
+                  - paragraph [ref=f5e533]: Source
+                  - paragraph [ref=f5e534]: "5"
+                - generic [ref=f5e535]:
+                  - paragraph [ref=f5e536]: Excluded
+                  - paragraph [ref=f5e537]: "0"
+                - generic [ref=f5e538]:
+                  - paragraph [ref=f5e539]: Generated
+                  - paragraph [ref=f5e540]: "5"
+                - generic [ref=f5e541]:
+                  - paragraph [ref=f5e542]: Blocking
+                  - paragraph [ref=f5e543]: "0"
+              - status [ref=f5e544]:
+                - generic [ref=f5e548]:
+                  - paragraph [ref=f5e549]: Validation passed
+                  - generic [ref=f5e550]: All expected source operations are represented after explicit exclusions.
+              - paragraph [ref=f5e552]: No validation findings were recorded.
+          - generic [ref=f5e553]:
+            - heading "Change set" [level=3] [ref=f5e560]
+            - region "Build diff" [ref=f5e561]:
+              - code [ref=f5e562]: "{ \"added_operations\": [], \"removed_operations\": [], \"changed_operations\": [ { \"operation_key\": \"op_046cace8a6124155a58c2be0\", \"changes\": [ \"semantic_enrichment\" ] }, { \"operation_key\": \"op_3f6f3dac3b4b47b3f92d6728\", \"changes\": [ \"semantic_enrichment\" ] }, { \"operation_key\": \"op_40d03e923027877792e580e7\", \"changes\": [ \"semantic_enrichment\" ] }, { \"operation_key\": \"op_83ff92a2ebc9135307a22724\", \"changes\": [ \"semantic_enrichment\" ] }, { \"operation_key\": \"op_89082c6ce2ee93bb62f88e43\", \"changes\": [ \"semantic_enrichment\" ] } ], \"unchanged_operations\": [], \"changed_schemas\": [], \"changed_security\": [], \"changed_documents\": [ \"38227626-5322-4679-bbd3-9fb49cfb94a2\", \"409d462b-0545-4b23-8055-d15857d7c50a\", \"52637e7d-1715-4378-a761-6e7b5a026203\", \"56b1a315-9238-459f-bcc5-c4684d526a9f\", \"5c3530f4-2332-4806-9b7a-f28a4e934660\", \"7db493f9-faab-4047-aaec-3c3bb8d063e6\", \"d49bb539-3a1c-47c2-af48-56f74fbfd7e2\", \"dd5e3eb7-7d9a-471e-a4d1-1690ab0d483b\" ] }"

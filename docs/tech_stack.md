@@ -348,6 +348,8 @@ The project must still own its normalization/compiler logic; do not let a third-
 Approved libraries:
 
 - `PyMuPDF` for text extraction from PDFs;
+- `openpyxl` in read-only mode for bounded XLSX text extraction;
+- `python-docx` for bounded DOCX paragraph/table text extraction;
 - `markdown-it-py` for Markdown parsing/structure if needed;
 - `beautifulsoup4` for bounded HTML text/section extraction;
 - standard library HTML utilities as appropriate.
@@ -355,6 +357,9 @@ Approved libraries:
 Rules:
 
 - no OCR dependency in core V1;
+- Office Open XML archives must be inspected for unsafe paths, encryption, macros,
+  entry count, expanded size, and compression ratio before parsing;
+- spreadsheet formulas and document code are data only and are never executed;
 - no browser engine required for ordinary documentation crawling;
 - do not execute page JavaScript;
 - do not preserve/render arbitrary source HTML unsanitized;

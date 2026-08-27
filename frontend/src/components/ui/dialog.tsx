@@ -36,7 +36,7 @@ export function Dialog({
     <div className="fixed inset-0 z-50 grid place-items-center p-4">
       <button
         aria-label="Close dialog"
-        className="absolute inset-0 cursor-default bg-black/65"
+        className="absolute inset-0 cursor-default bg-scrim/68"
         onClick={onClose}
         type="button"
       />
@@ -44,7 +44,7 @@ export function Dialog({
         aria-describedby={description ? "dialog-description" : undefined}
         aria-labelledby="dialog-title"
         aria-modal="true"
-        className="relative z-10 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border-strong bg-panel p-5 shadow-dialog"
+        className="surface-panel relative z-10 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border-strong bg-panel p-5 shadow-dialog"
         role="dialog"
       >
         <div className="flex items-start justify-between gap-4">

@@ -26,8 +26,8 @@ export function ProjectLayout() {
 
   return (
     <ProjectContext.Provider value={project.data}>
-      <div className="space-y-6">
-        <header>
+      <div className="min-w-0 space-y-6">
+        <header className="min-w-0">
           <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-muted">
             <Link className="hover:text-foreground" to="/projects">
               Projects

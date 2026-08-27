@@ -816,12 +816,19 @@ Unsupported executable constructs produce operation-level blocking findings. A u
 
 Supported supplemental documentation in V1:
 
+- JSON (`.json`)
 - Markdown (`.md`)
 - plain text (`.txt`)
+- CSV (`.csv`)
+- Excel Open XML (`.xlsx`)
+- Word Open XML (`.docx`)
 - HTML (`.html` or fetched HTML pages)
 - PDF with extractable text
 
 OCR is not part of V1. Image-only PDFs are reported as having insufficient extractable text.
+Office Open XML packages are treated as untrusted archives: entry paths, encryption,
+macros, entry count, expanded size, and compression ratio are validated before bounded
+text extraction. Formulas and document code are never executed.
 
 ### 12.1 Normalization
 

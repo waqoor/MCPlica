@@ -35,6 +35,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { WizardShell } from "@/features/projects/wizard-shell";
 import { buildIsActive } from "@/lib/lifecycle";
+import { MAX_UPLOAD_LABEL, uploadAccept, uploadFileError } from "@/lib/uploads";
 
 const identitySchema = z.object({
   name: z.string().trim().min(1, "Enter a project name.").max(160),
@@ -424,6 +425,7 @@ function SourceStep({
   );
   const [url, setUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
   const create = useMutation({
     mutationFn: () =>
       origin === "url"
@@ -443,7 +445,7 @@ function SourceStep({
   });
   const canSubmit =
     name.trim() &&
-    (origin === "url" ? /^https?:\/\//.test(url) : Boolean(file));
+    (origin === "url" ? /^https?:\/\//.test(url) : Boolean(file) && !fileError);
   return (
     <div>
       <CardHeader>
@@ -465,15 +467,22 @@ function SourceStep({
           <Label htmlFor="source-kind">Source format</Label>
           <Select
             id="source-kind"
-            onChange={(event) =>
-              setSourceKind(event.target.value as SourceKind)
-            }
+            onChange={(event) => {
+              const nextKind = event.target.value as SourceKind;
+              setSourceKind(nextKind);
+              setFileError(file ? uploadFileError(file, nextKind) : null);
+            }}
             value={sourceKind}
             disabled={kind === "documentation"}
           >
-            <option value="openapi">OpenAPI 3.x</option>
-            <option value="api_inventory">API Inventory v1</option>
-            <option value="documentation">Documentation</option>
+            {kind === "documentation" ? (
+              <option value="documentation">Documentation</option>
+            ) : (
+              <>
+                <option value="openapi">OpenAPI 3.x</option>
+                <option value="api_inventory">API Inventory v1</option>
+              </>
+            )}
           </Select>
         </div>
         <div className="space-y-2">
@@ -517,20 +526,29 @@ function SourceStep({
           <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="source-file">Source file</Label>
             <Input
-              accept={
-                kind === "documentation"
-                  ? ".md,.txt,.html,.htm,.pdf,text/markdown,text/plain,text/html,application/pdf"
-                  : ".json,.yaml,.yml,application/json,application/yaml,text/yaml"
-              }
+              accept={uploadAccept(sourceKind)}
+              aria-invalid={Boolean(fileError)}
               id="source-file"
-              onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+              onChange={(event) => {
+                const selected = event.target.files?.[0] ?? null;
+                setFile(selected);
+                setFileError(
+                  selected ? uploadFileError(selected, sourceKind) : null,
+                );
+              }}
               type="file"
             />
-            <FieldHelp>
-              {file
-                ? `${file.name} · ${(file.size / 1024).toFixed(1)} KB`
-                : "Files are streamed, bounded, hashed, and stored as immutable source versions."}
-            </FieldHelp>
+            {fileError ? (
+              <FieldError>{fileError}</FieldError>
+            ) : (
+              <FieldHelp>
+                {file
+                  ? `${file.name} · ${(file.size / 1_000_000).toFixed(2)} MB`
+                  : kind === "documentation"
+                    ? `JSON, Markdown, TXT, CSV, XLSX, DOCX, HTML, or PDF · ${MAX_UPLOAD_LABEL} maximum.`
+                    : `OpenAPI 3.x or API Inventory v1 JSON/YAML · ${MAX_UPLOAD_LABEL} maximum.`}
+              </FieldHelp>
+            )}
           </div>
         )}
       </div>

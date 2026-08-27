@@ -44,7 +44,9 @@ format:
 	cd frontend && corepack enable && pnpm format
 
 compose-up:
-	$(COMPOSE) up --build -d
+	$(COMPOSE) up --build -d --wait --wait-timeout 300
+	$(COMPOSE) exec -T api alembic -c ../migrations/alembic.ini upgrade head
+	$(COMPOSE) exec -T api python -m app.cli.ensure_development_admin
 
 compose-down:
 	$(COMPOSE) down

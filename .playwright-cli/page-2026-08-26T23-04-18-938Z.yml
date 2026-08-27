@@ -1,0 +1,106 @@
+- generic [ref=f8e23]:
+  - link "Skip to main content" [ref=f8e24] [cursor=pointer]:
+    - /url: "#main-content"
+  - generic [ref=f8e25]:
+    - banner [ref=f8e26]:
+      - generic [ref=f8e27]:
+        - button "Open navigation" [ref=f8e28] [cursor=pointer]
+        - generic [ref=f8e33]:
+          - paragraph [ref=f8e34]: MCPlica Admin
+          - paragraph [ref=f8e35]: admin access
+      - button "Sign out" [ref=f8e36] [cursor=pointer]
+    - main [ref=f8e42]:
+      - generic [ref=f8e43]:
+        - generic [ref=f8e44]:
+          - generic [ref=f8e45]:
+            - paragraph [ref=f8e46]: Control plane
+            - heading "Operational overview" [level=1] [ref=f8e47]
+            - paragraph [ref=f8e48]: Build, validate, and operate isolated MCP runtimes from deterministic API contracts.
+          - link "New project" [ref=f8e50] [cursor=pointer]:
+            - /url: /projects/new
+        - region "Workspace metrics" [ref=f8e54]:
+          - generic [ref=f8e58]:
+            - paragraph [ref=f8e59]: Projects
+            - paragraph [ref=f8e60]: "1"
+            - paragraph [ref=f8e61]: in this installation
+          - generic [ref=f8e79]:
+            - paragraph [ref=f8e80]: Builds active
+            - paragraph [ref=f8e81]: "0"
+            - paragraph [ref=f8e82]: 0 recent failures
+          - generic [ref=f8e91]:
+            - paragraph [ref=f8e92]: Deployments
+            - paragraph [ref=f8e93]: "1"
+            - paragraph [ref=f8e94]: active project references
+          - generic [ref=f8e104]:
+            - paragraph [ref=f8e105]: System
+            - paragraph [ref=f8e106]: ready
+            - paragraph [ref=f8e107]: builder dependencies
+        - generic [ref=f8e123]:
+          - generic [ref=f8e124]:
+            - generic [ref=f8e125]:
+              - generic [ref=f8e126]:
+                - heading "Recent builds" [level=2] [ref=f8e127]
+                - paragraph [ref=f8e128]: Immutable compilation attempts across projects
+              - link "View all" [ref=f8e129] [cursor=pointer]:
+                - /url: /builds
+            - generic [ref=f8e130]:
+              - link "#3 Project build Aug 27, 2026, 1:49 AM Ready" [ref=f8e131] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/builds/7f8f3088-eabd-4f32-b524-dad95a2ad5aa
+                - generic [ref=f8e132]: "#3"
+                - generic [ref=f8e133]:
+                  - generic [ref=f8e134]: Project build
+                  - generic [ref=f8e135]: Aug 27, 2026, 1:49 AM
+                - generic [ref=f8e136]: Ready
+              - link "#2 Project build Aug 26, 2026, 9:06 PM Ready" [ref=f8e137] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/builds/399a2e5b-ec75-438d-b77d-a0cc78b8ddaf
+                - generic [ref=f8e138]: "#2"
+                - generic [ref=f8e139]:
+                  - generic [ref=f8e140]: Project build
+                  - generic [ref=f8e141]: Aug 26, 2026, 9:06 PM
+                - generic [ref=f8e142]: Ready
+              - link "#1 Project build Aug 26, 2026, 9:05 PM Ready" [ref=f8e143] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/builds/e234a9ee-99d4-4f69-bee9-af5f340294a5
+                - generic [ref=f8e144]: "#1"
+                - generic [ref=f8e145]:
+                  - generic [ref=f8e146]: Project build
+                  - generic [ref=f8e147]: Aug 26, 2026, 9:05 PM
+                - generic [ref=f8e148]: Ready
+          - generic [ref=f8e149]:
+            - generic [ref=f8e150]:
+              - generic [ref=f8e151]:
+                - generic [ref=f8e152]:
+                  - heading "System readiness" [level=2] [ref=f8e153]
+                  - paragraph [ref=f8e154]: Serving runtimes stay independent of build-time AI and vector services.
+                - generic [ref=f8e155]: Ready
+              - generic [ref=f8e156]:
+                - generic [ref=f8e157]:
+                  - generic [ref=f8e158]: postgres
+                  - generic [ref=f8e159]: Ready
+                - generic [ref=f8e160]:
+                  - generic [ref=f8e161]: redis
+                  - generic [ref=f8e162]: Ready
+                - generic [ref=f8e163]:
+                  - generic [ref=f8e164]: artifact_storage
+                  - generic [ref=f8e165]: Ready
+                - generic [ref=f8e166]:
+                  - generic [ref=f8e167]: build_queue
+                  - generic [ref=f8e168]: Ready
+                - generic [ref=f8e169]:
+                  - generic [ref=f8e170]: milvus
+                  - generic [ref=f8e171]: Ready
+                - generic [ref=f8e172]:
+                  - generic [ref=f8e173]: openrouter
+                  - generic [ref=f8e174]: Ready
+            - generic [ref=f8e175]:
+              - generic [ref=f8e176]:
+                - generic [ref=f8e177]:
+                  - heading "Deployment workspace" [level=2] [ref=f8e178]
+                  - paragraph [ref=f8e179]: Open a project to inspect health and lifecycle history
+                - link "View deployments" [ref=f8e180] [cursor=pointer]:
+                  - /url: /deployments
+              - link "MCPlica final acceptance final-acceptance.mcp.localhost Active" [ref=f8e185] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/deployment
+                - generic [ref=f8e186]:
+                  - paragraph [ref=f8e187]: MCPlica final acceptance
+                  - paragraph [ref=f8e188]: final-acceptance.mcp.localhost
+                - generic [ref=f8e189]: Active
