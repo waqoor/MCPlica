@@ -3,38 +3,134 @@
 @theme {
   --font-sans: "Fira Sans", "Segoe UI", sans-serif;
   --font-mono: "Fira Code Variable", ui-monospace, monospace;
-  --color-canvas: #071018;
-  --color-panel: #0c1923;
-  --color-panel-raised: #11232f;
-  --color-panel-hover: #162c3a;
-  --color-input: #0a151e;
-  --color-foreground: #e7f0f3;
-  --color-muted: #9aadb6;
-  --color-border: #1d3442;
-  --color-border-strong: #315061;
-  --color-accent: #38c9b2;
-  --color-accent-strong: #5ad9c5;
-  --color-accent-ink: #031613;
-  --color-info: #67b7e8;
-  --color-info-soft: #a8dcfa;
-  --color-success: #4fc58a;
-  --color-success-soft: #99e5bd;
-  --color-warning: #efb95f;
-  --color-warning-soft: #ffd895;
-  --color-danger: #d9535f;
-  --color-danger-strong: #ea6671;
-  --color-danger-soft: #ffabb2;
-  --shadow-panel: 0 18px 45px rgb(0 0 0 / 0.16);
-  --shadow-dialog: 0 24px 80px rgb(0 0 0 / 0.48);
+  --color-brand-indigo: #101050;
+  --color-brand-blue: #1060ff;
+  --color-brand-cyan: #00a8c8;
+  --color-brand-violet: #6040ff;
+  --color-brand-paper: #fbfbfc;
+  --color-canvas: #050a20;
+  --color-panel: #0a1230;
+  --color-panel-raised: #101b42;
+  --color-panel-hover: #172652;
+  --color-input: #070d27;
+  --color-foreground: #f5f7ff;
+  --color-muted: #a6b0d2;
+  --color-border: #1e2e63;
+  --color-border-strong: #4664b5;
+  --color-accent: #29c7d9;
+  --color-accent-strong: #6adde8;
+  --color-accent-ink: #03151e;
+  --color-info: #6b9bff;
+  --color-info-soft: #b7ccff;
+  --color-success: #6edba8;
+  --color-success-soft: #b3f2d0;
+  --color-warning: #ffc466;
+  --color-warning-soft: #ffe1a8;
+  --color-danger: #ff7182;
+  --color-danger-strong: #ff92a0;
+  --color-danger-soft: #ffb4bd;
+  --color-danger-ink: #2b050b;
+  --color-scrim: #01020a;
+  --shadow-panel: 0 18px 48px rgb(1 5 24 / 0.24);
+  --shadow-dialog: 0 28px 90px rgb(1 3 18 / 0.62);
+  --shadow-action: 0 10px 28px rgb(0 168 200 / 0.16);
 }
 
 :root {
+  --brand-flow: linear-gradient(
+    100deg,
+    var(--color-brand-indigo) 0%,
+    var(--color-brand-blue) 28%,
+    var(--color-brand-cyan) 52%,
+    var(--color-brand-violet) 78%,
+    var(--color-brand-indigo) 100%
+  );
+  --grid-line: rgb(107 155 255 / 0.038);
+  --logo-border: rgb(245 247 255 / 0.18);
+  --logo-shadow: 0 10px 26px rgb(1 5 24 / 0.2);
+  --panel-sheen: linear-gradient(
+    135deg,
+    rgb(16 96 255 / 0.045),
+    transparent 36%,
+    rgb(96 64 255 / 0.028) 100%
+  );
+  --page-background:
+    radial-gradient(
+      circle at 8% -12%,
+      rgb(16 96 255 / 0.16),
+      transparent 34rem
+    ),
+    radial-gradient(circle at 96% 4%, rgb(96 64 255 / 0.14), transparent 31rem),
+    radial-gradient(
+      circle at 52% 112%,
+      rgb(0 168 200 / 0.07),
+      transparent 38rem
+    ),
+    linear-gradient(180deg, #050a20 0%, #070d27 100%);
   font-family: "Fira Sans", "Segoe UI", sans-serif;
-  color: #e7f0f3;
-  background: #071018;
+  color: var(--color-foreground);
+  background: var(--color-canvas);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --color-canvas: #f5f7ff;
+    --color-panel: #ffffff;
+    --color-panel-raised: #ecf1ff;
+    --color-panel-hover: #e3eaff;
+    --color-input: #ffffff;
+    --color-foreground: #10184a;
+    --color-muted: #4c5a82;
+    --color-border: #cbd5f2;
+    --color-border-strong: #6f84c0;
+    --color-accent: #3157d6;
+    --color-accent-strong: #2445b7;
+    --color-accent-ink: #ffffff;
+    --color-info: #2f61d5;
+    --color-info-soft: #1d429b;
+    --color-success: #08784d;
+    --color-success-soft: #086443;
+    --color-warning: #a96205;
+    --color-warning-soft: #7a3f00;
+    --color-danger: #c33149;
+    --color-danger-strong: #a9243b;
+    --color-danger-soft: #92233a;
+    --color-danger-ink: #ffffff;
+    --color-scrim: #07102e;
+    --shadow-panel: 0 18px 48px rgb(31 54 128 / 0.1);
+    --shadow-dialog: 0 28px 90px rgb(28 42 97 / 0.24);
+    --shadow-action: 0 10px 28px rgb(49 87 214 / 0.18);
+    --grid-line: rgb(16 96 255 / 0.055);
+    --logo-border: rgb(16 24 74 / 0.13);
+    --logo-shadow: 0 10px 26px rgb(31 54 128 / 0.12);
+    --panel-sheen: linear-gradient(
+      135deg,
+      rgb(16 96 255 / 0.035),
+      transparent 38%,
+      rgb(96 64 255 / 0.025) 100%
+    );
+    --page-background:
+      radial-gradient(
+        circle at 8% -12%,
+        rgb(16 96 255 / 0.11),
+        transparent 34rem
+      ),
+      radial-gradient(
+        circle at 96% 4%,
+        rgb(96 64 255 / 0.09),
+        transparent 31rem
+      ),
+      radial-gradient(
+        circle at 52% 112%,
+        rgb(0 168 200 / 0.06),
+        transparent 38rem
+      ),
+      linear-gradient(180deg, #f8f9ff 0%, #eef3ff 100%);
+    color-scheme: light;
+  }
 }
 
 * {
@@ -44,20 +140,19 @@
 html {
   min-width: 320px;
   min-height: 100%;
-  background: #071018;
+  overflow-x: hidden;
+  overflow-x: clip;
+  background: var(--color-canvas);
 }
 
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background:
-    radial-gradient(
-      circle at 82% -10%,
-      rgb(56 201 178 / 0.08),
-      transparent 32rem
-    ),
-    linear-gradient(180deg, #071018 0%, #08131c 100%);
+  overflow-x: hidden;
+  overflow-x: clip;
+  background: var(--page-background);
+  background-attachment: fixed;
 }
 
 body::before {
@@ -65,8 +160,8 @@ body::before {
   inset: 0;
   z-index: -1;
   background-image:
-    linear-gradient(rgb(103 183 232 / 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(103 183 232 / 0.025) 1px, transparent 1px);
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
   background-size: 32px 32px;
   content: "";
   mask-image: linear-gradient(to bottom, black, transparent 78%);
@@ -85,8 +180,69 @@ a {
 }
 
 ::selection {
-  color: #031613;
-  background: #5ad9c5;
+  color: var(--color-accent-ink);
+  background: var(--color-accent-strong);
+}
+
+.brand-flow {
+  background-image: var(--brand-flow);
+}
+
+.brand-logo {
+  position: relative;
+  display: block;
+  flex: none;
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid var(--logo-border);
+  background: var(--color-brand-paper);
+  box-shadow: var(--logo-shadow);
+}
+
+.brand-logo::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.48);
+  content: "";
+  pointer-events: none;
+}
+
+.brand-logo img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  max-width: none;
+  transform: translate(-50%, -50%);
+  user-select: none;
+}
+
+.brand-logo--primary {
+  aspect-ratio: 4.2 / 1;
+  border-radius: 0.65rem;
+}
+
+.brand-logo--primary img {
+  width: 126%;
+}
+
+.brand-logo--compact {
+  aspect-ratio: 1.625 / 1;
+  border-radius: 0.55rem;
+}
+
+.brand-logo--compact img {
+  width: 143%;
+}
+
+.surface-panel {
+  background-image: var(--panel-sheen);
+}
+
+.nav-active {
+  box-shadow:
+    inset 3px 0 0 var(--color-accent),
+    0 10px 30px rgb(1 5 24 / 0.08);
 }
 
 .skip-link {
@@ -96,8 +252,8 @@ a {
   z-index: 100;
   transform: translateY(-180%);
   border-radius: 0.375rem;
-  background: #38c9b2;
-  color: #031613;
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
   padding: 0.625rem 0.875rem;
   font-weight: 700;
   transition: transform 150ms ease;
@@ -105,12 +261,12 @@ a {
 
 .skip-link:focus {
   transform: translateY(0);
-  outline: 2px solid #e7f0f3;
+  outline: 2px solid var(--color-foreground);
   outline-offset: 2px;
 }
 
 .scrollbar-thin {
-  scrollbar-color: #315061 transparent;
+  scrollbar-color: var(--color-border-strong) transparent;
   scrollbar-width: thin;
 }
 
@@ -120,13 +276,17 @@ a {
   left: 50%;
   width: 100%;
   height: 1px;
-  background: linear-gradient(90deg, #315061, #1d3442);
+  background: linear-gradient(
+    90deg,
+    var(--color-border-strong),
+    var(--color-border)
+  );
   content: "";
 }
 
 .prose-safe :where(h1, h2, h3, h4) {
   margin-block: 1.4em 0.55em;
-  color: #e7f0f3;
+  color: var(--color-foreground);
   font-weight: 650;
   line-height: 1.3;
 }
@@ -148,7 +308,7 @@ a {
 }
 
 .prose-safe a {
-  color: #5ad9c5;
+  color: var(--color-accent-strong);
   text-decoration: underline;
   text-underline-offset: 0.15em;
 }
@@ -159,16 +319,16 @@ a {
 
 .prose-safe code {
   border-radius: 0.2rem;
-  background: #071018;
+  background: var(--color-canvas);
   padding: 0.1rem 0.3rem;
-  color: #a8dcfa;
+  color: var(--color-info-soft);
 }
 
 .prose-safe pre {
   overflow-x: auto;
-  border: 1px solid #1d3442;
+  border: 1px solid var(--color-border);
   border-radius: 0.5rem;
-  background: #071018;
+  background: var(--color-canvas);
   padding: 1rem;
 }
 

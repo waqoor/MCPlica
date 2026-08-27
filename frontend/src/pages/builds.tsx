@@ -19,7 +19,7 @@ export function BuildsPage() {
     refetchInterval: 5_000,
   });
   return (
-    <div className="space-y-7">
+    <div className="min-w-0 space-y-7">
       <PageHeader
         description="Installation-wide immutable build history. Filter here, then inspect exact evidence within its project."
         eyebrow="Operations"
@@ -71,7 +71,7 @@ export function BuildsPage() {
         />
       )}
       {builds.data?.length ? (
-        <div className="overflow-x-auto rounded-xl border border-border">
+        <div className="max-w-full overflow-x-auto rounded-xl border border-border">
           <table className="w-full min-w-[52rem] text-left">
             <thead className="bg-panel-raised font-mono text-[0.64rem] uppercase tracking-[0.1em] text-muted">
               <tr>

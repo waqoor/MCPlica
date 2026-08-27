@@ -83,6 +83,7 @@ async def upload_source_version(
         source_id=source_id,
         content=file,
         media_type=file.content_type or "application/octet-stream",
+        filename=file.filename,
         actor_user_id=principal.user.id,
         request_id=request.state.request_id,
     )

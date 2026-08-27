@@ -788,12 +788,10 @@ def main() -> None:
     )
     parser.add_argument(
         "--email",
-        default=os.getenv("E2E_ADMIN_EMAIL", "admin@mcplica.dev"),
+        default=os.getenv("E2E_ADMIN_EMAIL", "admin@admin.com"),
     )
     args = parser.parse_args()
-    password = os.getenv("E2E_ADMIN_PASSWORD")
-    if not password:
-        raise SystemExit("E2E_ADMIN_PASSWORD is required")
+    password = os.getenv("E2E_ADMIN_PASSWORD", "admin@321")
     result = asyncio.run(run(api_base=args.api_base, email=args.email, password=password))
     print(json.dumps(result, sort_keys=True, indent=2), flush=True)
 

@@ -13,6 +13,7 @@ export function NotFoundPage() {
           </Link>
         }
         description="The requested control-plane route does not exist or is no longer available."
+        headingLevel="h1"
         icon={Compass}
         title="Page not found"
       />

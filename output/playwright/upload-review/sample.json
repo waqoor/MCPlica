@@ -1,0 +1,6 @@
+{
+  "service": "Widget API",
+  "operations": [
+    {"method": "GET", "path": "/widgets", "purpose": "List widgets"}
+  ]
+}

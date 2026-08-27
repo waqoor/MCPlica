@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { z } from "@/lib/schemas";
 import { useAuth } from "@/auth/use-auth";
+import { BrandLogo } from "@/components/brand-logo";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -54,10 +55,11 @@ export function LoginPage() {
     <main className="relative grid min-h-screen place-items-center overflow-hidden p-4 sm:p-8">
       <div
         aria-hidden="true"
-        className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-info via-accent to-warning"
+        className="brand-flow absolute inset-x-0 top-0 h-1"
       />
       <div className="grid w-full max-w-5xl gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
         <section className="hidden lg:block">
+          <BrandLogo className="mb-9 h-12 w-[12.75rem]" loading="eager" />
           <p className="font-mono text-xs font-semibold uppercase tracking-[0.18em] text-accent">
             Self-hosted control plane
           </p>
@@ -79,11 +81,14 @@ export function LoginPage() {
           </div>
         </section>
 
-        <Card className="mx-auto w-full max-w-md border-border-strong p-6 sm:p-8">
+        <Card className="mx-auto w-full max-w-md border-border-strong bg-panel/92 p-6 backdrop-blur-xl sm:p-8">
           <div className="mb-7 flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-lg border border-accent/40 bg-accent/10 font-mono font-bold text-accent">
-              M
-            </span>
+            <BrandLogo
+              alt=""
+              className="h-9 w-[3.65rem] lg:h-10 lg:w-[4.1rem]"
+              loading="eager"
+              variant="compact"
+            />
             <div>
               <p className="text-lg font-semibold text-foreground">
                 Sign in to MCPlica

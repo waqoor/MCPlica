@@ -11,10 +11,11 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
-import { FieldHelp, Label } from "@/components/ui/label";
+import { FieldError, FieldHelp, Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { useProject } from "@/features/projects/project-context";
 import { formatBytes, formatDate, shortenHash } from "@/lib/format";
+import { MAX_UPLOAD_LABEL, uploadAccept, uploadFileError } from "@/lib/uploads";
 
 export function ProjectSourcesPage() {
   const project = useProject();
@@ -114,10 +115,12 @@ function SourceCard({
   onVersionAdded: () => void;
 }) {
   const [file, setFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
   const version = useMutation({
     mutationFn: () => sourceApi.addVersion(projectId, source.id, file!),
     onSuccess: () => {
       setFile(null);
+      setFileError(null);
       onVersionAdded();
     },
   });
@@ -225,18 +228,32 @@ function SourceCard({
             Upload a new immutable version
           </Label>
           <Input
+            accept={uploadAccept(source.kind)}
+            aria-invalid={Boolean(fileError)}
             id={`version-${source.id}`}
-            onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+            onChange={(event) => {
+              const selected = event.target.files?.[0] ?? null;
+              setFile(selected);
+              setFileError(
+                selected ? uploadFileError(selected, source.kind) : null,
+              );
+            }}
             type="file"
           />
-          <FieldHelp>
-            {latest
-              ? `Current version created ${formatDate(latest.created_at)}`
-              : "No current version"}
-          </FieldHelp>
+          {fileError ? (
+            <FieldError>{fileError}</FieldError>
+          ) : (
+            <FieldHelp>
+              {file
+                ? `${file.name} · ${(file.size / 1_000_000).toFixed(2)} MB`
+                : latest
+                  ? `Current version created ${formatDate(latest.created_at)} · ${MAX_UPLOAD_LABEL} maximum.`
+                  : `No current version · ${MAX_UPLOAD_LABEL} maximum.`}
+            </FieldHelp>
+          )}
         </div>
         <Button
-          disabled={!file || version.isPending}
+          disabled={!file || Boolean(fileError) || version.isPending}
           onClick={() => version.mutate()}
           variant="outline"
         >
@@ -292,6 +309,7 @@ function AddSourceForm({
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
   const create = useMutation({
     mutationFn: () =>
       origin === "url"
@@ -301,7 +319,7 @@ function AddSourceForm({
   });
   const ready =
     name.trim() &&
-    (origin === "url" ? /^https?:\/\//.test(url) : Boolean(file));
+    (origin === "url" ? /^https?:\/\//.test(url) : Boolean(file) && !fileError);
   return (
     <div className="space-y-4">
       <div className="space-y-2">
@@ -318,7 +336,11 @@ function AddSourceForm({
           <Label htmlFor="add-source-kind">Kind</Label>
           <Select
             id="add-source-kind"
-            onChange={(event) => setKind(event.target.value as SourceKind)}
+            onChange={(event) => {
+              const nextKind = event.target.value as SourceKind;
+              setKind(nextKind);
+              setFileError(file ? uploadFileError(file, nextKind) : null);
+            }}
             value={kind}
           >
             <option value="openapi">OpenAPI 3.x</option>
@@ -354,10 +376,26 @@ function AddSourceForm({
         <div className="space-y-2">
           <Label htmlFor="add-source-file">File</Label>
           <Input
+            accept={uploadAccept(kind)}
+            aria-invalid={Boolean(fileError)}
             id="add-source-file"
-            onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+            onChange={(event) => {
+              const selected = event.target.files?.[0] ?? null;
+              setFile(selected);
+              setFileError(selected ? uploadFileError(selected, kind) : null);
+              if (selected && !name.trim()) setName(selected.name);
+            }}
             type="file"
           />
+          {fileError ? (
+            <FieldError>{fileError}</FieldError>
+          ) : (
+            <FieldHelp>
+              {kind === "documentation"
+                ? `JSON, Markdown, TXT, CSV, XLSX, DOCX, HTML, or PDF · ${MAX_UPLOAD_LABEL} maximum.`
+                : `OpenAPI 3.x or API Inventory v1 JSON/YAML · ${MAX_UPLOAD_LABEL} maximum.`}
+            </FieldHelp>
+          )}
         </div>
       )}
       {create.error && <Alert tone="danger">{create.error.message}</Alert>}

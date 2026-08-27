@@ -1,0 +1,3 @@
+Widget API reference
+
+The listWidgets operation returns all widgets visible to the authenticated caller.

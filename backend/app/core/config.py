@@ -109,8 +109,8 @@ class Settings(BaseSettings):
     login_rate_limit_window_seconds: int = Field(default=300, ge=10, le=3600)
 
     artifact_root: str = "./artifacts"
-    upload_max_bytes: int = Field(default=20_000_000, ge=1_024, le=500_000_000)
-    document_max_bytes: int = Field(default=25_000_000, ge=1_024, le=500_000_000)
+    upload_max_bytes: int = Field(default=100_000_000, ge=1_024, le=500_000_000)
+    document_max_bytes: int = Field(default=100_000_000, ge=1_024, le=500_000_000)
     fetch_max_bytes: int = Field(default=25_000_000, ge=1_024, le=500_000_000)
     fetch_timeout_seconds: float = Field(default=30.0, gt=0, le=300)
     fetch_max_redirects: int = Field(default=3, ge=0, le=10)

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import PurePath
 from typing import Literal
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from mcp_contracts.json_types import JsonObject
@@ -22,7 +24,7 @@ from app.domain.sources import (
     SourceVersionMetadataRecord,
     SourceVersionRecord,
 )
-from app.parsers.documentation import DocumentChunk
+from app.parsers.documentation import DocumentChunk, detect_office_document_format
 from app.parsers.structured import parse_json_or_yaml
 from app.providers.storage import ArtifactStorage
 from app.repositories.audit import AuditRepository
@@ -38,6 +40,30 @@ _PARSE_ERROR_CODES = frozenset(
     {"SOURCE_PARSE_ERROR", "REFERENCE_RESOLUTION_ERROR", "CANONICALIZATION_ERROR"}
 )
 _PREVIEW_CHAR_LIMIT = 20_000
+_DOCUMENT_FORMAT_BY_EXTENSION = {
+    ".csv": "csv",
+    ".docx": "docx",
+    ".htm": "html",
+    ".html": "html",
+    ".json": "json",
+    ".markdown": "markdown",
+    ".md": "markdown",
+    ".pdf": "pdf",
+    ".txt": "text",
+    ".xlsx": "xlsx",
+}
+_DOCUMENT_FORMAT_BY_MEDIA_TYPE = {
+    "application/json": "json",
+    "application/pdf": "pdf",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+    "application/xhtml+xml": "html",
+    "text/csv": "csv",
+    "text/html": "html",
+    "text/markdown": "markdown",
+    "text/plain": "text",
+    "text/x-markdown": "markdown",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,7 +79,13 @@ def _parse_executable(value: bytes) -> tuple[str, JsonObject]:
     return detected, parsed
 
 
-def _detect_format(source: ProjectSourceRecord, value: bytes, media_type: str) -> str:
+def _detect_format(
+    source: ProjectSourceRecord,
+    value: bytes,
+    media_type: str,
+    *,
+    filename: str | None = None,
+) -> str:
     if not value:
         raise SourceParseError("Source content is empty")
     if source.kind in {SourceKind.OPENAPI, SourceKind.API_INVENTORY}:
@@ -67,26 +99,33 @@ def _detect_format(source: ProjectSourceRecord, value: bytes, media_type: str) -
         return detected
 
     normalized_media = media_type.partition(";")[0].strip().casefold()
-    name = source.name.casefold()
-    if value.startswith(b"%PDF-") or normalized_media == "application/pdf" or name.endswith(".pdf"):
+    name = (filename or source.name).strip().casefold()
+    extension_format = _DOCUMENT_FORMAT_BY_EXTENSION.get(PurePath(name).suffix)
+    media_format = _DOCUMENT_FORMAT_BY_MEDIA_TYPE.get(normalized_media)
+    if value.startswith(b"%PDF-") or media_format == "pdf" or extension_format == "pdf":
         if not value.startswith(b"%PDF-"):
             raise SourceParseError("PDF documentation does not contain a valid PDF header")
         return "pdf"
+    if value.startswith((b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08")):
+        return detect_office_document_format(value)
+    if media_format in {"xlsx", "docx"} or extension_format in {"xlsx", "docx"}:
+        raise SourceParseError("Office document does not contain a valid XLSX or DOCX package")
     try:
         value.decode("utf-8-sig")
     except UnicodeDecodeError as exc:
-        raise SourceParseError("Documentation must be UTF-8 text or a valid PDF") from exc
-    if normalized_media in {"text/html", "application/xhtml+xml"} or name.endswith(
-        (".html", ".htm")
-    ):
-        return "html"
-    if normalized_media in {"text/markdown", "text/x-markdown"} or name.endswith(
-        (".md", ".markdown")
-    ):
-        return "markdown"
-    if normalized_media.startswith("text/") or name.endswith(".txt"):
+        raise SourceParseError(
+            "Documentation must be UTF-8 JSON, Markdown, text, CSV, or HTML, "
+            "or a valid XLSX, DOCX, or PDF"
+        ) from exc
+    if extension_format is not None:
+        return extension_format
+    if media_format is not None:
+        return media_format
+    if normalized_media.startswith("text/"):
         return "text"
-    raise SourceParseError("Unsupported documentation media type")
+    raise SourceParseError(
+        "Unsupported documentation format; use JSON, Markdown, TXT, CSV, XLSX, DOCX, or PDF"
+    )
 
 
 class SourceService:
@@ -188,6 +227,7 @@ class SourceService:
         source_id: UUID,
         content: AsyncReadable,
         media_type: str,
+        filename: str | None,
         actor_user_id: UUID,
         request_id: str | None,
     ) -> SourceVersionResult:
@@ -207,7 +247,12 @@ class SourceService:
         )
         try:
             value = await self._storage.get_staged(staged, max_bytes=max_bytes)
-            detected_format = _detect_format(source, value, media_type)
+            detected_format = _detect_format(
+                source,
+                value,
+                media_type,
+                filename=filename,
+            )
             stored = await self._storage.commit_staged(staged)
         except BaseException:
             await self._storage.discard_staged(staged)
@@ -238,7 +283,11 @@ class SourceService:
             raise InvalidStateError("Only URL sources can be refreshed")
         latest = await self.latest_version(source_id)
         headers: dict[str, str] = {
-            "Accept": "application/json, application/yaml, text/*, application/pdf"
+            "Accept": (
+                "application/json, application/yaml, text/*, application/pdf, "
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, "
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
         }
         if latest and latest.source_etag:
             headers["If-None-Match"] = latest.source_etag
@@ -259,7 +308,13 @@ class SourceService:
                 )
             return SourceVersionResult(latest, deduplicated=True)
         media_type = response.headers.get("Content-Type", "application/octet-stream")
-        detected_format = _detect_format(source, response.body, media_type)
+        remote_name = PurePath(urlsplit(source.source_url).path).name or source.name
+        detected_format = _detect_format(
+            source,
+            response.body,
+            media_type,
+            filename=remote_name,
+        )
         stored = await self._storage.put_bytes(
             f"projects/{project_id}/sources",
             response.body,

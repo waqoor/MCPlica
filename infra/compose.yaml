@@ -68,6 +68,9 @@ services:
     container_name: milvus-standalone
     image: milvusdb/milvus:v3.0.0@sha256:49371c30af46b1013e4d3e0b980e691d81376d69cdbe1b372725baf1d7255862
     command: ["milvus", "run", "standalone"]
+    # Recover from transient standalone failures (for example, an etcd timeout)
+    # without requiring an operator to notice and restart the container manually.
+    restart: unless-stopped
     # Milvus probes the container cgroup limit when sizing internal resources.
     # Keep the default at its documented standalone minimum while allowing
     # operators to raise it for larger indexes.
@@ -110,7 +113,10 @@ services:
       - "127.0.0.1:${API_PORT:-8000}:8000"
     read_only: true
     tmpfs:
-      - /tmp:size=64m,mode=1777
+      # Starlette spools multipart files to /tmp before the bounded source
+      # storage layer reads them. Leave headroom above the 100 MB default so
+      # valid boundary uploads reach application validation instead of ENOSPC.
+      - /tmp:size=256m,mode=1777
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true

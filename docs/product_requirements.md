@@ -275,7 +275,7 @@ Requirements are normative. IDs must be referenced by implementation/tests where
 
 **FR-SRC-003** — The platform shall accept executable sources from administrator-provided URLs using the secure fetch subsystem.
 
-**FR-SRC-004** — The platform shall accept supplemental Markdown, text, HTML, and text-extractable PDF documentation.
+**FR-SRC-004** — The platform shall accept supplemental JSON, Markdown, text, CSV, XLSX, DOCX, HTML, and text-extractable PDF documentation.
 
 **FR-SRC-005** — Every source update shall create an immutable source version identified by a content hash.
 

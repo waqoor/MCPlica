@@ -42,8 +42,8 @@ Production startup rejects missing encryption/signing/pepper keys, an insecure f
 | `BUILD_CONCURRENCY`                    |        2 | 1–32                                                  |
 | `DEPLOYMENT_JOB_TIMEOUT_SECONDS`       |      900 | 60–7200                                               |
 | `DEPLOYMENT_JOB_MAX_ATTEMPTS`          |        3 | 1–8                                                   |
-| `UPLOAD_MAX_BYTES`                     | 20000000 | 1024–500000000                                        |
-| `DOCUMENT_MAX_BYTES`                   | 25000000 | 1024–500000000                                        |
+| `UPLOAD_MAX_BYTES`                     | 100000000 | 1024–500000000                                       |
+| `DOCUMENT_MAX_BYTES`                   | 100000000 | 1024–500000000                                       |
 | `FETCH_MAX_BYTES`                      | 25000000 | 1024–500000000                                        |
 | `FETCH_MAX_REDIRECTS`                  |        3 | 0–10, policy checked at every hop                     |
 | `FETCH_TIMEOUT_SECONDS`                |       30 | >0–300 seconds per request phase                      |

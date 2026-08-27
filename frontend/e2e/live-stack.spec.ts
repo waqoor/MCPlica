@@ -1,18 +1,13 @@
 import { expect, test } from "@playwright/test";
 
 const liveEnabled = process.env.E2E_LIVE === "1";
-const adminEmail = process.env.E2E_ADMIN_EMAIL;
-const adminPassword = process.env.E2E_ADMIN_PASSWORD;
+const adminEmail = process.env.E2E_ADMIN_EMAIL ?? "admin@admin.com";
+const adminPassword = process.env.E2E_ADMIN_PASSWORD ?? "admin@321";
 
 test("authenticates against Compose and exposes the active rollback runtime", async ({
   page,
 }) => {
   test.skip(!liveEnabled, "Live Compose acceptance is opt-in");
-  test.skip(
-    !adminEmail || !adminPassword,
-    "Live administrator credentials are required",
-  );
-
   const cspViolations: string[] = [];
   page.on("console", (message) => {
     if (/content-security-policy|unsafe-eval/i.test(message.text())) {
@@ -26,8 +21,8 @@ test("authenticates against Compose and exposes the active rollback runtime", as
   });
 
   await page.goto("/login");
-  await page.getByLabel("Email").fill(adminEmail!);
-  await page.getByLabel("Password").fill(adminPassword!);
+  await page.getByLabel("Email").fill(adminEmail);
+  await page.getByLabel("Password").fill(adminPassword);
   await page.getByRole("button", { name: "Sign in" }).click();
 
   await expect(
@@ -61,15 +56,18 @@ test("authenticates against Compose and exposes the active rollback runtime", as
   await expect(
     page
       .getByText("Indexed chunks", { exact: true })
+      .first()
       .locator("..")
-      .getByText("1"),
+      .getByText("1", { exact: true }),
   ).toBeVisible();
 
   await page.getByRole("link", { name: "Documentation", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Documentation", exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("mcplica-fixture/embedding")).toBeVisible();
+  await expect(
+    page.getByText("mcplica-fixture/embedding").first(),
+  ).toBeVisible();
   await expect(page.getByText("Pending index", { exact: true })).toHaveCount(0);
 
   await page.getByRole("link", { name: "Deployment", exact: true }).click();

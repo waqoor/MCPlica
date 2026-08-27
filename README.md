@@ -67,18 +67,17 @@ docs/                Authoritative implementation specifications
    make install-frontend
    ```
 
-5. Start infrastructure/applications and apply migrations:
+5. Start infrastructure/applications. This waits for healthy services, applies
+   migrations, and creates the development administrator when it does not exist:
 
    ```bash
    make compose-up
-   docker compose --env-file .env -f infra/compose.yaml exec api alembic -c ../migrations/alembic.ini upgrade head
    ```
 
-6. Bootstrap the first administrator using the non-echoing CLI, remove the bootstrap secret, then open:
+6. Sign in with the development defaults:
 
-   ```bash
-   docker compose --env-file .env -f infra/compose.yaml exec api python -m app.cli.bootstrap_admin --email admin@example.com --display-name "MCPlica Admin"
-   ```
+   - Email: `admin@admin.com`
+   - Password: `admin@321`
 
    - MCPlica UI: `http://localhost:8080`
    - Backend OpenAPI: `http://localhost:8000/docs`
@@ -86,6 +85,10 @@ docs/                Authoritative implementation specifications
 
    PostgreSQL, Redis, Milvus, etcd, and MinIO stay exclusively on the internal
    builder network and are intentionally not published on host ports.
+
+   These well-known credentials are development-only. The seed command refuses
+   to run outside `ENV=development`; production installation continues to use the
+   prompted bootstrap flow documented in `docs/operations/installation.md`.
 
 ## Local development without full Compose
 

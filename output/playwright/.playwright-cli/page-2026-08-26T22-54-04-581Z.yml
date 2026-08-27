@@ -1,0 +1,128 @@
+- generic [ref=f1e40]:
+  - link "Skip to main content" [ref=f1e41] [cursor=pointer]:
+    - /url: "#main-content"
+  - complementary [ref=f1e42]:
+    - generic [ref=f1e43]:
+      - link "MCPlica dashboard" [ref=f1e46] [cursor=pointer]:
+        - /url: /
+        - generic [ref=f1e48]: API → MCP control plane
+      - navigation "Primary" [ref=f1e49]:
+        - link "Dashboard" [ref=f1e50] [cursor=pointer]:
+          - /url: /
+        - link "Projects" [ref=f1e57] [cursor=pointer]:
+          - /url: /projects
+        - link "Builds" [ref=f1e71] [cursor=pointer]:
+          - /url: /builds
+        - link "Deployments" [ref=f1e79] [cursor=pointer]:
+          - /url: /deployments
+        - link "Activity" [ref=f1e88] [cursor=pointer]:
+          - /url: /activity
+        - link "Settings" [ref=f1e94] [cursor=pointer]:
+          - /url: /settings
+      - generic [ref=f1e101]:
+        - generic [ref=f1e102]:
+          - generic [ref=f1e103]: Control plane
+          - generic [ref=f1e104]: Ready
+        - paragraph [ref=f1e105]: MCPlica Admin
+        - paragraph [ref=f1e106]: admin@admin.com
+  - generic [ref=f1e107]:
+    - banner [ref=f1e108]:
+      - generic [ref=f1e110]:
+        - paragraph [ref=f1e111]: MCPlica Admin
+        - paragraph [ref=f1e112]: admin access
+      - button "Sign out" [ref=f1e113] [cursor=pointer]
+    - main [ref=f1e118]:
+      - generic [ref=f1e119]:
+        - generic [ref=f1e120]:
+          - generic [ref=f1e121]:
+            - paragraph [ref=f1e122]: Control plane
+            - heading "Operational overview" [level=1] [ref=f1e123]
+            - paragraph [ref=f1e124]: Build, validate, and operate isolated MCP runtimes from deterministic API contracts.
+          - link "New project" [ref=f1e126] [cursor=pointer]:
+            - /url: /projects/new
+        - region "Workspace metrics" [ref=f1e128]:
+          - generic [ref=f1e132]:
+            - paragraph [ref=f1e133]: Projects
+            - paragraph [ref=f1e134]: "1"
+            - paragraph [ref=f1e135]: in this installation
+          - generic [ref=f1e150]:
+            - paragraph [ref=f1e151]: Builds active
+            - paragraph [ref=f1e152]: "0"
+            - paragraph [ref=f1e153]: 0 recent failures
+          - generic [ref=f1e162]:
+            - paragraph [ref=f1e163]: Deployments
+            - paragraph [ref=f1e164]: "1"
+            - paragraph [ref=f1e165]: active project references
+          - generic [ref=f1e175]:
+            - paragraph [ref=f1e176]: System
+            - paragraph [ref=f1e177]: ready
+            - paragraph [ref=f1e178]: builder dependencies
+        - generic [ref=f1e192]:
+          - generic [ref=f1e193]:
+            - generic [ref=f1e194]:
+              - generic [ref=f1e195]:
+                - heading "Recent builds" [level=2] [ref=f1e196]
+                - paragraph [ref=f1e197]: Immutable compilation attempts across projects
+              - link "View all" [ref=f1e198] [cursor=pointer]:
+                - /url: /builds
+            - generic [ref=f1e199]:
+              - link "#3 Project build Aug 27, 2026, 1:49 AM Ready" [ref=f1e200] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/builds/7f8f3088-eabd-4f32-b524-dad95a2ad5aa
+                - generic [ref=f1e201]: "#3"
+                - generic [ref=f1e202]:
+                  - generic [ref=f1e203]: Project build
+                  - generic [ref=f1e204]: Aug 27, 2026, 1:49 AM
+                - generic [ref=f1e205]: Ready
+              - link "#2 Project build Aug 26, 2026, 9:06 PM Ready" [ref=f1e206] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/builds/399a2e5b-ec75-438d-b77d-a0cc78b8ddaf
+                - generic [ref=f1e207]: "#2"
+                - generic [ref=f1e208]:
+                  - generic [ref=f1e209]: Project build
+                  - generic [ref=f1e210]: Aug 26, 2026, 9:06 PM
+                - generic [ref=f1e211]: Ready
+              - link "#1 Project build Aug 26, 2026, 9:05 PM Ready" [ref=f1e212] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/builds/e234a9ee-99d4-4f69-bee9-af5f340294a5
+                - generic [ref=f1e213]: "#1"
+                - generic [ref=f1e214]:
+                  - generic [ref=f1e215]: Project build
+                  - generic [ref=f1e216]: Aug 26, 2026, 9:05 PM
+                - generic [ref=f1e217]: Ready
+          - generic [ref=f1e218]:
+            - generic [ref=f1e219]:
+              - generic [ref=f1e220]:
+                - generic [ref=f1e221]:
+                  - heading "System readiness" [level=2] [ref=f1e222]
+                  - paragraph [ref=f1e223]: Serving runtimes stay independent of build-time AI and vector services.
+                - generic [ref=f1e224]: Ready
+              - generic [ref=f1e225]:
+                - generic [ref=f1e226]:
+                  - generic [ref=f1e227]: postgres
+                  - generic [ref=f1e228]: Ready
+                - generic [ref=f1e229]:
+                  - generic [ref=f1e230]: redis
+                  - generic [ref=f1e231]: Ready
+                - generic [ref=f1e232]:
+                  - generic [ref=f1e233]: artifact_storage
+                  - generic [ref=f1e234]: Ready
+                - generic [ref=f1e235]:
+                  - generic [ref=f1e236]: build_queue
+                  - generic [ref=f1e237]: Ready
+                - generic [ref=f1e238]:
+                  - generic [ref=f1e239]: milvus
+                  - generic [ref=f1e240]: Ready
+                - generic [ref=f1e241]:
+                  - generic [ref=f1e242]: openrouter
+                  - generic [ref=f1e243]: Ready
+            - generic [ref=f1e244]:
+              - generic [ref=f1e245]:
+                - generic [ref=f1e246]:
+                  - heading "Deployment workspace" [level=2] [ref=f1e247]
+                  - paragraph [ref=f1e248]: Open a project to inspect health and lifecycle history
+                - link "View deployments" [ref=f1e249] [cursor=pointer]:
+                  - /url: /deployments
+              - link "MCPlica final acceptance final-acceptance.mcp.localhost Active" [ref=f1e253] [cursor=pointer]:
+                - /url: /projects/845d3c75-ca77-4026-ab2b-dc04260b741b/deployment
+                - generic [ref=f1e254]:
+                  - paragraph [ref=f1e255]: MCPlica final acceptance
+                  - paragraph [ref=f1e256]: final-acceptance.mcp.localhost
+                - generic [ref=f1e257]: Active

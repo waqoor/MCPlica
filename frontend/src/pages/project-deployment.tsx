@@ -143,7 +143,7 @@ export function ProjectDeploymentPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       <div>
         <h2 className="text-xl font-semibold text-foreground">
           Deployment and MCP access
@@ -330,7 +330,7 @@ export function ProjectDeploymentPage() {
           </div>
         </CardHeader>
         {deployments.data.length ? (
-          <div className="overflow-x-auto">
+          <div className="max-w-full overflow-x-auto">
             <table className="w-full min-w-[46rem] text-left">
               <thead className="font-mono text-[0.64rem] uppercase tracking-[0.1em] text-muted">
                 <tr>

@@ -1,0 +1,3 @@
+method,path,summary,description
+GET,/widgets,List widgets,Returns all widgets visible to the authenticated caller.
+POST,/widgets,Create widget,Creates a widget from the submitted JSON body.

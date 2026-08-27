@@ -4,16 +4,20 @@ from bs4 import BeautifulSoup
 
 from app.core.exceptions import SourceParseError
 
+from .common import decode_utf8, ensure_text_limit
 from .models import DocumentSection, NormalizedDocument
 
 _CONTENT_TAGS = {"p", "li", "pre", "blockquote", "dt", "dd", "td", "th"}
 
 
-def parse_html(value: bytes, *, source_version_id: UUID, title: str | None) -> NormalizedDocument:
-    try:
-        decoded = value.decode("utf-8-sig")
-    except UnicodeDecodeError as exc:
-        raise SourceParseError("HTML documentation must be UTF-8") from exc
+def parse_html(
+    value: bytes,
+    *,
+    source_version_id: UUID,
+    title: str | None,
+    max_text_chars: int,
+) -> NormalizedDocument:
+    decoded = decode_utf8(value, label="HTML", max_text_chars=max_text_chars)
     soup = BeautifulSoup(decoded, "html.parser")
     for element in soup(["script", "style", "noscript", "iframe", "object", "template"]):
         element.decompose()
@@ -64,10 +68,12 @@ def parse_html(value: bytes, *, source_version_id: UUID, title: str | None) -> N
                 ordinal=0,
             )
         )
+    text = "\n\n".join(section.text for section in sections)
+    ensure_text_limit(text, label="HTML", max_text_chars=max_text_chars)
     return NormalizedDocument(
         source_version_id=source_version_id,
         title=document_title,
-        text="\n\n".join(section.text for section in sections),
+        text=text,
         sections=sections,
         metadata={"format": "html"},
     )
