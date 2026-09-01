@@ -1,10 +1,22 @@
+# All processes instantiate the same Settings model, including migrations.
+# Apply production routing and image invariants consistently to every process.
+x-production-environment: &production-environment
+  ENV: production
+  API_DOMAIN: ${API_DOMAIN:?Set API_DOMAIN}
+  FRONTEND_ORIGIN: https://${UI_DOMAIN:?Set UI_DOMAIN}
+  MCP_DOMAIN: ${MCP_DOMAIN:?Set MCP_DOMAIN}
+  MCP_RUNTIME_IMAGE: ${MCP_RUNTIME_IMAGE:?Set MCP_RUNTIME_IMAGE to an immutable release digest}
+  TRAEFIK_ENTRYPOINT: websecure
+  TRAEFIK_TLS: "true"
+  TRAEFIK_CERT_RESOLVER: letsencrypt
+  RUNTIME_HOST_ROOT: ${RUNTIME_HOST_ROOT:?Set an absolute RUNTIME_HOST_ROOT}
+
 services:
   migrate:
     build: !reset null
     image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE to an immutable release digest}
     pull_policy: always
-    environment:
-      ENV: production
+    environment: *production-environment
 
   runtime-init:
     image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE to an immutable release digest}
@@ -15,15 +27,7 @@ services:
     image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE to an immutable release digest}
     build: !reset null
     pull_policy: always
-    environment:
-      ENV: production
-      FRONTEND_ORIGIN: https://${UI_DOMAIN:?Set UI_DOMAIN}
-      MCP_DOMAIN: ${MCP_DOMAIN:?Set MCP_DOMAIN}
-      MCP_RUNTIME_IMAGE: ${MCP_RUNTIME_IMAGE:?Set MCP_RUNTIME_IMAGE to an immutable release digest}
-      TRAEFIK_ENTRYPOINT: websecure
-      TRAEFIK_TLS: "true"
-      TRAEFIK_CERT_RESOLVER: letsencrypt
-      RUNTIME_HOST_ROOT: ${RUNTIME_HOST_ROOT:?Set an absolute RUNTIME_HOST_ROOT}
+    environment: *production-environment
     labels:
       traefik.http.routers.mcplica-api.rule: Host(`${API_DOMAIN:?Set API_DOMAIN}`)
       traefik.http.routers.mcplica-api.entrypoints: websecure
@@ -34,10 +38,7 @@ services:
     build: !reset null
     image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE to an immutable release digest}
     pull_policy: always
-    environment:
-      ENV: production
-      MCP_DOMAIN: ${MCP_DOMAIN:?Set MCP_DOMAIN}
-      MCP_RUNTIME_IMAGE: ${MCP_RUNTIME_IMAGE:?Set MCP_RUNTIME_IMAGE to an immutable release digest}
+    environment: *production-environment
 
   runtime-validator:
     image: ${MCP_RUNTIME_IMAGE:?Set MCP_RUNTIME_IMAGE to an immutable release digest}
@@ -50,14 +51,7 @@ services:
     build: !reset null
     image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE to an immutable release digest}
     pull_policy: always
-    environment:
-      ENV: production
-      MCP_DOMAIN: ${MCP_DOMAIN:?Set MCP_DOMAIN}
-      MCP_RUNTIME_IMAGE: ${MCP_RUNTIME_IMAGE:?Set MCP_RUNTIME_IMAGE to an immutable release digest}
-      TRAEFIK_ENTRYPOINT: websecure
-      TRAEFIK_TLS: "true"
-      TRAEFIK_CERT_RESOLVER: letsencrypt
-      RUNTIME_HOST_ROOT: ${RUNTIME_HOST_ROOT:?Set an absolute RUNTIME_HOST_ROOT}
+    environment: *production-environment
 
   frontend:
     image: ${FRONTEND_IMAGE:?Set FRONTEND_IMAGE to an immutable release digest}
@@ -87,7 +81,8 @@ services:
       - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
       - --certificatesresolvers.letsencrypt.acme.tlschallenge=true
       - --log.level=INFO
-    ports:
+    ports: !override
+      - "80:80"
       - "443:443"
     volumes:
       - letsencrypt-data:/letsencrypt

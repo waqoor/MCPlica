@@ -59,7 +59,7 @@ jobs:
       - run: uv run --frozen --extra dev ruff format --check app tests ../packages/contracts/src ../packages/contracts/tests
       - run: uv run --frozen --extra dev pyright app ../packages/contracts/src
       - run: uv run --frozen --extra dev alembic -c ../migrations/alembic.ini upgrade head
-      - run: uv run --frozen --extra dev pytest -c pyproject.toml tests ../packages/contracts/tests --cov=app --cov-report=json:coverage-critical.json
+      - run: uv run --frozen --extra dev pytest -c pyproject.toml tests ../packages/contracts/tests ../tests/integration/test_fixture_server.py --cov=app --cov-report=json:coverage-critical.json
       - run: uv run --frozen --extra dev python scripts/check_critical_coverage.py coverage-critical.json
       - run: uv run --frozen --extra dev alembic -c ../migrations/alembic.ini check
 
@@ -170,16 +170,10 @@ jobs:
         run: python tests/integration/prepare_compose.py
       - name: Validate canonical Compose configuration
         run: docker compose --env-file .env -f infra/compose.yaml config --quiet
-      - name: Validate production override without using live production credentials
+      - name: Validate resolved production settings without production credentials
         env:
-          BACKEND_IMAGE: mcplica/backend@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-          FRONTEND_IMAGE: mcplica/frontend@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-          MCP_RUNTIME_IMAGE: mcplica/runtime@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-          UI_DOMAIN: ui.example.com
-          API_DOMAIN: api.example.com
-          MCP_DOMAIN: mcp.example.com
-          ACME_EMAIL: operator@example.com
-        run: docker compose --env-file .env -f infra/compose.yaml -f infra/compose.production.yaml config --quiet
+          PYTHONPATH: backend
+        run: uv run --project backend --frozen --extra dev python tests/integration/production_config_check.py
       - name: Build canonical application images
         run: docker compose --env-file .env -f infra/compose.yaml build api runtime-validator frontend
       - name: Start the complete platform, including schema and mount initialization
@@ -210,6 +204,8 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm exec playwright install --with-deps chromium
           pnpm exec playwright test e2e/live-stack.spec.ts --project=chromium
+      - name: Verify service recovery after all acceptance checks
+        run: python tests/integration/compose_evidence.py --check
       - name: Collect bounded redacted diagnostics
         if: always()
         run: python tests/integration/compose_evidence.py

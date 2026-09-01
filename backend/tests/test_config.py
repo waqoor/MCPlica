@@ -13,6 +13,7 @@ class _ComposeLoader(yaml.SafeLoader):
 
 
 _ComposeLoader.add_constructor("!reset", lambda _loader, _node: None)
+_ComposeLoader.add_constructor("!override", yaml.SafeLoader.construct_sequence)
 
 
 def test_default_admin_credentials_must_be_configured_as_a_pair() -> None:
@@ -121,6 +122,7 @@ def test_compose_application_services_wait_for_schema_migrations() -> None:
         (root / "infra" / "compose.production.yaml").read_text(encoding="utf-8"),
         Loader=_ComposeLoader,
     )
+    assert production["services"]["traefik"]["ports"] == ["80:80", "443:443"]
     assert production["services"]["migrate"].get("build") is None
     assert production["services"]["migrate"]["image"].startswith("${BACKEND_IMAGE:")
     for service_name in ("api", "runtime-validator", "frontend"):
