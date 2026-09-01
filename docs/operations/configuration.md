@@ -141,3 +141,34 @@ Runtime request, response, manifest, secret-bundle, connection-pool, keepalive, 
 ## Secret rotation
 
 Rotate project upstream credentials and MCP access tokens through the API/UI so audit and overlap rules are applied. Upstream secret rotation preserves the credential's source-security binding and can proceed against that stored binding after source drift; changing a scheme/name/location requires a replacement credential and new Build. Rotating the control-plane encryption key requires a tested decrypt/re-encrypt migration and rollback copy; changing it directly makes existing ciphertext unreadable. Rotating signing/pepper keys invalidates existing sessions and must be followed by an API restart. Never log old or new values.
+
+## Compose environment resolution
+
+`--env-file` selects interpolation inputs; it does not by itself replace a service's
+`env_file`. The Makefile forwards `ENV_FILE` as an absolute `MCPLICA_ENV_FILE` so both
+use the same file. For direct commands with a non-default file, export
+`MCPLICA_ENV_FILE` to its absolute path and also pass `--env-file` with that path.
+Do not print a fully resolved Compose model into shared logs: it contains secrets.
+Use `config --quiet` for routine syntax checks.
+
+The common control-plane environment is shared by migrations, API, builder worker,
+and deployment worker. Explicit shell overrides for database URL, queue names,
+runtime paths/image, and edge settings are therefore applied consistently.
+`RUNTIME_WORKER_ROOT` must match the bind-mount destination; `RUNTIME_HOST_ROOT` is
+the corresponding daemon-visible source. Queue names must remain distinct.
+`runtime-init` receives only UID, GID, and the worker root, not application secrets.
+The production override applies production environment/TLS/domain/origin/image
+invariants to all four processes, including migrations.
+
+The canonical bundled topology intentionally fixes Redis/Milvus DNS and artifact
+paths to `redis`, `milvus`, and `/data/artifacts`; those are not host-shell service
+selection switches. External-service installations require a coherent reviewed
+Compose configuration, including worker commands and health checks, rather than
+changing only one environment variable.
+
+`tests/integration/production_config_check.py` resolves the production Compose model
+using private temporary test configuration and instantiates each process's real
+`Settings`. It checks TLS/ports, queue/mount overrides, initializer secret isolation,
+and rejection of a missing release image. It neither starts production nor uses
+real release-image identifiers. Production requires Compose 2.24.4 or newer and
+publishes exactly ports 80 and 443 on Traefik, without retaining development 8443.

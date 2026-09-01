@@ -1,6 +1,9 @@
 # Production domains and TLS
 
-The base Compose file is a loopback-bound development topology. Production must use `infra/compose.production.yaml`, real DNS, HTTPS, immutable release image digests, and a protected host runtime root.
+The base Compose file is a development topology with loopback API/UI ports and a published HTTP edge; it is not an internet-safe production configuration. Production must use `infra/compose.production.yaml`, real DNS, HTTPS, immutable release image digests, and a protected host runtime root.
+
+Compose 2.24.4 or newer is required. The production override replaces, rather than
+appends to, the development edge port list and publishes ports 80 and 443.
 
 ## DNS and firewall
 
@@ -17,18 +20,22 @@ Point them to the Traefik host. Permit inbound TCP 80 only for HTTPS redirection
 Set `UI_DOMAIN`, `API_DOMAIN`, `MCP_DOMAIN`, and `ACME_EMAIL`. Set backend, frontend, and runtime images to the exact `image@sha256:digest` values in a verified GitHub release. Set `RUNTIME_HOST_ROOT` to a dedicated absolute Docker-host directory and keep `RUNTIME_WORKER_ROOT=/runtime-host`:
 
 ```bash
-sudo install -d -o 10001 -g 10001 -m 0750 /var/lib/mcplica/runtime
+sudo install -d -o 10001 -g 10001 -m 0700 /var/lib/mcplica/runtime
 chmod 0600 .env
 ```
 
 Compose mounts that host directory at the deployment-worker root. The deployment worker alone receives the Docker socket and writable mount. The API and builder-worker containers must not receive either deployment capability.
+
+For a non-default environment filename, set `MCPLICA_ENV_FILE` to the same absolute
+path passed to `--env-file`; see `installation.md`. All four control-plane processes
+receive the same production routing invariants.
 
 ## Validate and start
 
 ```bash
 docker compose --env-file .env -f infra/compose.yaml -f infra/compose.production.yaml config --quiet
 docker compose --env-file .env -f infra/compose.yaml -f infra/compose.production.yaml pull
-docker compose --env-file .env -f infra/compose.yaml -f infra/compose.production.yaml up -d --no-build
+docker compose --env-file .env -f infra/compose.yaml -f infra/compose.production.yaml up --no-build --detach --wait --wait-timeout 300
 ```
 
 The override disables the dashboard, redirects HTTP to HTTPS, enables the `websecure` entrypoint, and obtains certificates with the ACME TLS challenge. Protect the ACME volume and include it in host recovery planning; private keys must not be copied into the repository.
