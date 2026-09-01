@@ -145,6 +145,9 @@ def test_mixed_documentation_and_semantics_are_labeled_and_generation_isolated()
     }
     assert {chunk.generation_id for chunk in mixed} == {first_generation}
     assert {chunk.generation_id for chunk in semantic_second} == {second_generation}
-    assert [chunk.chunk_id for chunk in semantic_first] == [
+    assert {chunk.chunk_id for chunk in semantic_first}.isdisjoint(
         chunk.chunk_id for chunk in semantic_second
+    )
+    assert [chunk.content_sha256 for chunk in semantic_first] == [
+        chunk.content_sha256 for chunk in semantic_second
     ]

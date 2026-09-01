@@ -55,6 +55,9 @@ def chunk_document(
             content_digest = hashlib.sha256(chunk_text.encode("utf-8")).hexdigest()
             identity = "\x00".join(
                 [
+                    str(project_id),
+                    str(generation_id),
+                    str(document.source_version_id),
                     source_content_sha256,
                     "/".join(item.strip().casefold() for item in section.path),
                     str(ordinal),

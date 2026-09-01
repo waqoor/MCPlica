@@ -50,6 +50,7 @@ def main() -> None:
             BUILD_QUEUE_NAME="config-check-builds",
             DEPLOYMENT_QUEUE_NAME="config-check-deployments",
             RUNTIME_WORKER_ROOT="/config-check-runtime",
+            TRAEFIK_NETWORK="mcplica-config-check-edge",
         )
         command = [
             "docker", "compose", "--env-file", str(environment_file),
@@ -60,7 +61,8 @@ def main() -> None:
             command, cwd=ROOT, env=environment, capture_output=True,
             text=True, check=True, timeout=30,
         )
-        services = json.loads(result.stdout)["services"]
+        model = json.loads(result.stdout)
+        services = model["services"]
         for name in CONTROL_PLANE:
             values = services[name]["environment"]
             with patch.dict(os.environ, {key: str(value) for key, value in values.items()}, clear=True):
@@ -85,6 +87,11 @@ def main() -> None:
         assert set(services["runtime-init"]["environment"]) == {
             "RUNTIME_UID", "RUNTIME_GID", "RUNTIME_WORKER_ROOT",
         }
+        assert model["networks"]["edge"]["name"] == environment["TRAEFIK_NETWORK"]
+        for name in ("api", "frontend"):
+            assert services[name]["labels"]["traefik.docker.network"] == environment["TRAEFIK_NETWORK"]
+        network_option = "--providers.docker.network=" + environment["TRAEFIK_NETWORK"]
+        assert network_option in services["traefik"]["command"]
         edge_ports = services["traefik"]["ports"]
         assert sorted(int(port["published"]) for port in edge_ports) == [80, 443]
         assert all(port.get("host_ip", "0.0.0.0") in ("", "0.0.0.0") for port in edge_ports)

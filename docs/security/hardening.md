@@ -9,6 +9,8 @@ Use this checklist with the threat model and production Compose override. It is 
 - Confirm API, builder worker, deployment worker, frontend, and project runtimes run non-root, drop all capabilities, set `no-new-privileges`, use read-only roots/tmpfs, and have health/resource limits.
 - Keep the build and deployment queues distinct. The builder worker must not receive the Docker socket or runtime-host mount; the deployment worker must not consume build jobs.
 - Mount runtime manifests and secret bundles read-only from the dedicated host root; reject permissive secret-file modes.
+- Keep private runtime/environment/key material outside image build inputs. The root `.dockerignore` excludes `.runtime`, nested private `.env` files, and common private key/certificate paths. Keep custom private roots outside the source checkout; exclusion patterns do not detect secrets embedded in source files.
+- Validate build-context exclusions with `tests/integration/docker_context_check.py` using its synthetic files, never actual credentials.
 - Keep PostgreSQL, Redis, Milvus, MinIO, and etcd on internal/private networks. Publish no development dashboard.
 
 ## Identity and secrets

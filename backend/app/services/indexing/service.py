@@ -88,6 +88,8 @@ def semantic_chunks(
             content_sha256 = hashlib.sha256(text.encode()).hexdigest()
             identity = "\x00".join(
                 [
+                    str(project_id),
+                    str(generation_id),
                     str(source_version_id),
                     source_kind,
                     semantic_key,

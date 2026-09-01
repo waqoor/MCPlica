@@ -156,7 +156,16 @@ For an unchanged configuration, an individual service can be restarted with:
 docker compose --env-file .env -f infra/compose.yaml restart api
 ```
 
-Use `up` rather than `restart` to apply `.env` or Compose changes. Before an upgrade,
+Use `up` rather than `restart` to apply `.env` or Compose changes.
+`TRAEFIK_NETWORK` selects the shared control-plane edge network; Compose network
+creation and API/UI routing labels use that same value. Per-project runtimes keep
+their own isolated networks. Do not rename networks on a running installation
+without a planned service recreation.
+
+The Docker build context excludes local `.runtime` state, nested private `.env`
+files, and private key/certificate files; examples remain available. Keep any
+custom runtime host root outside the source checkout. Do not place actual secrets
+inside source files, build arguments, or unrecognized directories. Before an upgrade,
 back up the database, artifacts, runtime files, and encryption keys and follow the
 [upgrade procedure](docs/operations/upgrade.md).
 
@@ -218,7 +227,13 @@ project settings; it must not run against production or retained business data.
 Normal Docker startup never invokes it. Commit-specific validation results and
 limitations are in [Compose evidence](docs/evidence/compose-validation-2026-09-01.md).
 
+For the post-merge regression scope and remaining limitations, see
+[post-merge validation](docs/evidence/post-merge-validation-2026-09-01.md).
+
 ## Local development without full Compose
+
+The Make targets use the same absolute backend/runtime virtual-environment paths
+for installation and execution, with frozen dependency resolution.
 
 Install development dependencies with `make install-python` and
 `make install-frontend`. A host-side backend also requires explicitly configured,
