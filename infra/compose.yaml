@@ -1,10 +1,34 @@
 name: mcplica
 
+# Resolve shell/.env interpolation once for every control-plane process. Without
+# this map a shell override can migrate one database, consume another queue, or
+# write runtime files outside the bind-mounted path.
+x-control-plane-environment: &control-plane-environment
+  DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
+  REDIS_URL: redis://redis:6379/0
+  MILVUS_URI: http://milvus:19530
+  ARTIFACT_ROOT: /data/artifacts
+  API_DOMAIN: ${API_DOMAIN:-api.localhost}
+  FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:8080}
+  BUILD_QUEUE_NAME: ${BUILD_QUEUE_NAME:-mcplica-builds}
+  DEPLOYMENT_QUEUE_NAME: ${DEPLOYMENT_QUEUE_NAME:-mcplica-deployments}
+  MCP_RUNTIME_IMAGE: ${MCP_RUNTIME_IMAGE:-mcplica-runtime:local}
+  MCP_RUNTIME_VERSION: ${MCP_RUNTIME_VERSION:-1.0.0}
+  MCP_DOMAIN: ${MCP_DOMAIN:-mcp.localhost}
+  TRAEFIK_NETWORK: ${TRAEFIK_NETWORK:-mcplica-edge}
+  TRAEFIK_CONTAINER_NAME: ${TRAEFIK_CONTAINER_NAME:-mcplica-traefik-1}
+  TRAEFIK_ENTRYPOINT: ${TRAEFIK_ENTRYPOINT:-web}
+  TRAEFIK_TLS: ${TRAEFIK_TLS:-false}
+  TRAEFIK_CERT_RESOLVER: ${TRAEFIK_CERT_RESOLVER:-}
+  RUNTIME_HOST_ROOT: ${RUNTIME_HOST_ROOT:?Set an absolute Docker host runtime path}
+  RUNTIME_WORKER_ROOT: ${RUNTIME_WORKER_ROOT:-/runtime-host}
+
 x-backend: &backend
   image: ${BACKEND_IMAGE:-mcplica-api:local}
   build:
     context: ..
     dockerfile: infra/docker/backend.Dockerfile
+  environment: *control-plane-environment
   env_file:
     - path: ${MCPLICA_ENV_FILE:-../.env}
       required: false
@@ -134,13 +158,6 @@ services:
     restart: unless-stopped
     init: true
     <<: *backend
-    environment:
-      REDIS_URL: redis://redis:6379/0
-      MILVUS_URI: http://milvus:19530
-      ARTIFACT_ROOT: /data/artifacts
-      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
-      MCP_RUNTIME_IMAGE: ${MCP_RUNTIME_IMAGE:-mcplica-runtime:local}
-      MCP_RUNTIME_VERSION: ${MCP_RUNTIME_VERSION:-1.0.0}
     volumes:
       - artifacts:/data/artifacts
     ports:
@@ -175,7 +192,7 @@ services:
     networks: [builder, egress, edge]
     labels:
       traefik.enable: "true"
-      traefik.http.routers.mcplica-api.rule: Host(`api.localhost`)
+      traefik.http.routers.mcplica-api.rule: Host(`${API_DOMAIN:-api.localhost}`)
       traefik.http.routers.mcplica-api.entrypoints: web
       traefik.http.services.mcplica-api.loadbalancer.server.port: "8000"
 
@@ -231,13 +248,6 @@ services:
     init: true
     stop_grace_period: ${WORKER_STOP_GRACE_PERIOD:-30s}
     <<: *backend
-    environment:
-      REDIS_URL: redis://redis:6379/0
-      MILVUS_URI: http://milvus:19530
-      ARTIFACT_ROOT: /data/artifacts
-      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
-      MCP_RUNTIME_IMAGE: ${MCP_RUNTIME_IMAGE:-mcplica-runtime:local}
-      MCP_RUNTIME_VERSION: ${MCP_RUNTIME_VERSION:-1.0.0}
     command:
       [
         "rq",
@@ -319,12 +329,6 @@ services:
     init: true
     stop_grace_period: ${WORKER_STOP_GRACE_PERIOD:-30s}
     <<: *backend
-    environment:
-      REDIS_URL: redis://redis:6379/0
-      ARTIFACT_ROOT: /data/artifacts
-      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
-      MCP_RUNTIME_IMAGE: ${MCP_RUNTIME_IMAGE:-mcplica-runtime:local}
-      MCP_RUNTIME_VERSION: ${MCP_RUNTIME_VERSION:-1.0.0}
     command:
       [
         "rq",

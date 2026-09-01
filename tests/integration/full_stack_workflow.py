@@ -14,10 +14,8 @@ import io
 import json
 import os
 import secrets
-import socket
 import time
 import zipfile
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import cast
@@ -25,12 +23,11 @@ from uuid import uuid4
 
 import httpx
 import httpx2
-import uvicorn
+from fixture_server import FixtureServer
 from mcp import Client
 from mcp.client.streamable_http import streamable_http_client
 from mock_openrouter.app import app as openrouter_app
 from mock_upstream.app import app as upstream_app
-from starlette.applications import Starlette
 
 from app.clients.mcp import MCPValidationClient
 from app.core.config import Settings
@@ -64,60 +61,6 @@ def _assert_superseded_before_running(
         raise RuntimeError("deployment lifecycle timestamps are missing")
     if datetime.fromisoformat(stopped_at) > datetime.fromisoformat(started_at):
         raise RuntimeError("replacement became RUNNING before the superseded runtime stopped")
-
-
-@dataclass(slots=True)
-class FixtureServer:
-    app: Starlette
-    port: int
-    server: uvicorn.Server | None = None
-    task: asyncio.Task[None] | None = None
-    listener: socket.socket | None = None
-
-    async def start(self) -> None:
-        listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            listener.bind(("0.0.0.0", self.port))
-            listener.listen(socket.SOMAXCONN)
-            listener.setblocking(False)
-        except OSError as exc:
-            listener.close()
-            raise RuntimeError(f"fixture port {self.port} is unavailable") from exc
-        self.listener = listener
-        config = uvicorn.Config(
-            self.app,
-            host="0.0.0.0",
-            port=self.port,
-            log_level="warning",
-            access_log=False,
-        )
-        self.server = uvicorn.Server(config)
-        self.task = asyncio.create_task(self.server.serve(sockets=[listener]))
-        deadline = time.monotonic() + 20
-        async with httpx.AsyncClient(trust_env=False) as client:
-            while time.monotonic() < deadline:
-                if self.task.done():
-                    await self.task
-                    raise RuntimeError(f"fixture server on port {self.port} stopped during startup")
-                try:
-                    response = await client.get(f"http://127.0.0.1:{self.port}/healthz")
-                    if response.status_code == 200:
-                        return
-                except httpx.HTTPError:
-                    pass
-                await asyncio.sleep(0.2)
-        raise RuntimeError(f"fixture server on port {self.port} did not become healthy")
-
-    async def stop(self) -> None:
-        if self.server is not None:
-            self.server.should_exit = True
-        if self.task is not None:
-            await asyncio.wait_for(self.task, timeout=15)
-        if self.listener is not None:
-            self.listener.close()
-        self.server = None
-        self.task = None
-        self.listener = None
 
 
 class ControlPlaneClient:
@@ -503,10 +446,17 @@ async def _compose(*arguments: str) -> None:
         "-f",
         "infra/compose.yaml",
         *arguments,
+        cwd=Path(__file__).resolve().parents[2],
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
     )
-    output, _ = await process.communicate()
+    try:
+        output, _ = await asyncio.wait_for(process.communicate(), timeout=240)
+    except (TimeoutError, asyncio.CancelledError):
+        if process.returncode is None:
+            process.kill()
+        await process.wait()
+        raise
     if process.returncode != 0:
         text = output.decode("utf-8", errors="replace")[-4_000:]
         raise RuntimeError(f"docker compose {' '.join(arguments)} failed:\n{text}")
@@ -796,7 +746,6 @@ async def run(*, api_base: str, email: str, password: str) -> dict[str, object]:
         )
         if _tool_body(outage_results[0]).get("path") != "/api/widgets/outage-proof":
             raise RuntimeError("runtime failed while builder-side dependencies were unavailable")
-        openrouter = FixtureServer(openrouter_app, 9010)
         await openrouter.start()
         await _compose(
             "up",
@@ -893,8 +842,31 @@ async def run(*, api_base: str, email: str, password: str) -> dict[str, object]:
         ):
             raise RuntimeError("project active references were not atomically rolled back")
 
+        # Recreate the control plane and database/cache containers without deleting
+        # named volumes. Published MCP runtimes must remain independent and live.
+        await _compose(
+            "up", "--no-build", "--no-deps", "--force-recreate", "--detach", "--wait",
+            "--wait-timeout", "180", "postgres", "redis", "api", "builder-worker",
+            "deployment-worker", "frontend",
+        )
+        await _wait_control_plane(client)
+        persisted = await client.json("GET", f"/projects/{project_id}", csrf=False)
+        if (
+            str(persisted.get("active_build_id")) != build_one_id
+            or str(persisted.get("active_deployment_id")) != rollback_id
+        ):
+            raise RuntimeError("project deployment references did not survive container recreation")
+        _, _, persisted_calls = await _mcp_round_trip(
+            hostname=hostname,
+            bearer_token=access_token,
+            calls=[(get_tool, {"widget_id": "persistence-proof"})],
+        )
+        if _tool_body(persisted_calls[0]).get("path") != "/api/widgets/persistence-proof":
+            raise RuntimeError("runtime failed after control-plane container recreation")
+
         return {
             "status": "passed",
+            "container_recreation_persistence": "passed",
             "project_id": project_id,
             "project_slug": project_slug,
             "source_versions": [str(initial_version["id"]), str(updated_version["id"])],
@@ -921,6 +893,14 @@ async def run(*, api_base: str, email: str, password: str) -> dict[str, object]:
 
 
 def main() -> None:
+    settings = Settings(
+        _env_file=Path(__file__).resolve().parents[2] / ".env"  # pyright: ignore[reportCallIssue]
+    )
+    if settings.env == "production" or os.getenv("RUN_DOCKER_INTEGRATION") != "1":
+        raise SystemExit(
+            "This destructive acceptance harness requires RUN_DOCKER_INTEGRATION=1 "
+            "and a disposable non-production Compose installation."
+        )
     default_email, default_password = _configured_default_admin_credentials()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
