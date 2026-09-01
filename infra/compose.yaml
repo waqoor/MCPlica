@@ -192,6 +192,7 @@ services:
     networks: [builder, egress, edge]
     labels:
       traefik.enable: "true"
+      traefik.docker.network: ${TRAEFIK_NETWORK:-mcplica-edge}
       traefik.http.routers.mcplica-api.rule: Host(`${API_DOMAIN:-api.localhost}`)
       traefik.http.routers.mcplica-api.entrypoints: web
       traefik.http.services.mcplica-api.loadbalancer.server.port: "8000"
@@ -414,6 +415,7 @@ services:
     networks: [edge]
     labels:
       traefik.enable: "true"
+      traefik.docker.network: ${TRAEFIK_NETWORK:-mcplica-edge}
       traefik.http.routers.mcplica-ui.rule: Host(`mcplica.localhost`)
       traefik.http.routers.mcplica-ui.entrypoints: web
       traefik.http.services.mcplica-ui.loadbalancer.server.port: "8080"
@@ -453,7 +455,7 @@ networks:
   egress:
     name: mcplica-egress
   edge:
-    name: mcplica-edge
+    name: ${TRAEFIK_NETWORK:-mcplica-edge}
 
 volumes:
   postgres-data:

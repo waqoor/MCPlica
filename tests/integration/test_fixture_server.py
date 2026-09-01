@@ -89,3 +89,36 @@ async def test_cancelled_startup_releases_resources() -> None:
     finally:
         task.cancel()
         await server.stop()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status_code", [200, 503])
+async def test_startup_does_not_lose_cancellation_in_health_client(
+    monkeypatch: pytest.MonkeyPatch, status_code: int
+) -> None:
+    entered = asyncio.Event()
+
+    async def interrupted_probe(*_args: object, **_kwargs: object) -> httpx.Response:
+        entered.set()
+        try:
+            await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            # A lower-level timeout/cancel scope can consume a cancellation while
+            # unwinding. The fixture owner must still honor the caller's request.
+            return httpx.Response(status_code)
+        raise AssertionError("cancellation was never delivered")
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", interrupted_probe)
+    server = FixtureServer(Starlette(), 0, startup_timeout=0.25)
+    task = asyncio.create_task(server.start())
+    try:
+        async with asyncio.timeout(2):
+            await entered.wait()
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+        assert server.task is None
+        assert server.listener is None
+    finally:
+        task.cancel()
+        await server.stop()
