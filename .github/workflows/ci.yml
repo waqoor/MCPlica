@@ -16,6 +16,7 @@ concurrency:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:18.6@sha256:1957b2ff3137e4ef7f3bc813e74fff50b1e1ffddc85c8b9d6f14ade972be8687
@@ -38,6 +39,16 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Archive the exact tracked source for reproducible verification
+        working-directory: .
+        run: git archive --format=tar.gz --output="$RUNNER_TEMP/mcplica-source.tar.gz" HEAD
+      - name: Preserve verification source snapshot
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: verification-source
+          path: ${{ runner.temp }}/mcplica-source.tar.gz
+          retention-days: 1
+          if-no-files-found: error
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           python-version: "3.13"
@@ -54,6 +65,7 @@ jobs:
 
   runtime:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: mcp_runtime
@@ -72,6 +84,7 @@ jobs:
 
   frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: frontend
@@ -94,6 +107,7 @@ jobs:
   e2e:
     needs: frontend
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: frontend
@@ -121,6 +135,7 @@ jobs:
   dependency-review:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
@@ -130,6 +145,7 @@ jobs:
   docker:
     needs: [backend, runtime, frontend, e2e]
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     services:
       postgres:
         image: postgres:18.6@sha256:1957b2ff3137e4ef7f3bc813e74fff50b1e1ffddc85c8b9d6f14ade972be8687
@@ -149,14 +165,16 @@ jobs:
       POSTGRES_PASSWORD: compose-postgres
       MINIO_ROOT_USER: compose-minio
       MINIO_ROOT_PASSWORD: compose-minio-password
-      RUNTIME_HOST_ROOT: ${{ runner.temp }}/mcplica-runtime
       RUN_DOCKER_INTEGRATION: "1"
       TEST_RUNTIME_IMAGE: mcplica/runtime:test
       TEST_RUNTIME_PULL_POLICY: never
-      TEST_RUNTIME_WORKER_ROOT: ${{ runner.temp }}/mcplica-runtime
-      TEST_RUNTIME_HOST_ROOT: ${{ runner.temp }}/mcplica-runtime
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set runner-local runtime paths
+        run: |
+          printf 'RUNTIME_HOST_ROOT=%s/mcplica-runtime\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'TEST_RUNTIME_WORKER_ROOT=%s/mcplica-runtime\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'TEST_RUNTIME_HOST_ROOT=%s/mcplica-runtime\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           python-version: "3.13"
