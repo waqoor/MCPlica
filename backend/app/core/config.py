@@ -189,6 +189,12 @@ class Settings(BaseSettings):
     runtime_allowed_private_hosts: CsvList = Field(default_factory=list)
     runtime_allowed_development_hosts: CsvList = Field(default_factory=list)
 
+    @field_validator("source_retention_days", "build_retention_count", mode="before")
+    @classmethod
+    def normalize_optional_retention(cls, value: object) -> object:
+        # Blank .env values explicitly disable optional retention, not integer zero.
+        return _empty_to_none(value)
+
     @field_validator("api_domain", "mcp_domain")
     @classmethod
     def validate_service_domain(cls, value: str) -> str:

@@ -1,9 +1,15 @@
 services:
   migrate:
+    build: !reset null
     image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE to an immutable release digest}
     pull_policy: always
     environment:
       ENV: production
+
+  runtime-init:
+    image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE to an immutable release digest}
+    build: !reset null
+    pull_policy: always
 
   api:
     image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE to an immutable release digest}
@@ -25,6 +31,7 @@ services:
       traefik.http.routers.mcplica-api.tls.certresolver: letsencrypt
 
   builder-worker:
+    build: !reset null
     image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE to an immutable release digest}
     pull_policy: always
     environment:
@@ -40,6 +47,7 @@ services:
       MCP_RUNTIME_VERSION: ${MCP_RUNTIME_VERSION:?Set MCP_RUNTIME_VERSION}
 
   deployment-worker:
+    build: !reset null
     image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE to an immutable release digest}
     pull_policy: always
     environment:

@@ -197,7 +197,12 @@ def _readme(project_name: str, project_slug: str, build: BuildRecord) -> str:
         "that runtime's documented secret mount. Verify `manifest.json` and "
         "`validation-report.json` before use. `compose.example.yaml` is a hardened starting "
         "fragment; set its image to an immutable compatible runtime digest and provide the "
-        "secret-bundle host path outside this export.\n"
+        "secret-bundle host path outside this export. Compute MCP_AUTH_OVERLAY_SHA256 "
+        "from the exact secret-bundle file bytes after materialization; do not copy the "
+        "manifest digest into that variable. Set MCP_PUBLIC_BASE_URL to the HTTPS origin "
+        "and MCP_ALLOWED_HOSTS to its exact authority. Place the runtime behind the "
+        "company TLS reverse proxy on a private Docker network. The example intentionally "
+        "publishes no unprotected host port.\n"
     )
 
 
@@ -221,7 +226,9 @@ def _compose_example(project_slug: str, manifest_sha256: str) -> str:
         '      MCP_MANIFEST_PATH: "/runtime/manifest.json"\n'
         f'      MCP_MANIFEST_SHA256: "{manifest_sha256}"\n'
         '      MCP_SECRET_BUNDLE_PATH: "/run/secrets/mcplica-runtime.json"\n'
+        "      MCP_AUTH_OVERLAY_SHA256: ${MCP_AUTH_OVERLAY_SHA256:?Set the secret bundle SHA-256}\n"
         "      MCP_PUBLIC_BASE_URL: ${MCP_PUBLIC_BASE_URL:?Set the public MCP URL}\n"
+        "      MCP_ALLOWED_ORIGINS: ${MCP_PUBLIC_BASE_URL:?Set the public MCP URL}\n"
         "      MCP_ALLOWED_HOSTS: ${MCP_ALLOWED_HOSTS:?Set the exact public host}\n"
         '      MCP_TLS_VERIFY: "true"\n'
         '      MCP_TRUST_ENVIRONMENT_PROXY: "false"\n'

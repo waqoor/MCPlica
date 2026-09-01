@@ -125,3 +125,70 @@ def test_compose_application_services_wait_for_schema_migrations() -> None:
     assert production["services"]["migrate"]["image"].startswith("${BACKEND_IMAGE:")
     for service_name in ("api", "runtime-validator", "frontend"):
         assert production["services"][service_name]["build"] is None
+
+
+@pytest.mark.parametrize("field", ["source_retention_days", "build_retention_count"])
+def test_blank_optional_retention_disables_retention(field: str) -> None:
+    settings = Settings.model_validate({field: ""})
+    assert getattr(settings, field) is None
+    with pytest.raises(ValidationError):
+        Settings.model_validate({field: 0})
+
+
+def test_example_environment_has_unique_keys_and_loads() -> None:
+    root = Path(__file__).resolve().parents[2]
+    path = root / ".env.example"
+    keys = [
+        line.split("=", 1)[0]
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line and not line.startswith("#") and "=" in line
+    ]
+    assert len(keys) == len(set(keys))
+    settings = Settings(_env_file=path)  # pyright: ignore[reportCallIssue]
+    assert settings.source_retention_days is None
+
+
+def test_compose_recovery_and_isolation_contract() -> None:
+    root = Path(__file__).resolve().parents[2]
+    services = yaml.safe_load((root / "infra/compose.yaml").read_text())["services"]
+    oneshot = {"migrate", "runtime-init"}
+    for name, service in services.items():
+        if name in oneshot:
+            assert service["restart"] == "no"
+        else:
+            assert service["restart"] == "unless-stopped"
+            assert "healthcheck" in service
+            assert service["logging"]["options"]["max-size"]
+    for name in ("postgres", "redis", "milvus", "minio", "etcd"):
+        assert services[name]["networks"] == ["builder"]
+        assert not services[name].get("ports")
+    for name in ("api", "builder-worker"):
+        assert not any("docker.sock" in str(item) for item in services[name].get("volumes", []))
+    assert "milvus" not in services["api"]["depends_on"]
+    assert services["builder-worker"]["depends_on"]["runtime-validator"]["condition"] == (
+        "service_healthy"
+    )
+    assert services["deployment-worker"]["depends_on"]["runtime-init"]["condition"] == (
+        "service_completed_successfully"
+    )
+    assert services["api"]["image"] == services["migrate"]["image"]
+    assert services["api"]["build"] == services["migrate"]["build"]
+
+
+def test_all_production_application_images_disable_local_builds() -> None:
+    root = Path(__file__).resolve().parents[2]
+    services = yaml.load(
+        (root / "infra/compose.production.yaml").read_text(), Loader=_ComposeLoader
+    )["services"]
+    for name in (
+        "migrate",
+        "runtime-init",
+        "api",
+        "builder-worker",
+        "deployment-worker",
+        "runtime-validator",
+        "frontend",
+    ):
+        assert "build" in services[name]
+        assert services[name]["build"] is None
+        assert ":?" in services[name]["image"]

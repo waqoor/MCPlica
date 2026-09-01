@@ -11,7 +11,6 @@ htmlcov/
 .venv/
 backend/.venv/
 mcp_runtime/.venv/
-docs/
 output/
 
 # Node
@@ -50,3 +49,6 @@ logs/
 build/
 dist/
 *.egg-info/
+
+# Private host runtime mount created by scripts/init_env.py
+/.runtime/

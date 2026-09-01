@@ -66,7 +66,17 @@ compose-logs:
 	$(COMPOSE) logs -f
 
 runtime-build:
-	docker build -f infra/docker/runtime.Dockerfile -t mcplica/mcp-runtime:dev .
+	$(COMPOSE) build runtime-validator
 
 validate:
 	python scripts/validate_starter.py
+
+.PHONY: init-env compose-check compose-test
+init-env:
+	python scripts/init_env.py
+
+compose-check:
+	$(COMPOSE) config --quiet
+
+compose-test:
+	PYTHONPATH=backend:tests/integration uv run --project backend --frozen --extra dev python tests/integration/full_stack_workflow.py --api-base http://127.0.0.1:8080/api/v1 --report output/compose-validation/workflow.json

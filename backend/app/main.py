@@ -4,6 +4,7 @@ import secrets
 import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
@@ -412,7 +413,12 @@ def create_app(settings_override: Settings | None = None) -> FastAPI:
     if config.is_production:
         app.add_middleware(
             TrustedHostMiddleware,
-            allowed_hosts=[config.api_domain, "127.0.0.1", "localhost"],
+            allowed_hosts=[
+                config.api_domain,
+                urlsplit(config.frontend_origin).hostname or config.api_domain,
+                "127.0.0.1",
+                "localhost",
+            ],
         )
 
     async def request_context_middleware(
