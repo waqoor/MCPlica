@@ -41,33 +41,47 @@ docs/                Authoritative implementation specifications
 - Capacity for the configured Milvus limit (default `8g`), the other services, and each active project runtime.
 - uv and Node.js matching `.node-version`, with Corepack/pnpm, only for host development or tests. Docker builds install application dependencies themselves.
 
-## Quick start
+## How to run with Docker
 
-Run from the repository root on a fresh local installation:
+Use the existing `infra/compose.yaml` file and the Dockerfiles in `infra/docker/`.
+There is no root-level `docker-compose.yml`; include `-f infra/compose.yaml` in the
+commands below. Docker must be running, and all commands run from the repository
+root. The base configuration is for **local development**, not internet-facing
+production. No host-side Node.js, pnpm, or uv installation is needed to run it.
+
+### 1. Get the code and initialize a private environment
+
+For a new checkout:
 
 ```bash
+git clone https://github.com/yazeedhasan97/MCPlica.git
+cd MCPlica
+docker version
+docker compose version
 python scripts/init_env.py
-make compose-check
-make compose-up
 ```
 
-The initializer exclusively creates a private `.env` file with independent random
-secrets and a random development administrator password. It refuses to overwrite an
-existing environment or rotate its encryption key. Configure `OPENROUTER_API_KEY` and
-the build-time model choices before expecting live AI-assisted builds to succeed.
+Use Python 3.13 (`python3` where that is its executable name). The initializer creates
+`.env` with independent random secrets, a random development administrator password,
+and an absolute runtime-files path. It refuses to overwrite an existing file.
+**For an existing installation, keep its `.env`, encryption key, and data; skip the
+initializer.** Do not use the example administrator password or commit your `.env`.
 
-`make compose-up` builds the canonical images, waits for all required services, runs
-schema and runtime-directory initialization, and creates the configured development
-administrator only when absent. Sign in using `DEFAULT_ADMIN_EMAIL` and
-`DEFAULT_ADMIN_PASSWORD` from your private `.env`; do not use the example password as
-an installation default. The seed never resets an existing password.
+### 2. Configure the installation
 
-The UI is `http://localhost:8080`, backend OpenAPI is `http://localhost:8000/docs`, and
-liveness is `http://localhost:8000/api/v1/health`. PostgreSQL, Redis, Milvus, etcd, and
-MinIO have no published host ports. The development Traefik HTTP entrypoint publishes
-port 80, so keep this installation on a trusted local host/network.
+Open `.env` in your local editor. Set `OPENROUTER_API_KEY` for real AI-assisted builds
+and choose available `OPENROUTER_ANALYSIS_MODEL`, `OPENROUTER_VALIDATION_MODEL`, and
+`OPENROUTER_EMBEDDING_MODEL` values, or configure model choices in the application's
+settings after login. OpenRouter is an external build-time dependency; these commands
+do not create a local model service or silently enable provider fixtures.
 
-On systems without Make:
+Keep `RUNTIME_UID=10001` and `RUNTIME_GID=10001` for the shipped images. On Linux,
+`DOCKER_GID` must match the Docker socket group; the initializer detects a local
+socket. `RUNTIME_HOST_ROOT` must be an absolute path visible to the Docker daemon.
+Allocate enough memory for Milvus's default `8g` limit plus the other services and
+project runtimes. Defaults use UI port 8080, API port 8000, and HTTP edge port 80.
+
+### 3. Build and start the complete platform
 
 ```bash
 docker compose --env-file .env -f infra/compose.yaml config --quiet
@@ -75,15 +89,134 @@ docker compose --env-file .env -f infra/compose.yaml up --build --detach --wait 
 docker compose --env-file .env -f infra/compose.yaml exec -T api python -m app.cli.ensure_development_admin
 ```
 
-Use `make compose-up ENV_FILE=/absolute/path/to/environment` to select another private
-environment file consistently for interpolation and service settings. Production
-uses the production override, verified release image digests, real domains/TLS, and
-interactive first-admin bootstrap; see `docs/operations/installation.md`.
+The startup command builds the backend, frontend, and reusable runtime images and
+starts their infrastructure dependencies. Schema migrations and runtime-directory
+initialization run automatically before the dependent services. The final command
+creates the configured development administrator only when absent; it never resets
+an existing password. Tests are **not** run as part of deployment startup.
 
-For full-platform verification on a **disposable installation**, follow
-`tests/integration/README.md`. Tests are explicit developer/CI commands, never part of
-the ordinary deployment startup path. Post-fix evidence and historical limitations
-are indexed in `docs/evidence/compose-validation-2026-09-01.md`.
+With Make, `make compose-check` followed by `make compose-up` performs the same
+configuration check/startup and administrator initialization after `.env` exists.
+
+### 4. Open the platform and deploy a project runtime
+
+| Purpose | Default local address |
+| --- | --- |
+| Web application | `http://localhost:8080` |
+| Backend API documentation | `http://localhost:8000/docs` |
+| API liveness | `http://localhost:8000/api/v1/health` |
+| API readiness/dependency status | `http://localhost:8000/api/v1/ready` |
+
+Sign in with `DEFAULT_ADMIN_EMAIL` and `DEFAULT_ADMIN_PASSWORD` from your private
+`.env`. Complete model configuration, create a project, import its API specification,
+configure required upstream credentials, build, configure MCP access, and deploy.
+The deployment worker creates the isolated project runtime from the reusable image;
+**do not start a second ad hoc runtime or inject its credentials through `docker run`.**
+Use the exact project endpoint and authentication details shown in the UI. See the
+[user guide](docs/user-guide.md) and [MCP connection guide](docs/mcp-client-connection.md).
+
+PostgreSQL, Redis, Milvus, etcd, and MinIO have no published host ports. API and UI
+host ports are loopback-bound; the development HTTP edge is published, so keep this
+stack on a trusted local host/network. Production requires the TLS override below.
+
+### 5. Verify services and inspect logs
+
+```bash
+docker compose --env-file .env -f infra/compose.yaml ps --all
+curl --fail http://localhost:8000/api/v1/health
+curl --fail http://localhost:8000/api/v1/ready
+docker compose --env-file .env -f infra/compose.yaml logs --tail=100 api builder-worker deployment-worker
+docker compose --env-file .env -f infra/compose.yaml logs --follow --tail=100
+```
+
+Expect **11 healthy running services**, plus `migrate` and `runtime-init` exited with
+code **0**. Project runtimes are created separately after deployment. Readiness
+reports builder-only OpenRouter/Milvus degradation separately from core-service
+failure. An unhealthy container or nonzero initializer exit needs investigation;
+do not remove health checks or delete volumes to hide it. Review the relevant
+service logs without sharing credentials or a fully expanded Compose environment.
+
+### 6. Stop, resume, and apply changes safely
+
+Stop Compose-managed services while retaining their containers and volumes:
+
+```bash
+docker compose --env-file .env -f infra/compose.yaml stop
+```
+
+Resume, or apply changes to the existing development configuration/source:
+
+```bash
+docker compose --env-file .env -f infra/compose.yaml up --build --detach --wait --wait-timeout 300
+```
+
+For an unchanged configuration, an individual service can be restarted with:
+
+```bash
+docker compose --env-file .env -f infra/compose.yaml restart api
+```
+
+Use `up` rather than `restart` to apply `.env` or Compose changes. Before an upgrade,
+back up the database, artifacts, runtime files, and encryption keys and follow the
+[upgrade procedure](docs/operations/upgrade.md).
+
+`docker compose --env-file .env -f infra/compose.yaml down` also removes the
+Compose-managed containers/networks but keeps named volumes. **Never add `--volumes`
+or `-v` unless you explicitly intend to destroy the installation's retained data.**
+Project runtimes are managed by the deployment worker, not the Compose service list;
+stop them through MCPlica before a complete shutdown/removal. Do not assume `down`
+removes project runtimes, and do not delete their host files while they are active.
+
+For another environment filename, use
+`make compose-up ENV_FILE=/absolute/path/to/environment`. With direct Compose
+commands, set `MCPLICA_ENV_FILE` to that same absolute path and pass it to
+`--env-file`; the two settings control different configuration inputs.
+
+### Production with Docker Compose
+
+Use a hardened Linux host, real UI/API/MCP DNS, and verified immutable release image
+digests. For a **new** installation only:
+
+```bash
+python scripts/init_env.py --production --output .env.production
+```
+
+Edit `.env.production` before continuing: set `UI_DOMAIN`, `API_DOMAIN`, `MCP_DOMAIN`,
+`FRONTEND_ORIGIN` to the exact HTTPS UI origin, `ACME_EMAIL`, provider credentials,
+and `BACKEND_IMAGE`, `FRONTEND_IMAGE`, `MCP_RUNTIME_IMAGE` to verified
+`registry/image@sha256:digest` values. Use a dedicated absolute runtime host path.
+Keep both `DEFAULT_ADMIN_*` values empty. No placeholder digest is runnable.
+
+Using a Linux/POSIX shell:
+
+```bash
+export MCPLICA_ENV_FILE="$(pwd)/.env.production"
+docker compose --env-file "$MCPLICA_ENV_FILE" -f infra/compose.yaml -f infra/compose.production.yaml config --quiet
+docker compose --env-file "$MCPLICA_ENV_FILE" -f infra/compose.yaml -f infra/compose.production.yaml pull
+docker compose --env-file "$MCPLICA_ENV_FILE" -f infra/compose.yaml -f infra/compose.production.yaml up --no-build --detach --wait --wait-timeout 300
+docker compose --env-file "$MCPLICA_ENV_FILE" -f infra/compose.yaml -f infra/compose.production.yaml exec api python -m app.cli.bootstrap_admin --email admin@example.com --display-name "MCPlica Admin"
+```
+
+Replace the example administrator email/name with your own. Bootstrap prompts for
+its one-time secret and the new password; do not put passwords on the command line.
+Remove `BOOTSTRAP_SECRET` after success and recreate the API and workers using the
+same production Compose options. Production publishes edge ports 80/443, persists
+ACME state, and does not locally build release images. Use both Compose files for
+subsequent status, logs, restart, and shutdown operations.
+
+Read the [installation](docs/operations/installation.md),
+[TLS/DNS](docs/operations/domain-tls.md), and
+[backup/restore](docs/operations/backup-restore.md) instructions before production
+use. Configuration validation is not proof of public DNS, certificate issuance,
+release-image availability, provider behavior, or backup restoration.
+
+### Optional end-to-end validation
+
+Follow [cross-service acceptance](tests/integration/README.md) on a **disposable
+installation only**. The harness deliberately stops/recreates services and changes
+project settings; it must not run against production or retained business data.
+Normal Docker startup never invokes it. Commit-specific validation results and
+limitations are in [Compose evidence](docs/evidence/compose-validation-2026-09-01.md).
 
 ## Local development without full Compose
 
