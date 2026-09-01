@@ -30,6 +30,8 @@ These six documents define scope and implementation authority. Later explicit de
 
 ## Release evidence
 
+- `evidence/post-merge-validation-2026-09-01.md` — post-merge regression fixes and fresh verification scope.
+
 - `release/release-process.md`
 - `release/release-checklist.md`
 - `evidence/compose-validation-2026-09-01.md` — current Compose corrections, commit-bound CI results, and remaining verification boundaries.

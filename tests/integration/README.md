@@ -81,3 +81,27 @@ CI cleanup is scoped to its disposable runner. Removing volumes destroys data; d
 not copy that cleanup command to a persistent host. Following an interrupted local
 exercise, inspect service states and restore the stopped services before any further
 use. Never run this harness against an existing development or production deployment.
+
+## Additional post-merge acceptance
+
+The disposable configuration selects a non-default `TRAEFIK_NETWORK` to exercise
+actual routing through the configured edge. The Docker CI job additionally runs:
+
+```bash
+python tests/integration/docker_context_check.py
+docker compose --env-file .env -f infra/compose.yaml exec -T -e RUN_DOCKER_INTEGRATION=1 builder-worker python < tests/integration/vector_isolation_check.py
+```
+
+The first command uses a temporary synthetic context and Docker's own exclusion
+engine, without reading real secrets. It verifies runtime/private files are not
+copied and required source/example files remain present. The second uses the real
+Milvus client/store and a unique disposable collection to exercise duplicate content
+across projects/generations, idempotent upserts, and scoped deletion. Run only in the
+explicit disposable acceptance installation; it rejects production settings.
+
+Fixture cancellation checks deterministically simulate a transport returning after
+consuming task cancellation. The fixture must propagate owner cancellation and
+release only its owned listener/task; intermittent passing alone is not evidence
+of a corrected race. Focused schema, canonicalization, chunk-identity, Compose,
+Makefile, and response-dispatch regressions are included in the normal component
+suites. None of these checks runs during ordinary deployment startup.

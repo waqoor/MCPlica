@@ -26,3 +26,31 @@ Verify liveness, readiness, browser authentication/CSRF, queue consumption, and 
 Application rollback is safe only while the older code understands the current schema. If migrations are backward-compatible, restore previous image digests and redeploy. If not, enter maintenance mode and restore the pre-upgrade database/artifact/secret set as one recovery point. Never run a destructive Alembic downgrade unless that exact downgrade was reviewed and rehearsed.
 
 Project deployment rollback is separate: use the recorded target deployment in the UI/API. The backend creates a new deployment from its immutable READY build and health-checks it; it does not rewrite history.
+
+## 2026-09-01 vector-isolation and Docker corrections
+
+New documentation and semantic vector rows include project, generation, and source
+version in their primary-key identity. Existing content hashes and embedding-cache
+records remain reusable. This correction prevents new cross-scope overwrites; it
+cannot recreate historical rows already lost. Create a new build for each affected
+project using its retained source versions, inspect its retrieval/validation results,
+and deploy through the existing lifecycle. Keep old immutable build artifacts and
+rollback evidence. Never purge a shared collection as an upgrade step.
+
+The runtime now rejects media mismatches in a declared exact/class response instead
+of accepting them through a less-specific default. Correct an inaccurate API source
+or upstream response rather than suppressing the contract error. Updating control-
+plane images alone does not replace already running project containers: deploy the
+intended compatible generic runtime through the normal project lifecycle.
+
+Keep the configured edge-network name unchanged during an ordinary upgrade. Changing
+`TRAEFIK_NETWORK` requires coordinated recreation of its Compose consumers; API/UI
+routing labels and the production provider use the configured value. Preserve all
+volumes and the runtime host root. Docker build inputs now exclude private runtime
+and environment/key files; custom private directories must remain outside the source
+checkout or have an explicit reviewed exclusion.
+
+Fresh checks and exact evidence are in
+`../evidence/post-merge-validation-2026-09-01.md`. These changes require no database
+migration beyond the existing migration head and do not establish a live production
+rollout or a completed backup restoration.
