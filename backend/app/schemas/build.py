@@ -193,7 +193,9 @@ class OperationExclusionCreate(BaseModel):
 
     @field_validator("operation_key", "reason", mode="before")
     @classmethod
-    def normalize_text(cls, value: str) -> str:
+    def normalize_text(cls, value: object) -> str:
+        if not isinstance(value, str):
+            raise ValueError("value must be a string")
         normalized = value.strip()
         if not normalized:
             raise ValueError("value cannot be blank")

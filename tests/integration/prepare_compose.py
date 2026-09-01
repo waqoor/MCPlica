@@ -32,6 +32,7 @@ def main() -> None:
         "FRONTEND_IMAGE": "mcplica/frontend:test",
         "MCP_RUNTIME_IMAGE": "mcplica/runtime:test",
         "MCP_RUNTIME_PULL_POLICY": "never",
+        "TRAEFIK_NETWORK": "mcplica-acceptance-edge",
         "OPENROUTER_API_KEY": "fixture-not-a-real-provider-key",
         "OPENROUTER_BASE_URL": f"http://{gateway}:9010/api/v1",
         "RUNTIME_ALLOWED_DEVELOPMENT_HOSTS": gateway,

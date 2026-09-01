@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 
 import yaml
@@ -48,3 +49,28 @@ def test_control_plane_waits_for_migrations_and_runtime_permissions() -> None:
     )
     for name in ("postgres", "redis", "milvus", "etcd", "minio"):
         assert not services[name].get("ports")
+
+
+def test_edge_routing_uses_the_configured_network() -> None:
+    model = yaml.safe_load((ROOT / "infra/compose.yaml").read_text())
+    network = "${TRAEFIK_NETWORK:-mcplica-edge}"
+    assert model["networks"]["edge"]["name"] == network
+    for name in ("api", "frontend"):
+        assert model["services"][name]["labels"]["traefik.docker.network"] == network
+
+
+def test_make_commands_use_the_same_absolute_python_environments() -> None:
+    result = subprocess.run(
+        ["make", "--no-print-directory", "-n", "install-python", "test"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=5,
+    )
+    commands = [line for line in result.stdout.splitlines() if "UV_PROJECT_ENVIRONMENT=" in line]
+    assert len(commands) == 4
+    for component in ("backend", "mcp_runtime"):
+        setting = f'UV_PROJECT_ENVIRONMENT="{ROOT / component / ".venv"}"'
+        assert sum(setting in command for command in commands) == 2
+    assert all("--frozen --extra dev" in command for command in commands)
