@@ -170,16 +170,10 @@ jobs:
         run: python tests/integration/prepare_compose.py
       - name: Validate canonical Compose configuration
         run: docker compose --env-file .env -f infra/compose.yaml config --quiet
-      - name: Validate production override without using live production credentials
+      - name: Validate resolved production settings without production credentials
         env:
-          BACKEND_IMAGE: mcplica/backend@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-          FRONTEND_IMAGE: mcplica/frontend@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-          MCP_RUNTIME_IMAGE: mcplica/runtime@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-          UI_DOMAIN: ui.example.com
-          API_DOMAIN: api.example.com
-          MCP_DOMAIN: mcp.example.com
-          ACME_EMAIL: operator@example.com
-        run: docker compose --env-file .env -f infra/compose.yaml -f infra/compose.production.yaml config --quiet
+          PYTHONPATH: backend
+        run: uv run --project backend --frozen --extra dev python tests/integration/production_config_check.py
       - name: Build canonical application images
         run: docker compose --env-file .env -f infra/compose.yaml build api runtime-validator frontend
       - name: Start the complete platform, including schema and mount initialization

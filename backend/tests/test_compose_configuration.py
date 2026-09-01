@@ -40,7 +40,9 @@ def test_workers_consume_the_same_queues_as_the_control_plane() -> None:
 def test_control_plane_waits_for_migrations_and_runtime_permissions() -> None:
     services = yaml.safe_load((ROOT / "infra/compose.yaml").read_text())["services"]
     for name in ("api", "builder-worker", "deployment-worker"):
-        assert services[name]["depends_on"]["migrate"]["condition"] == "service_completed_successfully"
+        assert services[name]["depends_on"]["migrate"]["condition"] == (
+            "service_completed_successfully"
+        )
     assert services["deployment-worker"]["depends_on"]["runtime-init"]["condition"] == (
         "service_completed_successfully"
     )
