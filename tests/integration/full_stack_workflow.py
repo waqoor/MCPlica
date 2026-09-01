@@ -393,7 +393,9 @@ def _openapi(*, updated: bool) -> bytes:
             "title": "MCPlica final acceptance API",
             "version": "2.0.0" if updated else "1.0.0",
         },
-        "servers": [{"url": "http://host.docker.internal:9009/api"}],
+        "servers": [
+            {"url": os.getenv("E2E_UPSTREAM_BASE_URL", "http://host.docker.internal:9009/api")}
+        ],
         "components": {"securitySchemes": {"bearerAuth": {"type": "http", "scheme": "bearer"}}},
         "paths": paths,
     }
@@ -446,14 +448,19 @@ async def _mcp_round_trip(
     bearer_token: str,
     calls: list[tuple[str, dict[str, object]]],
 ) -> tuple[list[str], list[str], list[dict[str, object]]]:
+    async def local_edge_resolver(_host: str, _port: int) -> tuple[str, ...]:
+        # This harness exercises the local Compose edge without Desktop-only DNS.
+        return ("127.0.0.1",)
+
     inspector = MCPValidationClient(
         bearer_token=bearer_token,
         allowed_hosts=frozenset({hostname}),
         allow_insecure_http=True,
+        resolver=local_edge_resolver,
     )
     inspection = await inspector.inspect(f"http://{hostname}/mcp")
     await inspector.close()
-    headers = {"Authorization": f"Bearer {bearer_token}"}
+    headers = {"Authorization": f"Bearer {bearer_token}", "Host": hostname}
     results: list[dict[str, object]] = []
     resources_read: list[str] = []
     async with httpx2.AsyncClient(
@@ -463,7 +470,7 @@ async def _mcp_round_trip(
         trust_env=False,
     ) as http:
         transport = streamable_http_client(
-            f"http://{hostname}/mcp",
+            "http://127.0.0.1/mcp",
             http_client=http,
             terminate_on_close=True,
         )
@@ -471,7 +478,7 @@ async def _mcp_round_trip(
             tools = await mcp.list_tools(cache_mode="bypass")
             resources = await mcp.list_resources(cache_mode="bypass")
             if resources.resources:
-                resource = await mcp.read_resource(resources.resources[0].uri)
+                resource = await mcp.read_resource(str(resources.resources[0].uri))
                 resources_read.append(str(resources.resources[0].uri))
                 if not resource.contents:
                     raise RuntimeError("MCP documentation resource was empty")
@@ -609,7 +616,9 @@ async def run(*, api_base: str, email: str, password: str) -> dict[str, object]:
                 "name": "MCPlica final acceptance",
                 "slug": project_slug,
                 "description": "Repository-wide real workflow proof",
-                "default_base_url": "http://host.docker.internal:9009/api",
+                "default_base_url": os.getenv(
+                    "E2E_UPSTREAM_BASE_URL", "http://host.docker.internal:9009/api"
+                ),
             },
         )
         project_id = str(project["id"])
@@ -922,6 +931,7 @@ def main() -> None:
         "--email",
         default=os.getenv("E2E_ADMIN_EMAIL") or default_email,
     )
+    parser.add_argument("--report", type=Path)
     args = parser.parse_args()
     password = os.getenv("E2E_ADMIN_PASSWORD") or default_password
     if not args.email or not password:
@@ -930,6 +940,9 @@ def main() -> None:
             "or provide E2E_ADMIN_EMAIL and E2E_ADMIN_PASSWORD"
         )
     result = asyncio.run(run(api_base=args.api_base, email=args.email, password=password))
+    if args.report is not None:
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(json.dumps(result, sort_keys=True, indent=2) + "\n")
     print(json.dumps(result, sort_keys=True, indent=2), flush=True)
 
 

@@ -121,3 +121,13 @@ def test_json_logs_and_metrics_use_bounded_labels() -> None:
     rendered = render_metrics().decode()
     assert 'route="/api/v1/builds/{build_id}"' in rendered
     assert "mcplica_openrouter_usage_total" in rendered
+
+
+async def test_production_same_origin_ui_proxy_host_is_allowed() -> None:
+    app = create_app(_production_settings())
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="https://ui.example.com"
+    ) as client:
+        assert (await client.get("/api/v1/health")).status_code == 200
+        rejected = await client.get("/api/v1/health", headers={"Host": "unrelated.example.com"})
+        assert rejected.status_code == 400
