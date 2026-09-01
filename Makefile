@@ -1,14 +1,15 @@
 SHELL := /bin/bash
-COMPOSE := docker compose --env-file .env -f infra/compose.yaml
+ENV_FILE ?= .env
+COMPOSE := MCPLICA_ENV_FILE="$(abspath $(ENV_FILE))" docker compose --env-file "$(ENV_FILE)" -f infra/compose.yaml
 
 .PHONY: install-python install-frontend lock backend-dev frontend-dev migrate test critical-coverage lint typecheck format api-contract api-contract-check compose-up compose-down compose-logs runtime-build validate
 
 install-python:
-	UV_PROJECT_ENVIRONMENT=backend/.venv uv sync --project backend
-	UV_PROJECT_ENVIRONMENT=mcp_runtime/.venv uv sync --project mcp_runtime
+	UV_PROJECT_ENVIRONMENT=backend/.venv uv sync --project backend --frozen --extra dev
+	UV_PROJECT_ENVIRONMENT=mcp_runtime/.venv uv sync --project mcp_runtime --frozen --extra dev
 
 install-frontend:
-	cd frontend && corepack enable && pnpm install
+	cd frontend && corepack enable && pnpm install --frozen-lockfile
 
 lock:
 	uv lock
@@ -24,7 +25,7 @@ migrate:
 	cd backend && UV_PROJECT_ENVIRONMENT=.venv uv run alembic -c ../migrations/alembic.ini upgrade head
 
 test:
-	cd backend && UV_PROJECT_ENVIRONMENT=.venv uv run pytest tests ../packages/contracts/tests
+	cd backend && UV_PROJECT_ENVIRONMENT=.venv uv run pytest tests ../packages/contracts/tests ../tests/integration/test_fixture_server.py
 	cd mcp_runtime && UV_PROJECT_ENVIRONMENT=.venv uv run pytest
 	cd frontend && corepack enable && pnpm test:run
 
@@ -79,4 +80,4 @@ compose-check:
 	$(COMPOSE) config --quiet
 
 compose-test:
-	PYTHONPATH=backend:tests/integration uv run --project backend --frozen --extra dev python tests/integration/full_stack_workflow.py --api-base http://127.0.0.1:8080/api/v1 --report output/compose-validation/workflow.json
+	RUN_DOCKER_INTEGRATION=1 PYTHONPATH=backend:tests/integration uv run --project backend --frozen --extra dev python tests/integration/full_stack_workflow.py --api-base http://127.0.0.1:8080/api/v1 --report output/compose-validation/workflow.json

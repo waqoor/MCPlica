@@ -1,0 +1,52 @@
+{
+  "repository": "yazeedhasan97/MCPlica",
+  "code_commit": "742d649b79db240d2c32087935a5c1cb0628f47c",
+  "ci_run_id": 33516768996,
+  "ci_conclusion": "failure",
+  "application_jobs": {
+    "backend": "success",
+    "runtime": "success",
+    "frontend": "success",
+    "e2e": "success",
+    "docker": "success"
+  },
+  "dependency_review": {
+    "status": "failure",
+    "reason": "Dependency review is not supported on this repository; repository security-feature prerequisites are unresolved."
+  },
+  "security_run_id": 33516768853,
+  "security_conclusion": "success",
+  "runtime_isolation_acceptance": "passed",
+  "cross_browser": {
+    "passed": 16,
+    "failed": 0,
+    "flaky": 0,
+    "skipped": 8,
+    "skip_reason": "Four live-stack opt-ins and four browser/device-specific exclusions."
+  },
+  "live_compose_browser": {
+    "passed": 1,
+    "failed": 0,
+    "flaky": 0,
+    "skipped": 0,
+    "browser": "chromium"
+  },
+  "compose_final_state": {
+    "required_services": 13,
+    "running_healthy": 11,
+    "successful_oneshot": 2
+  },
+  "compose_artifact_id": 9804352103,
+  "compose_artifact_sha256": "961f8e6d80b413a6a2a942e5fedf6f2eebb71a1875f3b851eb85d1ffe6e2b499",
+  "external_http_fixtures": [
+    "OpenRouter",
+    "example upstream product API"
+  ],
+  "production_host_deployed": false,
+  "live_public_tls_verified": false,
+  "all_prior_audit_findings_closed": false,
+  "remaining_repository_prerequisites": [
+    "Dependency-review feature configuration",
+    "Existing approved CLA-verification integration"
+  ]
+}
