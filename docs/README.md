@@ -32,7 +32,8 @@ These six documents define scope and implementation authority. Later explicit de
 
 - `release/release-process.md`
 - `release/release-checklist.md`
-- `evidence/final-integrated-validation.md` — repository-wide final traceability and local execution proof.
+- `evidence/compose-validation-2026-09-01.md` — current Compose corrections, commit-bound CI results, and remaining verification boundaries.
+- `evidence/final-integrated-validation.md` — historical traceability and local execution proof for its stated snapshots.
 - `evidence/issues-001-closure.md` — authoritative second-round status (22 verified, 26 fixed, zero blocked), previous-fix review, additional changes, implementation evidence, and fresh test/runtime proof for all 48 `issues_001.md` findings.
 - `evidence/agent3-requirement-traceability.md`
 

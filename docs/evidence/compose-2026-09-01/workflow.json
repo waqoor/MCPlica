@@ -1,0 +1,38 @@
+{
+  "build_one_seconds": 5.289,
+  "builder_outage_runtime_call": "passed",
+  "builds": [
+    "3ce4844e-1aa6-4575-b184-82129b6a66ef",
+    "cfb45b6f-a229-47a2-becb-ba12349861d9"
+  ],
+  "container_recreation_persistence": "passed",
+  "deployment_one_seconds": 9.156,
+  "deployments": [
+    "a59768f3-e19f-414b-8d31-56c0247e42c6",
+    "8b110d28-46ad-403f-868a-8e7fffd24121",
+    "4020f929-576e-4a1f-a2fd-7fadd9830085"
+  ],
+  "diff_added_operations": 1,
+  "documentation_resources_read": 1,
+  "export_files": [
+    "README.md",
+    "build-metadata.json",
+    "compose.example.yaml",
+    "manifest.json",
+    "validation-report.json"
+  ],
+  "initial_coverage_percent": 100.0,
+  "initial_tool_count": 4,
+  "mcp_round_trip_seconds": 0.322,
+  "project_id": "9a4fde64-0166-43e5-8b26-06932c4c8b7b",
+  "project_slug": "final-acceptance-dd0cca92",
+  "rollback_tool_count": 4,
+  "source_versions": [
+    "36b6eda9-f4a6-482e-9cb6-a4d4912ec0ff",
+    "65bd1a23-8a23-44ad-904e-874b925b1a57"
+  ],
+  "status": "passed",
+  "total_seconds": 80.434,
+  "updated_coverage_percent": 100.0,
+  "updated_tool_count": 5
+}

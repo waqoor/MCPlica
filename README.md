@@ -36,65 +36,61 @@ docs/                Authoritative implementation specifications
 
 ## Prerequisites
 
-- Python 3.13
-- uv
-- Node.js 24 LTS + pnpm
-- Docker Engine + Docker Compose v2
+- Docker Engine and Docker Compose **2.24.4 or newer**.
+- Python 3.13 for environment initialization and host-side verification.
+- Capacity for the configured Milvus limit (default `8g`), the other services, and each active project runtime.
+- uv and Node.js matching `.node-version`, with Corepack/pnpm, only for host development or tests. Docker builds install application dependencies themselves.
 
 ## Quick start
 
-1. Copy environment defaults:
+Run from the repository root on a fresh local installation:
 
-   ```bash
-   cp .env.example .env
-   ```
+```bash
+python scripts/init_env.py
+make compose-check
+make compose-up
+```
 
-2. Generate the encryption key and independent auth/pepper/bootstrap secrets, then replace every blank or `REPLACE_...` value in `.env`:
+The initializer exclusively creates a private `.env` file with independent random
+secrets and a random development administrator password. It refuses to overwrite an
+existing environment or rotate its encryption key. Configure `OPENROUTER_API_KEY` and
+the build-time model choices before expecting live AI-assisted builds to succeed.
 
-   ```bash
-   python scripts/generate_secret_key.py
-   ```
+`make compose-up` builds the canonical images, waits for all required services, runs
+schema and runtime-directory initialization, and creates the configured development
+administrator only when absent. Sign in using `DEFAULT_ADMIN_EMAIL` and
+`DEFAULT_ADMIN_PASSWORD` from your private `.env`; do not use the example password as
+an installation default. The seed never resets an existing password.
 
-3. Install Python projects:
+The UI is `http://localhost:8080`, backend OpenAPI is `http://localhost:8000/docs`, and
+liveness is `http://localhost:8000/api/v1/health`. PostgreSQL, Redis, Milvus, etcd, and
+MinIO have no published host ports. The development Traefik HTTP entrypoint publishes
+port 80, so keep this installation on a trusted local host/network.
 
-   ```bash
-   make install-python
-   ```
+On systems without Make:
 
-4. Install frontend dependencies:
+```bash
+docker compose --env-file .env -f infra/compose.yaml config --quiet
+docker compose --env-file .env -f infra/compose.yaml up --build --detach --wait --wait-timeout 300
+docker compose --env-file .env -f infra/compose.yaml exec -T api python -m app.cli.ensure_development_admin
+```
 
-   ```bash
-   make install-frontend
-   ```
+Use `make compose-up ENV_FILE=/absolute/path/to/environment` to select another private
+environment file consistently for interpolation and service settings. Production
+uses the production override, verified release image digests, real domains/TLS, and
+interactive first-admin bootstrap; see `docs/operations/installation.md`.
 
-5. Start infrastructure/applications. This waits for healthy services, applies
-   migrations, and creates the development administrator when it does not exist:
-
-   ```bash
-   make compose-up
-   ```
-
-6. Sign in with the development defaults read from `.env`:
-
-   - `DEFAULT_ADMIN_EMAIL=admin@admin.com`
-   - `DEFAULT_ADMIN_PASSWORD=admin@321`
-
-   - MCPlica UI: `http://localhost:8080`
-   - Backend OpenAPI: `http://localhost:8000/docs`
-   - Backend health: `http://localhost:8000/api/v1/health`
-
-   PostgreSQL, Redis, Milvus, etcd, and MinIO stay exclusively on the internal
-   builder network and are intentionally not published on host ports.
-
-   These well-known credentials are development-only. The seed command and live
-   E2E workflows read the same values from `.env`; external `E2E_ADMIN_*` values
-   may override them in CI. Production configuration rejects `DEFAULT_ADMIN_*`,
-   and production installation continues to use the prompted bootstrap flow in
-   `docs/operations/installation.md`. The seed never resets an existing password.
+For full-platform verification on a **disposable installation**, follow
+`tests/integration/README.md`. Tests are explicit developer/CI commands, never part of
+the ordinary deployment startup path. Post-fix evidence and historical limitations
+are indexed in `docs/evidence/compose-validation-2026-09-01.md`.
 
 ## Local development without full Compose
 
-Start PostgreSQL/Redis/Milvus first, then:
+Install development dependencies with `make install-python` and
+`make install-frontend`. A host-side backend also requires explicitly configured,
+secured host-reachable PostgreSQL/Redis/Milvus endpoints; the base Compose file does
+not expose those services. Then:
 
 ```bash
 make backend-dev
