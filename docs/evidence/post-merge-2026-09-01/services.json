@@ -1,0 +1,80 @@
+[
+  {
+    "Service": "api",
+    "State": "running",
+    "Health": "healthy",
+    "ExitCode": 0
+  },
+  {
+    "Service": "builder-worker",
+    "State": "running",
+    "Health": "healthy",
+    "ExitCode": 0
+  },
+  {
+    "Service": "deployment-worker",
+    "State": "running",
+    "Health": "healthy",
+    "ExitCode": 0
+  },
+  {
+    "Service": "etcd",
+    "State": "running",
+    "Health": "healthy",
+    "ExitCode": 0
+  },
+  {
+    "Service": "frontend",
+    "State": "running",
+    "Health": "healthy",
+    "ExitCode": 0
+  },
+  {
+    "Service": "migrate",
+    "State": "exited",
+    "Health": "",
+    "ExitCode": 0
+  },
+  {
+    "Service": "milvus",
+    "State": "running",
+    "Health": "healthy",
+    "ExitCode": 0
+  },
+  {
+    "Service": "minio",
+    "State": "running",
+    "Health": "healthy",
+    "ExitCode": 0
+  },
+  {
+    "Service": "postgres",
+    "State": "running",
+    "Health": "healthy",
+    "ExitCode": 0
+  },
+  {
+    "Service": "redis",
+    "State": "running",
+    "Health": "healthy",
+    "ExitCode": 0
+  },
+  {
+    "Service": "runtime-init",
+    "State": "exited",
+    "Health": "",
+    "ExitCode": 0
+  },
+  {
+    "Service": "runtime-validator",
+    "State": "running",
+    "Health": "healthy",
+    "ExitCode": 0
+  },
+  {
+    "Service": "traefik",
+    "State": "running",
+    "Health": "healthy",
+    "ExitCode": 0
+  }
+]

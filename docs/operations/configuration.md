@@ -172,3 +172,30 @@ using private temporary test configuration and instantiates each process's real
 and rejection of a missing release image. It neither starts production nor uses
 real release-image identifiers. Production requires Compose 2.24.4 or newer and
 publishes exactly ports 80 and 443 on Traefik, without retaining development 8443.
+
+## Post-merge configuration corrections (2026-09-01)
+
+`TRAEFIK_NETWORK` now names the Compose edge network and the explicit API/frontend
+routing labels as one configuration value. The production provider default uses it
+too. Existing dynamically created runtimes still use their own isolated networks;
+this does not combine project networks or add a second serving path. Recreate
+services deliberately when changing an existing network name.
+
+Canonicalization reads the primary executable source and its executable OpenAPI
+dependencies sequentially; documentation contributes immutable metadata there and
+is read by the existing indexing boundary instead. This avoids loading all raw
+project documentation during configuration discovery/build canonicalization, but
+does not establish an unlimited-size or aggregate-memory guarantee.
+
+Documentation and semantic chunk IDs now include project, generation, and source
+version identity. The normalized content hashes used for embedding-cache reuse are
+unchanged. New generations no longer overwrite other scopes' vector primary keys.
+Existing historical indexes are not retroactively rewritten: create a new build
+for affected projects from retained sources and verify it before deploying it. Do
+not bulk-delete a shared Milvus collection or modify historical build manifests.
+
+Runtime response validation selects the most specific declared status before media
+validation. An exact/class response definition with the wrong media type cannot
+fall through to `default`. APIs previously accepted through that fallback may now
+return an explicit response-contract error; correct the source contract or upstream
+response rather than broadening validation to conceal the mismatch.

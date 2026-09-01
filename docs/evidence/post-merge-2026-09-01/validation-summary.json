@@ -1,0 +1,62 @@
+{
+  "repository": "yazeedhasan97/MCPlica",
+  "baseline": "435447656ea0fe21e50c3ac43440bc33448b1570",
+  "code_commit": "ea88b9cf5f8967475e6644f5b8e5ea2a58abd0e9",
+  "ci_run_id": 33528770202,
+  "ci_conclusion": "failure",
+  "application_jobs": {
+    "backend": "success",
+    "runtime": "success",
+    "frontend": "success",
+    "e2e": "success",
+    "docker": "success"
+  },
+  "dependency_review": {
+    "job_id": 99926257806,
+    "status": "failure",
+    "reason": "Dependency review is not supported on this repository; relevant GitHub repository security-feature prerequisites remain unresolved."
+  },
+  "security_run_id": 33528770143,
+  "security_conclusion": "success",
+  "docker_context_privacy": "passed",
+  "milvus_scope_isolation": "passed",
+  "project_runtime_isolation": "passed",
+  "custom_edge_network": "mcplica-acceptance-edge",
+  "cross_browser": {
+    "total": 24,
+    "expected": 16,
+    "unexpected": 0,
+    "flaky": 0,
+    "skipped": 8,
+    "ok": true
+  },
+  "live_compose_browser": {
+    "stats": {
+      "total": 1,
+      "expected": 1,
+      "unexpected": 0,
+      "flaky": 0,
+      "skipped": 0,
+      "ok": true
+    },
+    "errors": []
+  },
+  "compose_final_state": {
+    "required_services": 13,
+    "running_healthy": 11,
+    "successful_oneshot": 2
+  },
+  "compose_artifact_id": 9809201659,
+  "compose_artifact_sha256": "e7a4510917e93d5d1161dea27ab9cacdce2d58ebc49e7a10341fe8039fdd9d58",
+  "cross_browser_artifact_id": 9808965375,
+  "cross_browser_artifact_sha256": "80276c54b4b71bbef4f06e99a0925cbe129c1cd56425e7e8c85d27bb27bac34b",
+  "external_http_fixtures": [
+    "OpenRouter",
+    "sample upstream product API"
+  ],
+  "production_host_deployed": false,
+  "live_public_tls_verified": false,
+  "all_prior_findings_closed": false,
+  "complete_every_file_semantic_audit": false,
+  "disposable_resources_cleaned_up": true
+}
