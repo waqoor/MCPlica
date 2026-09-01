@@ -66,7 +66,12 @@ def test_dispatches_exact_class_and_default_contracts_with_media_precedence() ->
         contract,
         UpstreamResult(201, "application/vnd.example+json", [1, 2]),
     )
-    validate_upstream_response(contract, UpstreamResult(204, "text/plain", "ok"))
+    with pytest.raises(UpstreamResponseContractError):
+        validate_upstream_response(contract, UpstreamResult(204, "text/plain", "ok"))
+    default_contract = compile_response_contract(
+        _tool([ResponseDefinition(status_code="default", media_type="text/plain")])
+    )
+    validate_upstream_response(default_contract, UpstreamResult(200, "text/plain", "ok"))
 
     with pytest.raises(UpstreamResponseContractError):
         validate_upstream_response(
@@ -143,3 +148,17 @@ def test_invalid_or_duplicate_dispatch_contract_fails_during_runtime_load() -> N
                 ]
             )
         )
+
+
+@pytest.mark.parametrize("specific", ["200", "2XX"])
+def test_media_mismatch_cannot_bypass_more_specific_status(specific: str) -> None:
+    contract = compile_response_contract(
+        _tool(
+            [
+                ResponseDefinition(status_code=specific, media_type="application/json"),
+                ResponseDefinition(status_code="default", media_type="text/plain"),
+            ]
+        )
+    )
+    with pytest.raises(UpstreamResponseContractError):
+        validate_upstream_response(contract, UpstreamResult(200, "text/plain", "unexpected"))

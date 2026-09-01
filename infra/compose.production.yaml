@@ -74,7 +74,7 @@ services:
       - --providers.docker.endpoint=unix:///var/run/docker.sock
       - --providers.docker.exposedbydefault=false
       - --providers.docker.allowemptyservices=false
-      - --providers.docker.network=mcplica-edge
+      - --providers.docker.network=${TRAEFIK_NETWORK:-mcplica-edge}
       - --ping=true
       - --ping.entrypoint=traefik
       - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:?Set ACME_EMAIL}

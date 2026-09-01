@@ -48,9 +48,13 @@ def validate_upstream_response(
     status_class = f"{status[0]}XX"
     for status_key in (status, status_class, "default"):
         candidates = [item for item in contract if item.definition.status_code == status_key]
+        if not candidates:
+            continue
+        # Status specificity is resolved before media. An explicit response
+        # cannot be bypassed through a range/default with a different media type.
         selected = _select_media(candidates, result.content_type, result.data)
         if selected is None:
-            continue
+            raise UpstreamResponseContractError()
         if selected.validator is not None:
             try:
                 selected.validator.validate(  # pyright: ignore[reportUnknownMemberType]

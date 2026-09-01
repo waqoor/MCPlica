@@ -1,4 +1,3 @@
-import asyncio
 import hashlib
 from pathlib import PurePosixPath
 from urllib.parse import urlsplit
@@ -102,19 +101,14 @@ class CanonicalizationService:
         ]
         if len(primary) != 1:
             raise SourceParseError("A build requires exactly one primary executable source")
-        payloads = await asyncio.gather(
-            *(
-                self._storage.get(
-                    item.version.storage_key,
-                    max_bytes=max_source_bytes,
-                )
-                for item in bindings
-            )
-        )
-        content = {item.version.id: value for item, value in zip(bindings, payloads, strict=True)}
+        # Documentation contributes immutable metadata here; its payload belongs
+        # exclusively to the bounded indexing parser. Read executable dependencies
+        # one at a time instead of retaining every source's raw bytes concurrently.
         root = primary[0]
+        root_payload = await self._storage.get(root.version.storage_key, max_bytes=max_source_bytes)
         try:
-            _, document = parse_json_or_yaml(content[root.version.id])
+            _, document = parse_json_or_yaml(root_payload)
+            del root_payload
         except SourceParseError as exc:
             _attribute_source_error(exc, root.version.id, pointer="#")
             raise
@@ -126,8 +120,12 @@ class CanonicalizationService:
                     or binding.source.kind is not SourceKind.OPENAPI
                 ):
                     continue
+                dependency_payload = await self._storage.get(
+                    binding.version.storage_key, max_bytes=max_source_bytes
+                )
                 try:
-                    _, external = parse_json_or_yaml(content[binding.version.id])
+                    _, external = parse_json_or_yaml(dependency_payload)
+                    del dependency_payload
                 except SourceParseError as exc:
                     _attribute_source_error(exc, binding.version.id, pointer="#")
                     raise

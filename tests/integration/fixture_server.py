@@ -13,6 +13,13 @@ import uvicorn
 from starlette.applications import Starlette
 
 
+def _raise_if_cancelled() -> None:
+    """Honor owner cancellation even when an HTTP timeout scope consumed it."""
+    owner = asyncio.current_task()
+    if owner is not None and owner.cancelling():
+        raise asyncio.CancelledError
+
+
 @dataclass(slots=True)
 class FixtureServer:
     app: Starlette
@@ -51,11 +58,13 @@ class FixtureServer:
             deadline = time.monotonic() + self.startup_timeout
             async with httpx.AsyncClient(trust_env=False, timeout=0.5) as client:
                 while time.monotonic() < deadline:
+                    _raise_if_cancelled()
                     if self.task.done():
                         await self.task
                         raise RuntimeError(f"fixture on port {self.port} stopped during startup")
                     try:
                         response = await client.get(f"http://127.0.0.1:{self.port}/healthz")
+                        _raise_if_cancelled()
                         if response.status_code == 200:
                             return
                     except httpx.HTTPError:

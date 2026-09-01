@@ -15,3 +15,14 @@ artifacts
 infra/volumes
 logs
 output
+
+# Local runtime state and nested private settings are never build inputs.
+.runtime
+**/.runtime
+**/.env
+**/.env.*
+!**/.env.example
+secrets
+runtime-secrets
+**/*.key
+**/*.pem
