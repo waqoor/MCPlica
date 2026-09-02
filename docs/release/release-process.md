@@ -23,7 +23,9 @@ and creates `docs/releases/vX.Y.Z.md`. Do not rely on generated GitHub notes as 
    contracts, and update changelog/release notes. Review internal schema/prompt identifiers
    separately; they are not blindly coupled to the product version.
 3. Reconcile the six authoritative design documents, migrations, lockfiles, Dockerfiles/Compose,
-   compatibility matrix, operator/security docs, and generated/checksum artifacts.
+   compatibility matrix, operator/security docs, and generated artifacts. Stage the intended tree,
+   run `python scripts/checksum_manifest.py --write`, and stage `MANIFEST.sha256`; the manifest
+   hashes canonical Git index blobs so Windows/Linux checkout line endings cannot change it.
 4. Run `make repository-check`, `make api-contract-check`, formatting, lint, type checks, component
    tests, critical coverage, migration round trips/drift, frontend build/browser tests, and the
    complete disposable Compose acceptance workflow.

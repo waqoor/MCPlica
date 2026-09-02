@@ -9,7 +9,8 @@ release is not ready; local evidence cannot satisfy a hosted or production-host 
 - [ ] `VERSION`, all package/lock/runtime/frontend/API/image consumers, `CHANGELOG.md`, and
       `docs/releases/vX.Y.Z.md` agree; `python scripts/release_version.py --check` passes.
 - [ ] The release-preparation branch contains only intended reviewed changes; generated artifacts,
-      documentation links, examples, and `MANIFEST.sha256` are current.
+      documentation links, examples, and `MANIFEST.sha256` are current. The checksum manifest was
+      regenerated from the fully staged Git index and then verified on a clean checkout.
 - [ ] No tracked `.env`, secret, private source specification, runtime secret bundle, disposable
       output, review scratch, merge marker, placeholder release value, or ignored build product is
       present.
