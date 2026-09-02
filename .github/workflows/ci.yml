@@ -39,6 +39,13 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Verify release version and repository documentation
+        working-directory: .
+        run: |
+          python scripts/release_version.py --check
+          python scripts/github_labels.py --check
+          python scripts/validate_docs.py
+          python scripts/validate_starter.py
       - name: Verify tracked source checksum manifest
         working-directory: .
         run: python scripts/checksum_manifest.py --check
@@ -58,10 +65,11 @@ jobs:
           enable-cache: true
           cache-dependency-glob: uv.lock
       - run: uv sync --frozen --extra dev
-      - run: uv run --frozen --extra dev ruff check app tests ../packages/contracts/src ../packages/contracts/tests
-      - run: uv run --frozen --extra dev ruff format --check app tests ../packages/contracts/src ../packages/contracts/tests
+      - run: uv run --frozen --extra dev ruff check app tests scripts ../packages/contracts/src ../packages/contracts/tests ../packages/contracts/scripts ../scripts ../tests/integration ../migrations
+      - run: uv run --frozen --extra dev ruff format --check app tests scripts ../packages/contracts/src ../packages/contracts/tests ../packages/contracts/scripts ../scripts ../tests/integration ../migrations
       - run: uv run --frozen --extra dev pyright app ../packages/contracts/src
       - run: uv run --frozen --extra dev alembic -c ../migrations/alembic.ini upgrade head
+      - run: uv run --frozen --extra dev python generate_openapi.py --check
       - run: uv run --frozen --extra dev pytest -c pyproject.toml tests ../packages/contracts/tests ../tests/integration/test_fixture_server.py --cov=app --cov-report=json:coverage-critical.json
       - run: uv run --frozen --extra dev python scripts/check_critical_coverage.py coverage-critical.json
       - run: uv run --frozen --extra dev alembic -c ../migrations/alembic.ini check
@@ -181,6 +189,32 @@ jobs:
         run: python tests/integration/docker_context_check.py
       - name: Build canonical application images
         run: docker compose --env-file .env -f infra/compose.yaml build api runtime-validator frontend
+      - name: Verify image versions, OCI metadata, and runtime users
+        run: python tests/integration/image_metadata_check.py
+      - name: Scan backend candidate image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: mcplica/backend:test
+          version: v0.74.0
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Scan runtime candidate image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: mcplica/runtime:test
+          version: v0.74.0
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Scan frontend candidate image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: mcplica/frontend:test
+          version: v0.74.0
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
       - name: Start the complete platform, including schema and mount initialization
         run: docker compose --env-file .env -f infra/compose.yaml up --no-build --detach --wait --wait-timeout 300
       - name: Check every required service and one-shot initialization

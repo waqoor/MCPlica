@@ -4,7 +4,7 @@ import os
 import stat
 from pathlib import Path
 
-from mcp_contracts import MCPManifest
+from mcp_contracts import VERSION, MCPManifest
 
 from app.manifest.schema import validate_manifest
 
@@ -26,7 +26,7 @@ def load_manifest(
     *,
     expected_sha256: str | None = None,
     max_bytes: int = 10_000_000,
-    runtime_version: str = "1.0.0",
+    runtime_version: str = VERSION,
 ) -> MCPManifest:
     payload = _read_bounded(Path(path), max_bytes)
     if expected_sha256 is not None:

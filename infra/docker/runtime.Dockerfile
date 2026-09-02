@@ -14,16 +14,19 @@ COPY mcp_runtime /workspace/mcp_runtime
 RUN uv sync --frozen --package mcplica-runtime --no-dev --no-editable
 
 FROM ${PYTHON_BASE} AS runtime
-ARG RUNTIME_VERSION=1.0.0
+ARG VERSION
+ARG VCS_REF=local
+ARG SOURCE_URL=https://github.com/yazeedhasan97/MCPlica
 LABEL org.opencontainers.image.title="MCPlica generic MCP runtime" \
       org.opencontainers.image.description="Manifest-driven MCP Streamable HTTP runtime" \
-      org.opencontainers.image.version="${RUNTIME_VERSION}" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${VCS_REF}" \
       org.opencontainers.image.licenses="AGPL-3.0-only" \
-      org.opencontainers.image.source="https://github.com/yazeedhasan97/MCPlica"
+      org.opencontainers.image.source="${SOURCE_URL}"
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH=/opt/venv/bin:$PATH \
-    MCP_RUNTIME_VERSION=${RUNTIME_VERSION}
+    MCP_RUNTIME_VERSION=${VERSION}
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y --no-install-recommends \
     && DEBIAN_FRONTEND=noninteractive apt-get purge -y --allow-remove-essential \
@@ -38,6 +41,8 @@ RUN apt-get update \
         --home-dir /nonexistent --shell /usr/sbin/nologin mcplica \
     && mkdir -p /runtime /run/secrets \
     && chown 10001:10001 /runtime /run/secrets
+COPY VERSION /opt/mcplica/VERSION
+RUN test -n "${VERSION}" && test "$(cat /opt/mcplica/VERSION)" = "${VERSION}"
 COPY --from=builder --chown=10001:10001 /opt/venv /opt/venv
 USER 10001:10001
 WORKDIR /

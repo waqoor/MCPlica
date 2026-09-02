@@ -796,7 +796,7 @@ Generated MCP runtime containers are dynamic Docker resources managed by the Run
 The installation defines:
 
 ```text
-MCP_BASE_DOMAIN=mcp.example.com
+MCP_DOMAIN=mcp.example.com
 ```
 
 A project slug `inventory` receives:

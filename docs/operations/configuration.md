@@ -10,6 +10,7 @@ projects, sources, builds, credentials, users, settings, audit records, and depl
 | Variable                                 | Purpose                                          | Production rule                                                         |
 | ---------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------- |
 | `ENV`                           | `development`, `test`, or `production`           | Must be `production`                                                    |
+| `MCPLICA_VERSION`               | Compose/package release identity from `VERSION`  | Must equal the deployed release; do not override runtime independently  |
 | `API_DOMAIN`                    | Public control-plane API hostname                | Explicit non-local hostname                                             |
 | `FRONTEND_ORIGIN`               | Exact browser origin used by CORS/cookies        | HTTPS origin, no wildcard                                               |
 | `METRICS_BEARER_TOKEN`          | Bearer token protecting `/metrics`               | Required; at least 32 characters                                        |
@@ -116,7 +117,11 @@ OpenRouter settings are `OPENROUTER_API_KEY`, `..._BASE_URL`, `..._ANALYSIS_MODE
 
 ## Health, metrics, and logs
 
-`/api/v1/health` is a liveness probe. `/api/v1/ready` concurrently probes PostgreSQL, Redis, artifact storage, the Build queue, Milvus, and OpenRouter within `READINESS_TIMEOUT_SECONDS`; unavailable core persistence/queue dependencies return 503, while AI/vector outages are reported as degraded because existing control-plane data and deployed runtimes remain usable.
+`/api/v1/health` is a liveness probe and reports the running product version.
+`/api/v1/ready` concurrently probes PostgreSQL, Redis, artifact storage, the Build queue, Milvus,
+and OpenRouter within `READINESS_TIMEOUT_SECONDS`; unavailable core persistence/queue dependencies
+return 503, while AI/vector outages are reported as degraded because existing control-plane data
+and deployed runtimes remain usable.
 
 Compose health checks cover PostgreSQL, Redis, etcd, MinIO, Milvus, API, both RQ
 workers, frontend, and Traefik. Each worker verifies its own hostname/queue registration
@@ -128,7 +133,16 @@ gate; both must exit successfully rather than remain running.
 
 ## Deployment and routing
 
-`MCP_DOMAIN` is the base for per-project hostnames. `TRAEFIK_NETWORK`, `..._CONTAINER_NAME`, `..._ENTRYPOINT`, `..._TLS`, and `..._CERT_RESOLVER` must match the active Traefik instance. The shipped backend/runtime images and Compose permissions use fixed UID/GID 10001; `runtime-init` rejects different values instead of advertising unsupported identity customization. Resource limits default to 512 MiB memory, 1 CPU, 256 PIDs, and 64 MiB tmpfs and may be tuned only after load and abuse testing. The API and builder worker remain Docker-socket-free. Only the deployment worker consumes the deployment queue and receives the socket plus runtime-host mount.
+`MCP_DOMAIN` is the base for per-project hostnames. `BUILDER_NETWORK`, `EGRESS_NETWORK`, and
+`TRAEFIK_NETWORK` name the three existing isolation boundaries; use unique names when intentionally
+running a disposable acceptance project beside a retained installation. `TRAEFIK_NETWORK`,
+`..._CONTAINER_NAME`, `..._ENTRYPOINT`, `..._TLS`, and `..._CERT_RESOLVER` must match the active
+Traefik instance. The shipped backend/runtime images and Compose permissions use fixed UID/GID
+10001; `runtime-init` rejects different values instead of advertising unsupported identity
+customization. Resource limits default to 512 MiB memory, 1 CPU, 256 PIDs, and 64 MiB tmpfs and may
+be tuned only after load and abuse testing. The API and builder worker remain Docker-socket-free.
+Only the deployment worker consumes the deployment queue and receives the socket plus runtime-host
+mount.
 
 `BUILDERS_CAN_DEPLOY` defaults false. This is a server authorization policy, not a cosmetic UI toggle. `BUILD_RETENTION_COUNT` keeps at least the newest configured number of Builds per Project plus every active, deployed, or nonterminal Build. `SOURCE_RETENTION_DAYS` removes only versions strictly older than the cutoff, never the latest version of a Source, and never a version referenced by a retained Build. Blank source retention disables source-version expiry.
 
@@ -158,12 +172,19 @@ Rotate project upstream credentials and MCP access tokens through the API/UI so 
 
 ## Compose environment resolution
 
-`--env-file` selects interpolation inputs; it does not by itself replace a service's
-`env_file`. The Makefile forwards `ENV_FILE` as an absolute `MCPLICA_ENV_FILE` so both
-use the same file. For direct commands with a non-default file, export
-`MCPLICA_ENV_FILE` to its absolute path and also pass `--env-file` with that path.
-Do not print a fully resolved Compose model into shared logs: it contains secrets.
-Use `config --quiet` for routine syntax checks.
+`--env-file` selects interpolation inputs; a service-level `env_file` is a separate
+Compose input. `scripts/init_env.py` therefore writes `CONTROL_PLANE_ENV_FILE` relative
+to `infra/compose.yaml`, and `tests/integration/prepare_compose.py` preserves the same
+invariant for custom disposable files. Do not copy or rename an environment file
+without regenerating or updating that path. Host-side validation scripts read
+`MCPLICA_ENV_FILE`; the Makefile sets it from `ENV_FILE`. Do not print a fully resolved
+Compose model into shared logs because it contains secrets. Use `config --quiet` for
+routine syntax checks.
+
+`MCPLICA_VERSION` is the only operator-visible Compose release version. Compose maps it to the
+backend/runtime compatibility setting and all local image build labels. Environments created
+before v1 must add `MCPLICA_VERSION=1.0.0` and remove a manually configured
+`MCP_RUNTIME_VERSION`; independent values can falsely advertise an incompatible runtime.
 
 The common control-plane environment is shared by migrations, API, builder worker,
 and deployment worker. Explicit shell overrides for database URL, queue names,

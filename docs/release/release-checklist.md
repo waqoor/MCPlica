@@ -1,45 +1,99 @@
 # Production release checklist
 
-Every checked item needs a link or stored evidence record. Unchecked means not ready.
+Every checked item needs an exact URL, workflow run, command output, or stored evidence record for
+the release commit. “Not applicable” needs a written reason. An unchecked/unknown item means the
+release is not ready; local evidence cannot satisfy a hosted or production-host gate.
 
-## Repository and governance
+## Release identity and repository state
 
-- [ ] `master` protection, required CI/security/CLA/CODEOWNERS review, and force-push/deletion controls are enabled.
-- [ ] Founder-approved individual/entity CLA text and verification service are operational; no external PR bypassed it.
-- [ ] Private vulnerability reporting and conduct-reporting channel work.
-- [ ] License, trademarks, maintainers, governance, sponsorship, generated-output, contribution, and security documents are current.
+- [ ] `VERSION`, all package/lock/runtime/frontend/API/image consumers, `CHANGELOG.md`, and
+      `docs/releases/vX.Y.Z.md` agree; `python scripts/release_version.py --check` passes.
+- [ ] The release-preparation branch contains only intended reviewed changes; generated artifacts,
+      documentation links, examples, and `MANIFEST.sha256` are current.
+- [ ] No tracked `.env`, secret, private source specification, runtime secret bundle, disposable
+      output, review scratch, merge marker, placeholder release value, or ignored build product is
+      present.
+- [ ] The release-readiness pull request records exact local/hosted results, known limitations,
+      external prerequisites, rollback/migration impact, and final publication commands.
 
-## Product and contracts
+## GitHub controls and governance
 
-- [ ] All authoritative acceptance scenarios map to live routes/UI behavior with no production mock/stub/TODO or parallel implementation.
-- [ ] OpenAPI, typed clients, domain contracts, migrations, compiler/runtime schemas, and generated artifacts agree.
-- [ ] The `issues_002.md` closure invariants remain green: current-source/frozen-Build identity,
-      exact execution fencing, bounded I/O/lifecycle, pagination, key rotation, safe logging, and
-      structured-AI accounting.
-- [ ] Source provenance, explicit exclusions, deterministic executable mapping, 100% coverage, no blocking findings, and runtime compatibility are proven.
-- [ ] Auth/CSRF/roles, one-time secret handling, SSRF/redirect/DNS policy, manifest digest, runtime isolation, and failed replacement/rollback behavior pass negative tests.
+- [ ] `master` protection/rulesets require pull requests, sensitive CODEOWNERS review,
+      conversation resolution, current CI/Security/CLA checks, and block force pushes/deletion with
+      administrator enforcement.
+- [ ] The founder-approved CLA service and `CLA_STATUS_CONTEXT` work for the exact pull-request
+      head; no external contribution bypassed it.
+- [ ] Private vulnerability reporting and the conduct-reporting channel work; maintainer access and
+      release/OIDC/GHCR permissions were reviewed.
+- [ ] License, trademarks, maintainers, governance, support, sponsorship, generated-output,
+      contribution, security, release, label, issue, and pull-request policies are current.
+
+## Product, contracts, and migrations
+
+- [ ] Authoritative acceptance behavior maps to the canonical routes/UI/runtime with no production
+      mock/stub/TODO, duplicate implementation, alternate persistence, or parallel deployment path.
+- [ ] FastAPI OpenAPI, generated TypeScript/Zod clients, shared contracts/JSON Schemas, fixtures,
+      compiler/runtime compatibility, migrations, and documentation agree.
+- [ ] Blank database upgrade reaches the single `0025` head; `alembic check`, the safe
+      `0025 -> 0020 -> 0025` rehearsal, legacy-constraint upgrade, and intentional `0021`
+      downgrade-refusal scenario pass on PostgreSQL.
+- [ ] Source/build identity, execution fencing, bounded I/O/lifecycle, pagination, key rotation,
+      safe logging, structured-AI accounting, deterministic mapping, and exact 100% validation
+      retain their PostgreSQL/component regression coverage.
+- [ ] Authentication/CSRF/roles, write-only secrets, SSRF/redirect/DNS policy, artifact/manifest
+      digests, runtime isolation, and failed replacement/rollback paths pass positive and negative
+      tests.
 
 ## Quality and supply chain
 
-- [ ] Formatting, lint, type checks, backend/runtime/contracts tests, frontend unit/build, Chromium/Firefox/WebKit/mobile E2E, and Compose/image smoke tests pass from frozen locks.
-- [ ] Secret, dependency, repository misconfiguration, and all three image scans have no unaccepted HIGH/CRITICAL blocker.
-- [ ] SBOMs, release evidence, checksums, image digests, and Cosign signatures verify for the exact tagged SHA.
-- [ ] `python scripts/checksum_manifest.py --check` succeeds for the exact tracked source tree and
-      the configured external CLA status/check succeeds for the release commit where applicable.
+- [ ] Frozen install, format, Ruff/ESLint, strict Python/TypeScript checks, backend/runtime/contracts
+      tests, critical coverage floors, frontend unit/build, and Chromium/Firefox/WebKit/mobile E2E
+      pass for the exact commit.
+- [ ] Canonical Compose render/build/start, image metadata, Docker context, dynamic runtime,
+      real-Milvus isolation, live browser, authenticated MCP calls, rebuild/redeploy, rollback,
+      outage recovery, and persistence-after-recreation checks pass on a disposable Linux runner.
+- [ ] Gitleaks, dependency review, `pip-audit`, `pnpm audit`, Trivy source/misconfiguration/secret
+      scan, and all three pre-publication image scans have no unaccepted HIGH/CRITICAL blocker.
+- [ ] `python scripts/checksum_manifest.py --check` passes and CI preserves the exact tracked source
+      plus bounded/redacted diagnostics for the release commit.
 
-## Operations
+## Publication artifacts
 
-- [ ] Production DNS/TLS, redirect, security headers, secure cookies, unknown-host denial, and authenticated `/mcp` pass live validation.
-- [ ] Unique production secrets, key escrow/versioning, least-privilege database/storage, network exposure, Docker socket separation, and host permissions are reviewed.
-- [ ] Monitoring/log redaction, incident contacts, capacity/timeouts, retention, upgrade, and project rollback are rehearsed.
-- [ ] Encrypted backup and isolated restore drill recover database, artifacts, encrypted credentials, indexes, and an authenticated runtime within accepted RPO/RTO.
+- [ ] The tag is annotated, exactly `v<VERSION>`, points to reviewed `master`, and neither its
+      GitHub Release nor any matching GHCR image tag already exists.
+- [ ] Backend/frontend/runtime image tags resolve to recorded immutable digests with correct
+      version/source/revision/license labels and expected non-root users.
+- [ ] Source and image SPDX JSON SBOMs, per-image release evidence/checksums, source archive,
+      `SHA256SUMS`, Cosign bundle, image signatures, and registry provenance/SBOM attestations exist
+      for the exact tagged SHA.
+- [ ] Checksums, blob signature, every image signature, and provenance attestation verify using the
+      tag-specific release workflow identity before any digest enters production configuration.
+
+## Target production environment
+
+- [ ] Supported hardened Linux x86-64 host has reviewed Docker/Compose versions, clock, capacity,
+      disk/inodes, encryption, firewall, SSH/access, Docker socket controls, and runtime-root modes.
+- [ ] Unique production secrets, encryption-key escrow/versioning, refresh/signing keys, database/
+      storage least privilege, external provider credentials, and bootstrap-secret removal are
+      verified without exposing values.
+- [ ] UI/API/wildcard MCP DNS, TLS chain/hostname, redirect, security headers, secure cookies,
+      unknown-host denial, and authenticated `/mcp` initialize/list/schema-valid call pass live.
+- [ ] Real OpenRouter models/capabilities/quota, external OIDC where used, runtime upstream DNS/TLS,
+      log redaction/monitoring/alerts, incident contacts, timeouts/capacity, and retention are tested.
+- [ ] Encrypted backup and isolated restore recover PostgreSQL, artifacts, runtime root, keys,
+      credential decryptability, indexes/rebuild path, active deployment evidence, and an
+      authenticated runtime within accepted RPO/RTO.
+- [ ] Upgrade and application rollback are rehearsed on a restored copy; project deployment
+      rollback uses the canonical immutable-Build lifecycle.
 
 ## Sign-off
 
 - Release/tag:
 - Commit SHA:
+- Pull request and required-check URLs:
 - Evidence bundle/checksum:
 - Technical reviewer:
 - Security/operations reviewer:
-- Founder release approval:
-- Known residual risks and expiry:
+- Release maintainer:
+- Target-host evidence location:
+- Known residual risks, owner, and expiry:

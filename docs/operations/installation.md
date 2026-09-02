@@ -34,6 +34,10 @@ key with your encrypted backups, separately from the database, and never commit
 `.env`. Read the generated administrator credentials locally, not in shared logs.
 The development seed creates only a missing account and never changes its password.
 
+For an existing pre-v1 private environment, do not regenerate secrets. Add
+`MCPLICA_VERSION=1.0.0`, remove the obsolete operator-set `MCP_RUNTIME_VERSION`, and follow the
+release-specific migration guidance before recreating containers.
+
 Set a real `OPENROUTER_API_KEY` and available analysis, validation, and embedding
 models for real AI-assisted builds. Missing provider credentials are not silently
 replaced with mocks. The control plane can remain usable while build intelligence
@@ -88,7 +92,7 @@ python scripts/init_env.py --production --output .env.production
 ```
 
 Set `UI_DOMAIN`, `API_DOMAIN`, `MCP_DOMAIN`, `ACME_EMAIL`, the HTTPS frontend origin,
-and backend/frontend/runtime **verified release image digests**. Set a dedicated
+`MCPLICA_VERSION`, and backend/frontend/runtime **verified release image digests**. Set a dedicated
 absolute runtime host directory and real provider credentials. Keep
 `DEFAULT_ADMIN_EMAIL` and `DEFAULT_ADMIN_PASSWORD` empty. Follow `domain-tls.md` for
 DNS, firewall, certificate, and release verification requirements.

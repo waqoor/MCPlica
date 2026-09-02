@@ -1,0 +1,31 @@
+name: Documentation report
+description: Report inaccurate, missing, or unclear MCPlica documentation.
+title: "docs: "
+labels: ["type: documentation", "status: needs-triage"]
+body:
+  - type: input
+    id: location
+    attributes:
+      label: Page or section
+      description: Link the file and heading, or name the missing topic.
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Explain what is inaccurate, ambiguous, stale, or broken.
+    validations:
+      required: true
+  - type: textarea
+    id: correction
+    attributes:
+      label: Suggested correction
+      description: Include commands or evidence when the report concerns operational behavior.
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety
+      options:
+        - label: I removed credentials, private specifications, and sensitive logs.
+          required: true

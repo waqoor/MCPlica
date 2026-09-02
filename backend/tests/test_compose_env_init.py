@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from dotenv import dotenv_values
+
 from app.core.config import Settings
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -16,6 +18,12 @@ def test_initialization_creates_private_consistent_environment_without_overwrite
     target = tmp_path / ".env"
     command = [sys.executable, str(ROOT / "scripts/init_env.py"), "--output", str(target)]
     result = subprocess.run(command, capture_output=True, text=True, check=True)
+    environment = dotenv_values(target)
+    configured_env_file = Path(str(environment["CONTROL_PLANE_ENV_FILE"]))
+    if not configured_env_file.is_absolute():
+        configured_env_file = ROOT / "infra" / configured_env_file
+    assert configured_env_file.resolve() == target.resolve()
+    assert environment["COMPOSE_PROJECT_NAME"] == "mcplica"
     settings = Settings(_env_file=target)  # pyright: ignore[reportCallIssue]
     assert settings.secret_encryption_key is not None
     key = settings.secret_encryption_key.get_secret_value()

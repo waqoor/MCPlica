@@ -1671,6 +1671,8 @@ export type components = {
        * @constant
        */
       readonly status: "ok";
+      /** Version */
+      readonly version: string;
     };
     /**
      * HttpMethod

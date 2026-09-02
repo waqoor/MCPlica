@@ -1,48 +1,127 @@
 # Release process
 
-MCPlica releases are immutable source tags plus three signed container images (`backend`, `frontend`, and `runtime`), SBOMs, digest evidence, and checksums. A tag does not make an installation production-ready; the operator gates in `release-checklist.md` still apply.
+MCPlica releases are immutable source tags plus three container images (`backend`, `frontend`,
+and `runtime`), source/image SBOMs, checksums, keyless signatures, and provenance/SBOM
+attestations. A successful repository workflow does not certify an operator environment; complete
+the target-host gates in the release checklist separately.
 
-## Repository controls
+## Version, branch, and changelog conventions
 
-Before the first external contribution or release, enable private vulnerability reporting, configure the founder-approved CLA service, and protect `master`: require pull requests, CODEOWNERS review for sensitive paths, conversation resolution, successful CI/security/CLA checks, signed or otherwise attributable commits per project policy, blocked force pushes/deletion, and administrator enforcement. These are GitHub-hosted settings and cannot be truthfully completed by repository files alone.
+Root `VERSION` is authoritative and contains SemVer without `v` or build metadata, such as `1.2.3`
+or `1.2.3-rc.1`. Release branches use `release/vX.Y.Z-preparation`; annotated tags and GitHub
+Releases use the matching `vX.Y.Z`. Published source tags and container tags are never moved,
+deleted for reuse, or overwritten. A correction uses a new patch/prerelease version.
 
-## Prepare
+Normal branches use `feature/`, `fix/`, or `docs/`. User/operator/security/compatibility changes
+enter `CHANGELOG.md` under `[Unreleased]`. Release preparation moves them to a dated version section
+and creates `docs/releases/vX.Y.Z.md`. Do not rely on generated GitHub notes as the release contract.
 
-1. Reconcile the release against the six authoritative documents and update version/changelog/release notes.
-2. Confirm frozen Python/pnpm locks, migrations, contracts, generated schemas/artifacts,
-   documentation, and `MANIFEST.sha256` are synchronized. For the 2026-09-02 schema line, rehearse
-   migrations `0021` through `0025` and the documented source-selection downgrade refusal.
-3. Run lint, format checks, type checks, unit/integration tests, frontend production build, cross-browser E2E, Compose rendering, image builds, non-root/health/header checks, and secret/dependency/source/image scans.
-4. Complete threat-model review, upgrade/rollback rehearsal, backup/restore drill, and live TLS/MCP authentication acceptance for the target environment.
-5. Resolve every blocker or mark the release not ready. Do not waive deterministic coverage, secret, auth, network, image-digest, or runtime-health gates.
+## Prepare one reusable release candidate
 
-Create an annotated SemVer tag on a commit already merged to `master`, for example `v1.0.0` or `v1.0.0-rc.1`. The release workflow verifies SemVer, default-branch ancestry, and a successful CI run for that exact SHA.
+1. Branch from current `master`; confirm no unrelated or secret files are present.
+2. Edit `VERSION`, run `python scripts/release_version.py --sync`, regenerate OpenAPI/frontend
+   contracts, and update changelog/release notes. Review internal schema/prompt identifiers
+   separately; they are not blindly coupled to the product version.
+3. Reconcile the six authoritative design documents, migrations, lockfiles, Dockerfiles/Compose,
+   compatibility matrix, operator/security docs, and generated/checksum artifacts.
+4. Run `make repository-check`, `make api-contract-check`, formatting, lint, type checks, component
+   tests, critical coverage, migration round trips/drift, frontend build/browser tests, and the
+   complete disposable Compose acceptance workflow.
+5. Build all three images through canonical Compose, check OCI version/source/revision/license and
+   non-root user metadata, and scan each candidate for unaccepted HIGH/CRITICAL findings.
+6. Update `docs/evidence/vX.Y.Z-release-candidate.md` with exact commands/results and clearly list
+   hosted/production checks not performed. Commit, push, and open the release-readiness pull request.
+7. Require normal review plus successful CI, Security, CLA (where applicable), and repository-rule
+   checks on the exact PR head. Merge without bypassing failed or unavailable required checks.
 
-## Automated publication
+The acceptance harness is destructive to its disposable installation. It must never run during
+ordinary deployment startup or against retained development/production data.
 
-For each component, `.github/workflows/release.yml` builds the repository Dockerfile, scans HIGH/CRITICAL image findings, creates an SPDX JSON SBOM, pushes the tagged GHCR image, resolves its immutable digest, and signs that digest keylessly with GitHub Actions OIDC. It publishes image/digest/source evidence and SHA-256 checksum files to the GitHub release. A failed matrix component prevents the release job.
+## Hosted repository prerequisites
+
+Before publication, verify `master` rules require pull requests, CODEOWNERS review for sensitive
+paths, conversation resolution, current CI/Security/CLA checks, force-push/deletion prevention, and
+administrator enforcement. Confirm Actions may issue OIDC tokens, write GHCR packages/attestations,
+and create releases; enable private vulnerability reporting; configure the founder-approved CLA
+service/context. These settings cannot be proven by committed files alone.
+
+The repository-managed label catalog is `.github/labels.json`; its workflow updates catalogued
+labels on `master` without deleting extra project labels.
+
+## Publish after acceptance
+
+From a clean checkout after the release-readiness pull request is merged:
+
+```bash
+git switch master
+git pull --ff-only origin master
+python scripts/release_version.py --check
+git status --short
+git tag -s -a v1.0.0 -m "MCPlica v1.0.0"
+git push origin v1.0.0
+```
+
+Use the version read from `VERSION`; `v1.0.0` above is the current example. If the project has no
+approved signed-tag identity, create an annotated tag with `git tag -a`; lightweight tags are
+rejected. Do not push a tag until successful CI and Security **push** runs exist for that exact
+`master` SHA.
+
+The tag is the only publication trigger. `.github/workflows/release.yml` then:
+
+1. verifies exact tag/VERSION equality, changelog/notes, annotated tag type, `master` ancestry, and
+   successful CI/Security runs for the tagged SHA;
+2. refuses an existing GitHub Release or container tag;
+3. builds each repository Dockerfile with exact version, source SHA, and source URL OCI metadata;
+4. scans before push, creates an SPDX JSON SBOM, pushes the version tag, resolves the digest, signs
+   and immediately verifies that digest;
+5. attaches build provenance and the SBOM to the immutable registry digest;
+6. creates a source archive/source SBOM, per-image evidence/checksums, overall `SHA256SUMS`, and a
+   keyless signature bundle; and
+7. creates the GitHub Release from the committed versioned notes and uploads assets without
+   clobbering existing files.
+
+No workflow creates `latest`, floating major/minor tags, production deployment, or a second release
+path.
 
 ## Consumer verification
 
-Download release assets and verify checksums:
+Download every release asset and verify its filenames against the release page before execution:
 
 ```bash
-sha256sum --check backend.sha256
-sha256sum --check frontend.sha256
-sha256sum --check runtime.sha256
+sha256sum --check SHA256SUMS
+cosign verify-blob \
+  --bundle SHA256SUMS.bundle.json \
+  --certificate-identity "https://github.com/yazeedhasan97/MCPlica/.github/workflows/release.yml@refs/tags/v1.0.0" \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+  SHA256SUMS
 ```
 
-Read each `*.release.txt`, pull the recorded digest, and verify its signature using the tag-specific workflow identity:
+Read each `*.release.txt`, retain its exact `image@sha256:digest`, and verify image signature and
+attestations against the same tag-specific workflow identity:
 
 ```bash
 cosign verify \
   --certificate-identity "https://github.com/yazeedhasan97/MCPlica/.github/workflows/release.yml@refs/tags/v1.0.0" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
   ghcr.io/yazeedhasan97/mcplica/runtime@sha256:<digest>
+
+cosign verify-attestation --type slsaprovenance \
+  --certificate-identity "https://github.com/yazeedhasan97/MCPlica/.github/workflows/release.yml@refs/tags/v1.0.0" \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+  ghcr.io/yazeedhasan97/mcplica/runtime@sha256:<digest>
 ```
 
-Review the SBOM and scanner results for accepted residual risk. Set Compose image variables to the verified digest references; never translate them back to mutable tags.
+Repeat for backend/frontend and review each SPDX SBOM plus scanner result. Configure production
+Compose with digest references only; never translate them back to mutable tags.
 
-## Rollback and withdrawal
+## Failure, withdrawal, and rollback
 
-Do not move or reuse a published tag. For a defective release, document impact, mark/withdraw assets as appropriate, publish a patched version, and direct operators to tested previous digests or the recovery procedure. A security embargo uses a private advisory and coordinated release. Preserve build/SBOM/signature evidence even when a release is withdrawn.
+A partially failed publication may leave one or more immutable image tags without a GitHub
+Release. Do not overwrite them or rerun by moving the tag. Investigate, record the partial state,
+and publish a corrected patch/prerelease version. For a defective completed release, document
+impact, withdraw it without destroying evidence as appropriate, and direct operators to a tested
+previous digest or coordinated recovery point.
+
+Application rollback is allowed only when the older code supports the current schema. Otherwise
+restore the pre-upgrade database/artifact/runtime-root/key set. Project runtime rollback remains the
+normal immutable-Build lifecycle. Security embargoes use a private advisory and coordinated patch.

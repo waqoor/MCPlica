@@ -72,6 +72,8 @@ def test_control_plane_waits_for_migrations_and_runtime_permissions() -> None:
 def test_edge_routing_uses_the_configured_network() -> None:
     model = yaml.safe_load((ROOT / "infra/compose.yaml").read_text())
     network = "${TRAEFIK_NETWORK:-mcplica-edge}"
+    assert model["networks"]["builder"]["name"] == "${BUILDER_NETWORK:-mcplica-builder}"
+    assert model["networks"]["egress"]["name"] == "${EGRESS_NETWORK:-mcplica-egress}"
     assert model["networks"]["edge"]["name"] == network
     for name in ("api", "frontend"):
         assert model["services"][name]["labels"]["traefik.docker.network"] == network

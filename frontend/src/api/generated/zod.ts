@@ -576,7 +576,7 @@ const DeploymentRead: z.ZodTypeAny = z
   })
   .strict();
 const HealthRead: z.ZodTypeAny = z
-  .object({ service: z.string(), status: z.string() })
+  .object({ service: z.string(), status: z.string(), version: z.string() })
   .strict();
 const RuntimeEffectState: z.ZodTypeAny = z.enum([
   "effective",

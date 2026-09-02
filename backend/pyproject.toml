@@ -1,6 +1,6 @@
 [project]
 name = "mcplica-backend"
-version = "0.1.0"
+version = "1.0.0"
 description = "MCPlica builder/control plane"
 requires-python = ">=3.13,<3.14"
 dependencies = [
@@ -73,4 +73,4 @@ target-version = "py313"
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["app"]
+known-first-party = ["app", "scripts"]

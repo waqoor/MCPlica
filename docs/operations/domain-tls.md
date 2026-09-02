@@ -26,9 +26,10 @@ chmod 0600 .env
 
 Compose mounts that host directory at the deployment-worker root. The deployment worker alone receives the Docker socket and writable mount. The API and builder-worker containers must not receive either deployment capability.
 
-For a non-default environment filename, set `MCPLICA_ENV_FILE` to the same absolute
-path passed to `--env-file`; see `installation.md`. All four control-plane processes
-receive the same production routing invariants.
+For a non-default environment filename, generate it with `scripts/init_env.py` so its
+service-level `CONTROL_PLANE_ENV_FILE` matches the path passed to `--env-file`; see
+`installation.md`. All four control-plane processes receive the same production
+routing invariants.
 
 ## Validate and start
 

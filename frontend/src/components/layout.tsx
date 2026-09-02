@@ -109,6 +109,9 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           {user?.display_name}
         </p>
         <p className="truncate text-xs text-muted">{user?.email}</p>
+        <p className="mt-2 font-mono text-[0.62rem] text-muted">
+          MCPlica v{__MCPLICA_VERSION__}
+        </p>
       </div>
     </div>
   );
