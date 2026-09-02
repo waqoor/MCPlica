@@ -295,12 +295,14 @@ class CleanupWorker:
     async def process_due_targets_once(self) -> int:
         """Process leased cleanup targets without running the retention scheduler."""
         processed = 0
+        eligibility_cutoff = datetime.now(UTC)
         while processed < self._batch_size:
             async with self._database.session_scope() as session:
                 targets = await self._repository.claim_due_targets(
                     session,
                     limit=1,
                     lease_seconds=self._lease_seconds,
+                    eligible_at=eligibility_cutoff,
                 )
             if not targets:
                 break
