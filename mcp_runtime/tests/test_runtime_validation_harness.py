@@ -17,7 +17,7 @@ async def test_candidate_runs_through_pinned_runtime_and_official_client() -> No
     manifest = _manifest()
     report = await inspect_runtime_candidate(manifest, runtime_version="1.0.0")
 
-    assert report["protocol_version"] == "2025-11-25"
+    assert report["protocol_version"] == "2026-07-28"
     assert report["tools"] == ["get_pet"]
     assert report["exercised_tools"] == ["get_pet"]
     assert report["request_mapping_count"] == 1

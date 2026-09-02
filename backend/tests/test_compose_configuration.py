@@ -54,6 +54,11 @@ def test_workers_consume_the_same_queues_as_the_control_plane() -> None:
         ("deployment-worker", "DEPLOYMENT_QUEUE_NAME"),
     ):
         assert services[service]["command"][-1] == services["api"]["environment"][queue]
+    assert services["deployment-worker"]["command"][:3] == [
+        "python",
+        "-m",
+        "app.jobs.deployment_worker",
+    ]
 
 
 def test_control_plane_waits_for_migrations_and_runtime_permissions() -> None:
@@ -65,6 +70,10 @@ def test_control_plane_waits_for_migrations_and_runtime_permissions() -> None:
     assert services["deployment-worker"]["depends_on"]["runtime-init"]["condition"] == (
         "service_completed_successfully"
     )
+    assert services["deployment-worker"]["depends_on"]["traefik"] == {
+        "condition": "service_healthy",
+        "restart": True,
+    }
     for name in ("postgres", "redis", "milvus", "etcd", "minio"):
         assert not services[name].get("ports")
 

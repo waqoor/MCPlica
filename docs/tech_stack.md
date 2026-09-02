@@ -28,18 +28,18 @@ Patch/minor security upgrades that do not change the architecture may be accepte
 
 ### 2.2 Baseline versions
 
-| Area | Baseline |
-|---|---|
-| Python | 3.13.x |
-| Node.js | 24 LTS |
-| React | 19.2.x |
-| Vite | 8.2.x supported line |
-| Tailwind CSS | 4.3.x |
-| PostgreSQL | 18.x; current maintenance baseline at spec date 18.6 |
-| Redis Open Source | 8.x; use current supported security-patched release |
-| Milvus | 3.x standalone line; use current stable Docker Compose release |
-| MCP Python SDK | v2 stable line |
-| Traefik | v3 stable line |
+| Area              | Baseline                                                               |
+| ----------------- | ---------------------------------------------------------------------- |
+| Python            | 3.13.x                                                                 |
+| Node.js           | 24 LTS                                                                 |
+| React             | 19.2.x                                                                 |
+| Vite              | 8.2.x supported line                                                   |
+| Tailwind CSS      | 4.3.x                                                                  |
+| PostgreSQL        | 18.x; current maintenance baseline at spec date 18.6                   |
+| Redis Open Source | 8.x; use current supported security-patched release                    |
+| Milvus            | 3.x standalone line; use current stable Docker Compose release         |
+| MCP Python SDK    | v2 stable line; lock 2.1.1 and validate protocol revision `2026-07-28` |
+| Traefik           | v3 stable line                                                         |
 
 Do not use beta/RC/development releases for production base services.
 
@@ -788,16 +788,16 @@ Configuration must be validated at startup and fail with clear messages for miss
 
 The following imports are forbidden outside designated modules:
 
-| Dependency/SDK | Allowed location |
-|---|---|
-| SQLAlchemy engine/session creation | `clients/database` and persistence bootstrap |
-| `redis` client | `clients/cache` |
-| `pymilvus` | `clients/vector` |
-| OpenRouter/raw provider HTTP specifics | `clients/ai` / `providers/ai` |
-| Docker Python SDK | `clients/docker` only |
-| MCP client | `clients/mcp` and tests |
-| MCP server SDK | `mcp_runtime/server` (plus protocol test harness) |
-| filesystem writes for artifacts | storage client/provider |
+| Dependency/SDK                         | Allowed location                                  |
+| -------------------------------------- | ------------------------------------------------- |
+| SQLAlchemy engine/session creation     | `clients/database` and persistence bootstrap      |
+| `redis` client                         | `clients/cache`                                   |
+| `pymilvus`                             | `clients/vector`                                  |
+| OpenRouter/raw provider HTTP specifics | `clients/ai` / `providers/ai`                     |
+| Docker Python SDK                      | `clients/docker` only                             |
+| MCP client                             | `clients/mcp` and tests                           |
+| MCP server SDK                         | `mcp_runtime/server` (plus protocol test harness) |
+| filesystem writes for artifacts        | storage client/provider                           |
 
 CI should include import-boundary/grep tests where practical.
 
@@ -828,20 +828,20 @@ Unless the authoritative docs are later changed, do not introduce:
 
 ## 29. Rationale summary
 
-| Decision | Why |
-|---|---|
-| FastAPI/Pydantic | Typed Python API and shared schema-heavy design |
-| PostgreSQL | Durable relational authority and JSONB support |
-| Redis/RQ | Simple self-hosted job/cache infrastructure |
-| Milvus | Explicit dedicated vector-store requirement |
-| OpenRouter | One build-time gateway for structured AI + embeddings |
-| Official MCP Python SDK | Protocol correctness and exact-schema runtime support |
-| Manifest-driven runtime | Maintainability, reproducibility, shared security fixes |
-| React/Vite | Internal SPA without SSR complexity |
-| Tailwind + shadcn/ui | Requested modern UI stack with repository-owned components |
-| Docker Compose | Appropriate self-hosted operational complexity |
-| Traefik | Dynamic Docker routing per project subdomain |
-| uv/pnpm | Fast deterministic package management/lockfiles |
+| Decision                              | Why                                                          |
+| ------------------------------------- | ------------------------------------------------------------ |
+| FastAPI/Pydantic                      | Typed Python API and shared schema-heavy design              |
+| PostgreSQL                            | Durable relational authority and JSONB support               |
+| Redis/RQ                              | Simple self-hosted job/cache infrastructure                  |
+| Milvus                                | Explicit dedicated vector-store requirement                  |
+| OpenRouter                            | One build-time gateway for structured AI + embeddings        |
+| Official MCP Python SDK               | Protocol correctness and exact-schema runtime support        |
+| Manifest-driven runtime               | Maintainability, reproducibility, shared security fixes      |
+| React/Vite                            | Internal SPA without SSR complexity                          |
+| Tailwind + shadcn/ui                  | Requested modern UI stack with repository-owned components   |
+| Docker Compose                        | Appropriate self-hosted operational complexity               |
+| Traefik                               | Dynamic Docker routing per project subdomain                 |
+| uv/pnpm                               | Fast deterministic package management/lockfiles              |
 | client/provider/repository boundaries | Replaceability, testability, consistent errors/observability |
 
 ---

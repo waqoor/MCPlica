@@ -8,7 +8,15 @@ version is not published until its immutable tag and release workflow complete.
 
 ### Changed
 
-- Nothing yet.
+- Added an admin-only, route-backed **Settings > Providers** workspace for write-only encrypted
+  OpenRouter key rotation, live connection testing, and distinct credential/reachability/build
+  readiness states.
+- Corrected the public OpenRouter API default and decoded-response header handling so compressed
+  model-catalog responses cannot be decompressed twice and falsely degrade the control plane.
+- Updated the official MCP Python SDK to 2.1.1, made `2026-07-28` the candidate-validation
+  protocol revision, and retained explicit legacy negotiation coverage on the same runtime.
+- Refreshed compatible container, frontend, Python, and GitHub Actions dependencies while
+  preserving the Node 24, Python 3.13, and single-host service compatibility boundaries.
 
 ## [1.0.0] - 2026-09-02
 

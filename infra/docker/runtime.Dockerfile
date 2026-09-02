@@ -5,7 +5,7 @@ ENV UV_COMPILE_BYTECODE=1 \
     UV_NO_CACHE=1 \
     UV_LINK_MODE=copy \
     UV_PROJECT_ENVIRONMENT=/opt/venv
-COPY --from=ghcr.io/astral-sh/uv:0.12.1@sha256:cf4eedcaa81655197f625739489effcbe71b61ceb1506f332c3facae5deceded /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.12.9@sha256:8b940d3a9d65bed080436972241af2e21c84b5e8c9193f7014ed71479ee795ff /uv /uvx /bin/
 WORKDIR /workspace
 COPY pyproject.toml uv.lock ./
 COPY backend/pyproject.toml /workspace/backend/pyproject.toml

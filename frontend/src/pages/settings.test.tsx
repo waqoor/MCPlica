@@ -72,4 +72,9 @@ test("renders nullable retention and enforces exact backend bounds before save",
   expect(
     screen.getByRole("button", { name: "Save operational settings" }),
   ).toBeDisabled();
+  expect(
+    screen
+      .getAllByRole("link", { name: "Providers" })
+      .some((link) => link.getAttribute("href") === "/settings/providers"),
+  ).toBe(true);
 });

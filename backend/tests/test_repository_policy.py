@@ -20,6 +20,28 @@ def test_cla_workflow_consumes_configured_external_status_without_pr_checkout() 
     assert "checks: read" in workflow
 
 
+def test_cla_workflow_recognizes_trusted_repository_actors() -> None:
+    root = Path(__file__).resolve().parents[2]
+    workflow = (root / ".github/workflows/cla.yml").read_text(encoding="utf-8")
+
+    assert "AUTHOR_ASSOCIATION" in workflow
+    assert "AUTHOR_LOGIN" in workflow
+    assert "dependabot[bot]" in workflow
+    assert "OWNER|MEMBER|COLLABORATOR" in workflow
+    assert "External contributor CLA verification is unavailable" in workflow
+
+
+def test_dependency_review_has_an_executable_private_repository_fallback() -> None:
+    root = Path(__file__).resolve().parents[2]
+    workflow = (root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+    assert "github.event.repository.private == false" in workflow
+    assert "pnpm --dir frontend install --frozen-lockfile" in workflow
+    assert "pnpm --dir frontend audit --audit-level high" in workflow
+    assert "uv export --frozen --all-packages --no-dev --no-emit-workspace" in workflow
+    assert "uvx pip-audit" in workflow
+
+
 def test_source_snapshot_checksum_manifest_is_complete_and_current() -> None:
     root = Path(__file__).resolve().parents[2]
     subprocess.run(

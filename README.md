@@ -73,17 +73,22 @@ Use Python 3.13 (`python3` where that is its executable name). The initializer c
 `.env` with independent random secrets, a random development administrator password,
 and an absolute runtime-files path. It refuses to overwrite an existing file.
 **For an existing installation, keep its `.env`, encryption key, and data; skip the
-initializer.** Do not use the example administrator password or commit your `.env`.
+initializer.** Keep installation-specific values out of `.env.example`, and never
+commit your private `.env`.
 An environment created before v1 must add `MCPLICA_VERSION=1.0.0` and remove the obsolete
 operator-set `MCP_RUNTIME_VERSION`; follow the release-specific upgrade notes before recreation.
 
 ### 2. Configure the installation
 
-Open `.env` in your local editor. Set `OPENROUTER_API_KEY` for real AI-assisted builds
-and choose available `OPENROUTER_ANALYSIS_MODEL`, `OPENROUTER_VALIDATION_MODEL`, and
-`OPENROUTER_EMBEDDING_MODEL` values, or configure model choices in the application's
-settings after login. OpenRouter is an external build-time dependency; these commands
-do not create a local model service or silently enable provider fixtures.
+Open `.env` in your local editor. The public OpenRouter API root is
+`https://openrouter.ai/api/v1`; keep that value in `OPENROUTER_BASE_URL`. Set
+`OPENROUTER_API_KEY` and the three model variables there, or sign in as an administrator,
+save/rotate the write-only key under **Settings > Providers**, and select the analysis,
+validation, and embedding models under **Settings > Models**. A key saved in the UI is
+encrypted in PostgreSQL and takes precedence over the environment fallback. OpenRouter is
+an external build-time dependency; these commands do not create a local model service or
+silently enable provider fixtures. `OPENROUTER_SITE_URL` is optional attribution metadata,
+not the OpenRouter API root.
 
 Keep `RUNTIME_UID=10001` and `RUNTIME_GID=10001` for the shipped images. On Linux,
 `DOCKER_GID` must match the Docker socket group; the initializer detects a local
@@ -110,12 +115,12 @@ configuration check/startup and administrator initialization after `.env` exists
 
 ### 4. Open the platform and deploy a project runtime
 
-| Purpose | Default local address |
-| --- | --- |
-| Web application | `http://localhost:8080` |
-| Backend API documentation | `http://localhost:8000/docs` |
-| API liveness | `http://localhost:8000/api/v1/health` |
-| API readiness/dependency status | `http://localhost:8000/api/v1/ready` |
+| Purpose                         | Default local address                 |
+| ------------------------------- | ------------------------------------- |
+| Web application                 | `http://localhost:8080`               |
+| Backend API documentation       | `http://localhost:8000/docs`          |
+| API liveness                    | `http://localhost:8000/api/v1/health` |
+| API readiness/dependency status | `http://localhost:8000/api/v1/ready`  |
 
 Sign in with `DEFAULT_ADMIN_EMAIL` and `DEFAULT_ADMIN_PASSWORD` from your private
 `.env`. Complete model configuration, create a project, import its API specification,
@@ -143,7 +148,10 @@ docker compose --env-file .env -f infra/compose.yaml logs --follow --tail=100
 Expect **11 healthy running services**, plus `migrate` and `runtime-init` exited with
 code **0**. Project runtimes are created separately after deployment. Readiness
 reports builder-only OpenRouter/Milvus degradation separately from core-service
-failure. An unhealthy container or nonzero initializer exit needs investigation;
+failure. Therefore the control-plane UI can remain usable while its badge says
+**Degraded**; open **Settings > Providers** to distinguish credential configuration,
+live provider reachability, and complete model selection. An unhealthy container or
+nonzero initializer exit needs investigation;
 do not remove health checks or delete volumes to hide it. Review the relevant
 service logs without sharing credentials or a fully expanded Compose environment.
 

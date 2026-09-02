@@ -9,8 +9,11 @@ environment and Compose files explicitly from the repository root.
 The stack contains eleven long-running services plus two one-shot jobs. PostgreSQL, Redis, etcd,
 MinIO, Milvus, API, runtime validator, builder worker, deployment worker, frontend, and Traefik must
 be running and healthy. `migrate` and `runtime-init` must exit 0. API/workers wait for migration;
-the deployment worker also waits for runtime-root ownership; the builder waits for Milvus and the
-runtime validator.
+the deployment worker also waits for runtime-root ownership and healthy Traefik; the builder waits
+for Milvus and the runtime validator. Before consuming deployment commands, the deployment worker
+reconciles Traefik attachments for enabled projects' exact active Build/Deployment pairs with
+valid activation evidence. This restores routes after an edge-container recreation without
+exposing stale or unproven runtimes.
 
 Ordinary deployment never runs tests. CI or an explicitly disposable acceptance host executes
 release validation before publication.
@@ -37,6 +40,8 @@ The internal builder network holds PostgreSQL, Redis, etcd, MinIO, and Milvus wi
 The API and frontend publish loopback ports for development. Traefik owns edge routing. Each
 deployed project runtime is created by the canonical deployment worker on a project network plus
 the configured edge network; it is not a Compose service and must be managed through MCPlica.
+When Compose recreates Traefik, it restarts the dependent deployment worker so that startup
+reconciliation can restore those verified project-network attachments.
 `BUILDER_NETWORK`, `EGRESS_NETWORK`, and `TRAEFIK_NETWORK` may rename those same boundaries when a
 separate disposable acceptance project must coexist on a development host; unique names do not
 create a different topology.

@@ -135,7 +135,7 @@ async def inspect_runtime_candidate(
     exercised: list[str] = []
     failed_calls: list[str] = []
     try:
-        async with Client(server, mode="legacy", cache=None) as client:
+        async with Client(server, mode="2026-07-28", cache=None) as client:
             tools = await _list_tools(client)
             resources = await _list_resources(client)
             for resource in resources:

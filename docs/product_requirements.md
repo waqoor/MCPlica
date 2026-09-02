@@ -169,7 +169,9 @@ Controls authentication from external MCP consumers to the generated endpoint.
 2. Required services become healthy.
 3. Operator creates the first administrator through the secure bootstrap process.
 4. Administrator logs into the UI.
-5. Administrator configures the OpenRouter API key and selects compatible analysis, validation, and embedding models.
+5. Administrator saves or rotates the write-only OpenRouter API key in **Settings > Providers**,
+   verifies live provider reachability, and selects compatible analysis, validation, and embedding
+   models in **Settings > Models**.
 6. Administrator configures the MCP base domain/TLS/deployment settings.
 7. System reports readiness to create a project.
 

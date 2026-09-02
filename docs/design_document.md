@@ -623,7 +623,6 @@ database-time lease while running. Terminal writes require the exact unexpired t
 effects additionally hold the project advisory lock and respect predecessor sequence; cleanup
 targets lock their parent job before aggregate refresh and claim immediately before external work.
 
-
 ### 7.15 `mcp_auth_configs`
 
 One row per Project when configured.
@@ -770,31 +769,31 @@ schema: api-inventory/v1
 name: Inventory Service
 version: "1.0"
 servers:
-  - id: primary
-    url: https://inventory.example.internal
+    - id: primary
+      url: https://inventory.example.internal
 security_schemes:
-  bearerAuth:
-    type: http_bearer
+    bearerAuth:
+        type: http_bearer
 operations:
-  - operation_id: getProduct
-    method: GET
-    path: /products/{product_id}
-    summary: Get product
-    description: Retrieve a product by ID.
-    parameters:
-      - name: product_id
-        in: path
-        required: true
-        schema:
-          type: string
-    responses:
-      "200":
-        content_type: application/json
-        schema:
-          type: object
-          additionalProperties: true
-    security:
-      - bearerAuth: []
+    - operation_id: getProduct
+      method: GET
+      path: /products/{product_id}
+      summary: Get product
+      description: Retrieve a product by ID.
+      parameters:
+          - name: product_id
+            in: path
+            required: true
+            schema:
+                type: string
+      responses:
+          "200":
+              content_type: application/json
+              schema:
+                  type: object
+                  additionalProperties: true
+      security:
+          - bearerAuth: []
 ```
 
 Required rules:
@@ -1550,12 +1549,12 @@ All responses use a stable error envelope on failure:
 
 ```json
 {
-  "error": {
-    "code": "PROJECT_NOT_FOUND",
-    "message": "Project was not found.",
-    "details": {},
-    "request_id": "..."
-  }
+    "error": {
+        "code": "PROJECT_NOT_FOUND",
+        "message": "Project was not found.",
+        "details": {},
+        "request_id": "..."
+    }
 }
 ```
 
@@ -1708,6 +1707,7 @@ The OpenRouter test may perform a provider metadata/capability check; it does no
 /deployments
 /activity
 /settings
+/settings/providers
 /settings/models
 /settings/users
 ```

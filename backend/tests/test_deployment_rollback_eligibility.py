@@ -18,6 +18,7 @@ from app.domain.deployments import (
     DeploymentRecord,
     DeploymentStatus,
     has_successful_activation,
+    is_restart_eligible,
     is_rollback_eligible,
 )
 from app.repositories.audit import AuditRepository
@@ -247,6 +248,13 @@ class _Deployments:
     ) -> DeploymentRecord | None:
         return self.target if deployment_id == self.target.id else None
 
+    async def get(
+        self,
+        session: AsyncSession,
+        deployment_id: UUID,
+    ) -> DeploymentRecord | None:
+        return self.target if deployment_id == self.target.id else None
+
 
 class _Dispatcher:
     def __init__(self) -> None:
@@ -356,4 +364,89 @@ async def test_rollback_atomically_creates_candidate_from_formerly_active_target
     assert await_args.kwargs["subject_type"] == "deployment"
     assert await_args.kwargs["subject_id"] == target.id
     assert await_args.kwargs["intent"] is DeploymentIntent.ROLLBACK
+    assert dispatcher.wake_calls == 1
+
+
+@pytest.mark.parametrize(
+    ("target", "active_deployment_id", "message"),
+    [
+        (
+            _record(DeploymentStatus.RUNNING, successful=True),
+            OTHER_DEPLOYMENT_ID,
+            "active deployment",
+        ),
+        (
+            _record(DeploymentStatus.STOPPED, successful=True),
+            DEPLOYMENT_ID,
+            "running deployment",
+        ),
+        (
+            _record(DeploymentStatus.RUNNING),
+            DEPLOYMENT_ID,
+            "successful activation evidence",
+        ),
+    ],
+)
+async def test_restart_rejects_any_target_other_than_the_proven_running_active_deployment(
+    target: DeploymentRecord,
+    active_deployment_id: UUID | None,
+    message: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, dispatcher = _service(
+        target,
+        active_deployment_id=active_deployment_id,
+    )
+    request = AsyncMock()
+    monkeypatch.setattr(service, "_request_in_session", request)
+
+    with pytest.raises(InvalidStateError, match=message):
+        await service.restart(
+            target.id,
+            actor_user_id=UUID(int=810),
+            request_id="restart-test",
+        )
+
+    request.assert_not_awaited()
+    assert dispatcher.wake_calls == 0
+
+
+async def test_restart_atomically_binds_the_proven_active_target_and_allows_its_build(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = _record(DeploymentStatus.RUNNING, successful=True)
+    assert is_restart_eligible(target, active_deployment_id=target.id)
+    candidate = target.model_copy(
+        update={
+            "id": UUID(int=812),
+            "status": DeploymentStatus.PENDING,
+            "previous_active_deployment_id": target.id,
+            "started_at": None,
+            "activated_at": None,
+            "activation_phase": None,
+            "activation_verified_at": None,
+            "activation_proof_sha256": None,
+        }
+    )
+    service, dispatcher = _service(
+        target,
+        active_deployment_id=target.id,
+    )
+    request = AsyncMock(return_value=candidate)
+    monkeypatch.setattr(service, "_request_in_session", request)
+
+    result = await service.restart(
+        target.id,
+        actor_user_id=UUID(int=810),
+        request_id="restart-test",
+    )
+
+    assert result is candidate
+    await_args = request.await_args
+    assert await_args is not None
+    assert await_args.kwargs["build_id"] == target.build_id
+    assert await_args.kwargs["subject_type"] == "deployment"
+    assert await_args.kwargs["subject_id"] == target.id
+    assert await_args.kwargs["intent"] is DeploymentIntent.NORMAL
+    assert await_args.kwargs["allow_historical_configuration"] is True
     assert dispatcher.wake_calls == 1
