@@ -6,6 +6,7 @@ from typing import Literal, cast
 from urllib.parse import urlsplit
 
 from mcp_contracts import (
+    VERSION,
     AuthProfile,
     BuildMetadata,
     CanonicalApi,
@@ -33,7 +34,7 @@ from app.core.canonical_json import canonical_json_bytes, canonical_sha256
 from app.core.exceptions import CompilationError
 from app.domain.builds import BuildSecuritySelection
 
-COMPILER_VERSION = "1.0.0"
+COMPILER_VERSION = VERSION
 type SupportedMediaType = Literal[
     "application/json",
     "application/x-www-form-urlencoded",

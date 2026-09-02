@@ -1,6 +1,6 @@
 [project]
 name = "mcplica-workspace"
-version = "0.1.0"
+version = "1.0.0"
 requires-python = ">=3.13,<3.14"
 
 [tool.uv.workspace]
@@ -14,7 +14,7 @@ target-version = "py313"
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["app"]
+known-first-party = ["app", "scripts"]
 
 [tool.pyright]
 pythonVersion = "3.13"

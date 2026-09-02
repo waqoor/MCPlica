@@ -10,7 +10,7 @@ from urllib.parse import urlsplit, urlunsplit
 import httpx2
 from mcp import Client
 from mcp.client.streamable_http import streamable_http_client
-from mcp.types import Resource, Tool
+from mcp.types import LATEST_PROTOCOL_VERSION, Resource, Tool
 from mcp_contracts import MCPManifest
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
@@ -316,6 +316,10 @@ class MCPValidationClient(AsyncClient):
         resource_uris = [str(resource.uri) for resource in manifest.resources]
         if inspected.runtime_version != runtime_version:
             raise ProtocolValidationError("Pinned generic-runtime version does not match the build")
+        if inspected.protocol_version != LATEST_PROTOCOL_VERSION:
+            raise ProtocolValidationError(
+                "Pinned generic runtime did not validate the latest MCP protocol revision"
+            )
         if inspected.manifest_sha256 != expected_sha256:
             raise ProtocolValidationError(
                 "Pinned generic runtime validated different manifest bytes"

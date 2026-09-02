@@ -3,6 +3,6 @@ contact_links:
   - name: Security vulnerability
     url: https://github.com/yazeedhasan97/MCPlica/security/advisories/new
     about: Report exploitable security issues privately; never open a public issue.
-  - name: Usage and design discussion
-    url: https://github.com/yazeedhasan97/MCPlica/discussions
-    about: Ask questions or discuss designs before proposing broad changes.
+  - name: Usage and support policy
+    url: https://github.com/yazeedhasan97/MCPlica/blob/master/SUPPORT.md
+    about: Choose the correct support channel and remove sensitive data before posting.

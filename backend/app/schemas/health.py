@@ -8,6 +8,7 @@ class HealthRead(BaseModel):
 
     status: Literal["ok"]
     service: Literal["mcplica-api"]
+    version: str
 
 
 class ReadinessDependenciesRead(BaseModel):

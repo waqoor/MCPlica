@@ -54,6 +54,11 @@ def test_workers_consume_the_same_queues_as_the_control_plane() -> None:
         ("deployment-worker", "DEPLOYMENT_QUEUE_NAME"),
     ):
         assert services[service]["command"][-1] == services["api"]["environment"][queue]
+    assert services["deployment-worker"]["command"][:3] == [
+        "python",
+        "-m",
+        "app.jobs.deployment_worker",
+    ]
 
 
 def test_control_plane_waits_for_migrations_and_runtime_permissions() -> None:
@@ -65,6 +70,10 @@ def test_control_plane_waits_for_migrations_and_runtime_permissions() -> None:
     assert services["deployment-worker"]["depends_on"]["runtime-init"]["condition"] == (
         "service_completed_successfully"
     )
+    assert services["deployment-worker"]["depends_on"]["traefik"] == {
+        "condition": "service_healthy",
+        "restart": True,
+    }
     for name in ("postgres", "redis", "milvus", "etcd", "minio"):
         assert not services[name].get("ports")
 
@@ -72,6 +81,8 @@ def test_control_plane_waits_for_migrations_and_runtime_permissions() -> None:
 def test_edge_routing_uses_the_configured_network() -> None:
     model = yaml.safe_load((ROOT / "infra/compose.yaml").read_text())
     network = "${TRAEFIK_NETWORK:-mcplica-edge}"
+    assert model["networks"]["builder"]["name"] == "${BUILDER_NETWORK:-mcplica-builder}"
+    assert model["networks"]["egress"]["name"] == "${EGRESS_NETWORK:-mcplica-egress}"
     assert model["networks"]["edge"]["name"] == network
     for name in ("api", "frontend"):
         assert model["services"][name]["labels"]["traefik.docker.network"] == network

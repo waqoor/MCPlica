@@ -1,3 +1,4 @@
+import hashlib
 import subprocess
 import sys
 import tomllib
@@ -19,6 +20,29 @@ def test_cla_workflow_consumes_configured_external_status_without_pr_checkout() 
     assert "checks: read" in workflow
 
 
+def test_cla_workflow_recognizes_trusted_repository_actors() -> None:
+    root = Path(__file__).resolve().parents[2]
+    workflow = (root / ".github/workflows/cla.yml").read_text(encoding="utf-8")
+
+    assert "AUTHOR_ASSOCIATION" in workflow
+    assert "AUTHOR_LOGIN" in workflow
+    assert "dependabot[bot]" in workflow
+    assert "OWNER|MEMBER|COLLABORATOR" in workflow
+    assert "External contributor CLA verification is unavailable" in workflow
+
+
+def test_dependency_review_has_an_executable_private_repository_fallback() -> None:
+    root = Path(__file__).resolve().parents[2]
+    workflow = (root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+    assert "github.event.repository.private == false" in workflow
+    assert "working-directory: frontend" in workflow
+    assert "pnpm install --frozen-lockfile" in workflow
+    assert "pnpm audit --audit-level high" in workflow
+    assert "uv export --frozen --all-packages --no-dev --no-emit-workspace" in workflow
+    assert "uvx pip-audit" in workflow
+
+
 def test_source_snapshot_checksum_manifest_is_complete_and_current() -> None:
     root = Path(__file__).resolve().parents[2]
     subprocess.run(
@@ -26,6 +50,43 @@ def test_source_snapshot_checksum_manifest_is_complete_and_current() -> None:
         cwd=root,
         check=True,
     )
+
+
+def test_source_snapshot_checksum_manifest_uses_canonical_git_blob_bytes() -> None:
+    root = Path(__file__).resolve().parents[2]
+    path = "README.md"
+    blob = subprocess.run(
+        ["git", "cat-file", "blob", f":{path}"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+    ).stdout
+    expected = f"{hashlib.sha256(blob).hexdigest()}  ./{path}"
+
+    assert expected in (root / "MANIFEST.sha256").read_text(encoding="utf-8").splitlines()
+
+
+def test_documentation_validator_only_reads_tracked_markdown() -> None:
+    root = Path(__file__).resolve().parents[2]
+    tracked = (
+        subprocess.run(
+            ["git", "ls-files", "-z", "--", "*.md"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+        )
+        .stdout.decode("utf-8")
+        .split("\0")
+    )
+    result = subprocess.run(
+        [sys.executable, "scripts/validate_docs.py"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert f"({len([path for path in tracked if path])} Markdown files;" in result.stdout
 
 
 def test_authoritative_documentation_is_not_ignored() -> None:
@@ -40,12 +101,41 @@ def test_authoritative_documentation_is_not_ignored() -> None:
     assert result.returncode == 1
 
 
+def test_custom_runtime_roots_are_ignored() -> None:
+    root = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        ["git", "check-ignore", "--no-index", ".runtime-release-candidate/secrets.json"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0
+
+
 def test_runtime_build_uses_the_compose_selected_image() -> None:
     root = Path(__file__).resolve().parents[2]
     makefile = (root / "Makefile").read_text(encoding="utf-8")
     runtime_target = makefile.split("runtime-build:", 1)[1].split("\n\n", 1)[0]
     assert "$(COMPOSE) build runtime-validator" in runtime_target
     assert "docker build -t" not in runtime_target
+
+
+def test_make_backend_tests_use_backend_pytest_configuration() -> None:
+    root = Path(__file__).resolve().parents[2]
+    makefile = (root / "Makefile").read_text(encoding="utf-8")
+    test_target = makefile.split("test:", 1)[1].split("\n\n", 1)[0]
+
+    assert "pytest -c pyproject.toml" in test_target
+
+
+def test_ruff_classifies_repository_scripts_as_first_party_consistently() -> None:
+    root = Path(__file__).resolve().parents[2]
+
+    for config_path in (root / "pyproject.toml", root / "backend/pyproject.toml"):
+        config = tomllib.loads(config_path.read_text(encoding="utf-8"))
+        known_first_party = config["tool"]["ruff"]["lint"]["isort"]["known-first-party"]
+        assert "scripts" in known_first_party
 
 
 def test_gitleaks_fixture_allowlist_is_rule_path_and_shape_scoped() -> None:

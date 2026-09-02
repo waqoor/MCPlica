@@ -255,6 +255,20 @@ def is_rollback_eligible(
     return record.id != active_deployment_id and has_successful_activation(record)
 
 
+def is_restart_eligible(
+    record: DeploymentRecord,
+    *,
+    active_deployment_id: UUID | None,
+) -> bool:
+    """Require the exact, proven active runtime for an operational restart."""
+
+    return (
+        record.id == active_deployment_id
+        and record.status is DeploymentStatus.RUNNING
+        and has_successful_activation(record)
+    )
+
+
 class RuntimeCommandRecord(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 

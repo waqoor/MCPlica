@@ -326,7 +326,8 @@ The organization can host this MCP project and future related open-source projec
 
 The organization hosts projects. The primary sponsorship identity remains the founder as an open-source creator across multiple projects.
 
-Organization repositories may point `.github/FUNDING.yml` to:
+After a verified funding channel exists, organization repositories may add
+`.github/FUNDING.yml` pointing to:
 
 - the founder's GitHub Sponsors profile;
 - the founder's personal portfolio sponsorship/contact gateway.
@@ -542,7 +543,7 @@ These relationships must remain conceptually and contractually separate.
 
 GitHub Sponsors is the primary public sponsorship mechanism at launch.
 
-The project shall implement:
+After the founder activates a verified channel, the project can implement:
 
 - founder GitHub Sponsors profile;
 - `.github/FUNDING.yml` in organization repositories;
@@ -1040,7 +1041,7 @@ GitHub configuration:
 
 ```text
 .github/
-├── FUNDING.yml
+├── FUNDING.yml        # only after a verified funding channel exists
 ├── CODEOWNERS
 ├── ISSUE_TEMPLATE/
 ├── PULL_REQUEST_TEMPLATE.md
@@ -1149,7 +1150,7 @@ Unless the founder revises this document, do not introduce:
 ### Sponsorship
 
 - [ ] GitHub Sponsors profile active.
-- [ ] `.github/FUNDING.yml` configured.
+- [ ] `.github/FUNDING.yml` configured only after a verified funding channel exists.
 - [ ] README support section published.
 - [ ] `SPONSORSHIP.md` published.
 - [ ] `SPONSORS.md` opt-in process defined.

@@ -28,6 +28,7 @@ from app.domain.deployments import (
     DeploymentStatus,
     MCPAuthConfigRecord,
     RuntimeCommandAction,
+    is_restart_eligible,
     is_rollback_eligible,
 )
 from app.repositories.audit import AuditRepository
@@ -287,14 +288,40 @@ class DeploymentService:
         actor_user_id: UUID,
         request_id: str | None,
     ) -> DeploymentRecord:
-        current = await self.get(deployment_id)
-        return await self.request(
-            project_id=current.project_id,
-            build_id=current.build_id,
-            actor_user_id=actor_user_id,
-            request_id=request_id,
-            event_type="deployment.restarted",
-        )
+        reference = await self.get(deployment_id)
+        async with self._database.session_scope() as session:
+            project = await self._deployments.lock_project(session, reference.project_id)
+            if project is None:
+                raise NotFoundError("Project was not found")
+            target = await self._deployments.get_for_update(session, deployment_id)
+            if target is None or target.project_id != project.id:
+                raise NotFoundError("Restart deployment was not found")
+            if target.id != project.active_deployment_id:
+                raise InvalidStateError("Only the active deployment can be restarted")
+            if target.status is not DeploymentStatus.RUNNING:
+                raise InvalidStateError("Only a running deployment can be restarted")
+            if not is_restart_eligible(
+                target,
+                active_deployment_id=project.active_deployment_id,
+            ):
+                raise InvalidStateError("Restart target has no successful activation evidence")
+            deployment = await self._request_in_session(
+                session,
+                project=project,
+                build_id=target.build_id,
+                actor_user_id=actor_user_id,
+                request_id=request_id,
+                stop_old_first=False,
+                event_type="deployment.restarted",
+                subject_type="deployment",
+                subject_id=target.id,
+                transition_id=uuid4(),
+                intent=DeploymentIntent.NORMAL,
+                transition_stopping_ids=set(),
+                allow_historical_configuration=True,
+            )
+        self._dispatcher.wake()
+        return deployment
 
     async def rollback(
         self,
@@ -444,6 +471,7 @@ class DeploymentService:
         transition_id: UUID,
         intent: DeploymentIntent,
         transition_stopping_ids: set[UUID],
+        allow_historical_configuration: bool = False,
     ) -> DeploymentRecord:
         if not project.is_enabled:
             raise InvalidStateError("Disabled projects cannot be deployed")
@@ -470,7 +498,9 @@ class DeploymentService:
             hostname=project.hostname,
             build=build,
             runtime_version=self._settings.mcp_runtime_version,
-            require_current_configuration=intent is DeploymentIntent.NORMAL,
+            require_current_configuration=(
+                intent is DeploymentIntent.NORMAL and not allow_historical_configuration
+            ),
         )
         deployment_id = uuid4()
         route_priority = await self._deployments.next_route_priority(session, project.id)
@@ -617,6 +647,7 @@ class DeploymentRunner:
         *,
         final_attempt: bool = True,
         rollback_target_id: UUID | None = None,
+        restart_target_id: UUID | None = None,
         execution_checkpoint: ExecutionCheckpoint | None = None,
     ) -> None:
         checkpoint = execution_checkpoint or _unfenced_execution_checkpoint
@@ -667,6 +698,10 @@ class DeploymentRunner:
                             raise InvalidStateError("Deployment build is no longer deployable")
                         require_current_configuration = deployment.intent is DeploymentIntent.NORMAL
                         if deployment.intent is DeploymentIntent.ROLLBACK:
+                            if restart_target_id is not None:
+                                raise InvalidStateError(
+                                    "Rollback deployments may not carry a restart target"
+                                )
                             if rollback_target_id is None:
                                 raise InvalidStateError(
                                     "Rollback deployment is missing its immutable target"
@@ -690,6 +725,23 @@ class DeploymentRunner:
                             raise InvalidStateError(
                                 "Only rollback deployments may carry a rollback target"
                             )
+                        if restart_target_id is not None:
+                            restart_target = await self._deployments.get(session, restart_target_id)
+                            if (
+                                deployment.intent is not DeploymentIntent.NORMAL
+                                or restart_target is None
+                                or restart_target.project_id != deployment.project_id
+                                or restart_target.build_id != deployment.build_id
+                                or deployment.previous_active_deployment_id != restart_target.id
+                                or not is_restart_eligible(
+                                    restart_target,
+                                    active_deployment_id=project.active_deployment_id,
+                                )
+                            ):
+                                raise InvalidStateError(
+                                    "Restart target is no longer eligible for activation"
+                                )
+                            require_current_configuration = False
                         deployment = await self._deployments.transition(
                             session,
                             deployment.id,

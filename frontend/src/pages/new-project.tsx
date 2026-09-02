@@ -9,7 +9,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { z } from "@/lib/schemas";
 import { buildApi } from "@/api/builds";
@@ -771,23 +771,25 @@ function ServerStep({
     queryKey: ["projects", projectId, "source-configuration"],
     queryFn: ({ signal }) => sourceApi.configuration(projectId, signal),
   });
-  const [mappings, setMappings] = useState<Record<string, string>>({});
+  const [mappingDraft, setMappingDraft] = useState<{
+    source: NonNullable<typeof discovery.data>;
+    value: Record<string, string>;
+  } | null>(null);
   const form = useForm<ServerValues>({
     resolver: zodResolver(serverSchema),
     defaultValues: { default_base_url: defaultValue },
   });
-  useEffect(() => {
-    if (!discovery.data) return;
-    setMappings(
-      Object.fromEntries(
-        discovery.data.operations.flatMap((operation) =>
-          operation.configured_server_ref
-            ? [[operation.operation_key, operation.configured_server_ref]]
-            : [],
-        ),
-      ),
-    );
-  }, [discovery.data]);
+  const discoveredMappings = Object.fromEntries(
+    discovery.data?.operations.flatMap((operation) =>
+      operation.configured_server_ref
+        ? [[operation.operation_key, operation.configured_server_ref]]
+        : [],
+    ) ?? [],
+  );
+  const mappings =
+    discovery.data && mappingDraft?.source === discovery.data
+      ? mappingDraft.value
+      : discoveredMappings;
   const update = useMutation({
     mutationFn: async (values: ServerValues) => {
       await projectApi.update(projectId, {
@@ -918,12 +920,18 @@ function ServerStep({
                   </Label>
                   <Select
                     id={`server-${operation.operation_key}`}
-                    onChange={(event) =>
-                      setMappings((current) => ({
-                        ...current,
-                        [operation.operation_key]: event.target.value,
-                      }))
-                    }
+                    onChange={(event) => {
+                      if (!discovery.data) return;
+                      setMappingDraft((current) => ({
+                        source: discovery.data!,
+                        value: {
+                          ...(current?.source === discovery.data
+                            ? current.value
+                            : discoveredMappings),
+                          [operation.operation_key]: event.target.value,
+                        },
+                      }));
+                    }}
                     value={mappings[operation.operation_key] ?? ""}
                   >
                     <option value="">Select a source-declared server</option>
@@ -998,8 +1006,11 @@ function CredentialStep({
       header_name: "",
     },
   });
-  const scheme = form.watch("scheme_type");
-  const securitySchemeName = form.watch("security_scheme");
+  const scheme = useWatch({ control: form.control, name: "scheme_type" });
+  const securitySchemeName = useWatch({
+    control: form.control,
+    name: "security_scheme",
+  });
   const supportedSchemes =
     discovery.data?.security_schemes.filter(
       (item) => credentialSchemeForSource(item) !== null,

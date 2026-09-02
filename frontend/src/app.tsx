@@ -79,6 +79,10 @@ const ModelSettingsPage = lazyPage(
   () => import("@/pages/model-settings"),
   "ModelSettingsPage",
 );
+const ProviderSettingsPage = lazyPage(
+  () => import("@/pages/provider-settings"),
+  "ProviderSettingsPage",
+);
 const UsersPage = lazyPage(() => import("@/pages/users"), "UsersPage");
 const NotFoundPage = lazyPage(
   () => import("@/pages/not-found"),
@@ -136,6 +140,10 @@ const router = createBrowserRouter([
                 element: <AdminRoute />,
                 children: [
                   { path: "activity", element: <ActivityPage /> },
+                  {
+                    path: "settings/providers",
+                    element: <ProviderSettingsPage />,
+                  },
                   { path: "settings/models", element: <ModelSettingsPage /> },
                   { path: "settings/users", element: <UsersPage /> },
                 ],

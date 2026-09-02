@@ -482,6 +482,54 @@ async def test_security_refresh_ignores_source_drift_but_normal_deploy_does_not(
         await database.close()
 
 
+async def test_restart_recovers_the_exact_proven_active_build_after_source_drift() -> None:
+    database = DatabaseClient(_database_url(), pool_size=4, max_overflow=0)
+    project_id, user_id, build_id, deployment_id = (
+        UUID(int=32_101),
+        UUID(int=32_102),
+        UUID(int=32_103),
+        UUID(int=32_104),
+    )
+    repository = _DeploymentRepository()
+    preflight = _StaleAwarePreflight()
+    service, dispatcher = _deployment_service(database, repository, preflight)
+    try:
+        await _cleanup(database, project_id=project_id, user_id=user_id)
+        await _seed(
+            database,
+            project_id=project_id,
+            user_id=user_id,
+            build_id=build_id,
+            deployment_id=deployment_id,
+        )
+
+        replacement = await service.restart(
+            deployment_id,
+            actor_user_id=user_id,
+            request_id="restart-after-source-drift",
+        )
+
+        assert replacement.build_id == build_id
+        assert replacement.intent is DeploymentIntent.NORMAL
+        assert replacement.previous_active_deployment_id == deployment_id
+        assert preflight.current_configuration_requirements == [False]
+        assert dispatcher.wake_count == 1
+        async with database.session_scope() as session:
+            command = await session.scalar(
+                select(RuntimeLifecycleCommand).where(
+                    RuntimeLifecycleCommand.deployment_id == replacement.id,
+                    RuntimeLifecycleCommand.action == RuntimeCommandAction.DEPLOY,
+                )
+            )
+            assert command is not None
+            assert command.reason == "deployment.restarted"
+            assert command.subject_type == "deployment"
+            assert command.subject_id == deployment_id
+    finally:
+        await _cleanup(database, project_id=project_id, user_id=user_id)
+        await database.close()
+
+
 async def test_unsafe_security_refresh_commits_a_stop_instead_of_rolling_back() -> None:
     database = DatabaseClient(_database_url(), pool_size=4, max_overflow=0)
     project_id, user_id, build_id, deployment_id = (

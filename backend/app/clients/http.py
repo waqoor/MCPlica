@@ -26,6 +26,19 @@ REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
 _SENSITIVE_FETCH_HEADERS = frozenset(
     {"authorization", "connection", "cookie", "host", "proxy-authorization"}
 )
+_REPRESENTATION_HEADERS = frozenset({"content-encoding", "content-length", "transfer-encoding"})
+
+
+def _decoded_response_headers(headers: httpx.Headers) -> httpx.Headers:
+    """Remove wire-representation metadata after httpx has decoded the body."""
+
+    return httpx.Headers(
+        [
+            (name, value)
+            for name, value in headers.multi_items()
+            if name.casefold() not in _REPRESENTATION_HEADERS
+        ]
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,7 +136,7 @@ class HttpClient(AsyncClient):
                 body.extend(chunk)
             return httpx.Response(
                 response.status_code,
-                headers=response.headers,
+                headers=_decoded_response_headers(response.headers),
                 content=bytes(body),
                 request=request,
                 extensions=response.extensions,

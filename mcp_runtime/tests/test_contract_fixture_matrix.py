@@ -26,4 +26,4 @@ async def test_every_compiler_golden_lists_and_calls_through_generic_runtime(
     assert report["tools"] == expected_tools
     assert report["exercised_tools"] == expected_tools
     assert report["request_mapping_count"] == len(expected_tools)
-    assert report["protocol_version"] == "2025-11-25"
+    assert report["protocol_version"] == "2026-07-28"

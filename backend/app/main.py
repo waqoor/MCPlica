@@ -12,6 +12,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse, Response
+from mcp_contracts import VERSION
 from pydantic import SecretStr
 from starlette.middleware.base import RequestResponseEndpoint
 
@@ -503,7 +504,7 @@ def create_app(settings_override: Settings | None = None) -> FastAPI:
 
     app = FastAPI(
         title="MCPlica API",
-        version="0.1.0",
+        version=VERSION,
         description="Self-hosted API-to-MCP builder/control plane",
         lifespan=lifespan,
     )

@@ -106,10 +106,17 @@ class RuntimeCommandExecutor:
                         and command.subject_type == "deployment"
                         else None
                     )
+                    restart_target_id = (
+                        command.subject_id
+                        if command.reason == "deployment.restarted"
+                        and command.subject_type == "deployment"
+                        else None
+                    )
                     await self._runner.run(
                         command.deployment_id,
                         final_attempt=False,
                         rollback_target_id=rollback_target_id,
+                        restart_target_id=restart_target_id,
                         execution_checkpoint=checkpoint,
                     )
                 else:

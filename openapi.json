@@ -1909,11 +1909,16 @@
             "const": "ok",
             "title": "Status",
             "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
           }
         },
         "required": [
           "status",
-          "service"
+          "service",
+          "version"
         ],
         "title": "HealthRead",
         "type": "object"
@@ -6330,7 +6335,7 @@
   "info": {
     "description": "Self-hosted API-to-MCP builder/control plane",
     "title": "MCPlica API",
-    "version": "0.1.0"
+    "version": "1.0.0"
   },
   "openapi": "3.1.0",
   "paths": {

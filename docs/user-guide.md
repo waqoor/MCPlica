@@ -4,7 +4,7 @@ MCPlica turns source evidence into a validated, manifest-driven MCP endpoint. Th
 
 ## Roles
 
-Admins manage users, installation/model settings, credentials, MCP access, deployment, and destructive project actions. Builders create and update projects/sources and review builds. An installation may explicitly allow builders to deploy, but the default is admin-only. Hidden or disabled controls are guidance, not the security boundary.
+Admins manage users, installation/provider/model settings, credentials, MCP access, deployment, and destructive project actions. Builders create and update projects/sources and review builds. An installation may explicitly allow builders to deploy, but the default is admin-only. Hidden or disabled controls are guidance, not the security boundary.
 
 ## Ten-step project workflow
 
@@ -29,6 +29,14 @@ be recovered after navigation.
 
 The project workspace separates Overview, Sources, Tools, Documentation, Builds/Validation, Deployment/MCP access, Credentials, and Settings. Global Builds, Deployments, Activity, and installation Settings pages provide cross-project operations with bounded queries. Tools uses a URL-backed immutable build selector: it defaults to the actively served build when available, otherwise the latest build with a canonical snapshot. A newer queued or failed build is shown as current progress but does not hide older evidence. Build detail exposes the schema-validated manifest, raw manifest download, executable-configuration fingerprint, model/provider/prompt/context hashes, retrieved chunk IDs, usage/cost metadata, response hashes, and full validation counts/source references/details; chain-of-thought is neither stored nor returned. Changing a bound source version, base URL, selected server, or operation routing makes older builds stale for new activation while leaving historical artifacts and an already-running deployment unchanged; rebuild and validate before deploying again.
 
+The admin-only **Settings > Providers** page manages the OpenRouter credential independently from
+model policy. It never reads a stored key back into the browser: entering a value creates or
+rotates the encrypted PostgreSQL override, while an environment key remains the fallback when no
+override exists. **Test connection** performs a live authenticated model-catalog request. Its
+status rail separates configured credential, provider reachability, and build readiness; build
+readiness also requires analysis, validation, and embedding selections under **Settings > Models**.
+The API base shown there is `https://openrouter.ai/api/v1`.
+
 Deployment history offers **Rollback** only for a former runtime whose exact build/container/image/
 manifest identity has durable successful-activation evidence. The active runtime and candidates that
 failed or stopped before activation are never rollback targets. Rollback creates a new deployment;
@@ -52,7 +60,7 @@ it does not mutate the historical row or build.
 - Credential rotation and MCP token rotation/revocation are server-side audited actions. Existing values are never redisplayed. Upstream credential binding fields are read-only during rotation; a mapping change requires a replacement credential and new Build. Authentication-only maintenance always targets the exact active Build even when a newer source is pending; it never activates that source implicitly. Revoking the final valid verifier commits the revocation and schedules runtime shutdown instead of preserving access or creating an unauthenticated replacement. Treat the change as pending until shutdown is observed, and follow the runbook if the worker reports a retryable or failed effect.
 - Project/build/deployment/search filters and meaningful pagination live in URL parameters, so links and browser back/forward restore the same view. Dirty settings and wizard forms warn before navigation; dialog forms submit with Enter.
 - Activity filters use actor, project, event type, and validated inclusive date ranges. Stable error codes and request IDs remain visible with retry/remediation guidance so operators can correlate sanitized logs.
-- Installation settings expose deploy policy, hostname, bounded upload/operation/chunk/build limits, and retention independently from model-provider recovery. User management supports display-name/password updates, safe disable/demotion confirmation, last-admin protection, and session revocation.
+- Installation settings expose provider credentials, model policy, deploy policy, hostname, bounded upload/operation/chunk/build limits, and retention as separate route-backed sections. User management supports display-name/password updates, safe disable/demotion confirmation, last-admin protection, and session revocation.
 
 ## Failure recovery
 

@@ -159,12 +159,36 @@ def test_redis_socket_timeouts_must_fit_inside_readiness_deadline() -> None:
 def test_example_environment_has_unique_keys_and_loads() -> None:
     root = Path(__file__).resolve().parents[2]
     path = root / ".env.example"
-    keys = [
-        line.split("=", 1)[0]
+    assignments = [
+        line.split("=", 1)
         for line in path.read_text(encoding="utf-8").splitlines()
         if line and not line.startswith("#") and "=" in line
     ]
+    keys = [name for name, _value in assignments]
     assert len(keys) == len(set(keys))
+    values = dict(assignments)
+    installation_specific = {
+        "DEFAULT_ADMIN_EMAIL",
+        "DEFAULT_ADMIN_PASSWORD",
+        "METRICS_BEARER_TOKEN",
+        "POSTGRES_PASSWORD",
+        "MINIO_ROOT_USER",
+        "MINIO_ROOT_PASSWORD",
+        "MILVUS_TOKEN",
+        "OPENROUTER_API_KEY",
+        "OPENROUTER_ANALYSIS_MODEL",
+        "OPENROUTER_VALIDATION_MODEL",
+        "OPENROUTER_EMBEDDING_MODEL",
+        "OPENROUTER_SITE_URL",
+        "SECRET_ENCRYPTION_KEY",
+        "AUTH_SIGNING_KEY",
+        "REFRESH_TOKEN_PEPPER",
+        "BOOTSTRAP_SECRET",
+        "ACME_EMAIL",
+    }
+    assert {name: values[name] for name in installation_specific} == {
+        name: "" for name in installation_specific
+    }
     settings = Settings(_env_file=path)  # pyright: ignore[reportCallIssue]
     assert settings.source_retention_days is None
 
