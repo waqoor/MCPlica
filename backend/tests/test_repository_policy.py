@@ -1,3 +1,4 @@
+import hashlib
 import subprocess
 import sys
 import tomllib
@@ -26,6 +27,20 @@ def test_source_snapshot_checksum_manifest_is_complete_and_current() -> None:
         cwd=root,
         check=True,
     )
+
+
+def test_source_snapshot_checksum_manifest_uses_canonical_git_blob_bytes() -> None:
+    root = Path(__file__).resolve().parents[2]
+    path = "README.md"
+    blob = subprocess.run(
+        ["git", "cat-file", "blob", f":{path}"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+    ).stdout
+    expected = f"{hashlib.sha256(blob).hexdigest()}  ./{path}"
+
+    assert expected in (root / "MANIFEST.sha256").read_text(encoding="utf-8").splitlines()
 
 
 def test_authoritative_documentation_is_not_ignored() -> None:
