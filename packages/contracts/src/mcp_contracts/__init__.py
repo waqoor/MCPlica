@@ -57,6 +57,7 @@ from .validation import (
     validate_operation_path,
     validate_runtime_compatibility,
 )
+from .version import VERSION
 
 __all__ = [
     "AuthProfile",
@@ -105,6 +106,7 @@ __all__ = [
     "SourceRef",
     "StaticTokenDigest",
     "UpstreamCredential",
+    "VERSION",
     "validate_manifest_contract",
     "validate_operation_path",
     "validate_runtime_compatibility",

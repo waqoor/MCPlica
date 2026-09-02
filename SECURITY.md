@@ -2,7 +2,14 @@
 
 ## Supported versions
 
-Security fixes are made on the default branch and, after the first stable release, on the latest supported release line. Pre-release builds are evaluation software and must not be exposed to untrusted networks without an operator security review.
+| Version | Support status |
+| --- | --- |
+| `1.0.x` | Supported after `v1.0.0` publication; fixes land on `master` and the latest compatible release line |
+| Release-candidate commits | Evaluation only; do not expose to untrusted networks without the full operator review |
+| `<1.0.0` snapshots | Unsupported; upgrade using the v1.0.0 migration guidance |
+
+Support status does not certify an individual deployment. Operators must verify target-host
+hardening, TLS, secrets, image signatures/digests, monitoring, and recovery.
 
 ## Private reporting
 

@@ -10,16 +10,26 @@ Upgrade only between verified releases and never by pulling mutable `latest` tag
 4. Export the current Compose render, database revision, active deployment/image/manifest digests, and health evidence.
 5. Test the upgrade on a restored non-production copy, including login, source parsing, build validation, credential connection, deployment, MCP invocation, and rollback.
 
+For the first v1 upgrade, retain every existing secret and add `MCPLICA_VERSION=1.0.0` to the
+private environment. Remove an old operator-defined `MCP_RUNTIME_VERSION`; the canonical Compose
+topology now derives it from the product release version so API, validator, generated runtimes, and
+image metadata cannot drift independently.
+
 ## Apply
 
 Pause new builds/deployments, stop both workers, pull the new digest-pinned images, and run database migrations as an explicit job:
 
 ```bash
 docker compose --env-file .env -f infra/compose.yaml -f infra/compose.production.yaml run --rm migrate
-docker compose --env-file .env -f infra/compose.yaml -f infra/compose.production.yaml up -d --no-build api frontend builder-worker deployment-worker
+docker compose --env-file .env -f infra/compose.yaml -f infra/compose.production.yaml up -d --no-build --wait --wait-timeout 300
 ```
 
-Verify liveness, readiness, browser authentication/CSRF, queue consumption, and an existing runtime before resuming work. New compiler/runtime versions create new builds; do not mutate an artifact already attached to a deployment.
+Running the full canonical topology applies updated infrastructure digests as well as application
+images. If Traefik is recreated, Compose restarts the dependent deployment worker and its startup
+reconciliation restores only the exact active, activation-proven project routes. Verify liveness,
+readiness, browser authentication/CSRF, queue consumption, and an existing runtime before resuming
+work. New compiler/runtime versions create new builds; do not mutate an artifact already attached
+to a deployment.
 
 ## Roll back
 

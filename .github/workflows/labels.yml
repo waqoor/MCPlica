@@ -1,0 +1,27 @@
+name: Repository labels
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - .github/labels.json
+      - .github/ISSUE_TEMPLATE/**
+      - scripts/github_labels.py
+      - .github/workflows/labels.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  synchronize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Apply managed labels without deleting repository-specific labels
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/github_labels.py --apply

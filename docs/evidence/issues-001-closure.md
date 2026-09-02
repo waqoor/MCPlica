@@ -1,7 +1,9 @@
-# issues_001.md second-round implementation closure
+# Historical issues_001 second-round implementation closure
 
-This is the authoritative second-round verification ledger for all 48 findings in
-issues_001.md. Every original issue, evidence location, root cause, recommended
+This is the retained second-round verification ledger for 48 findings from the historical
+`issues_001.md` source register. That source register is not distributed in the current checkout,
+so this ledger records its stated snapshot but is not independently reconstructible or proof of
+the v1.0.0 release candidate. At the time of the audit, every original issue, evidence location, root cause, recommended
 solution, and completion expectation was re-read against the current checkout.
 VERIFIED COMPLETE means the previous root-cause fix survived direct end-to-end
 inspection without an internally resolvable gap. FIXED IN SECOND ROUND means this

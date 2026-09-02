@@ -15,15 +15,28 @@ export function OneTimeSecretDialog({
   readonly title?: string;
   readonly onAcknowledged: () => void;
 }) {
+  return (
+    <OneTimeSecretDialogState
+      key={secret ?? "closed"}
+      onAcknowledged={onAcknowledged}
+      secret={secret}
+      title={title}
+    />
+  );
+}
+
+function OneTimeSecretDialogState({
+  secret,
+  title,
+  onAcknowledged,
+}: {
+  readonly secret: string | null;
+  readonly title: string;
+  readonly onAcknowledged: () => void;
+}) {
   const [stored, setStored] = useState(false);
   const [copyState, setCopyState] = useState<CopyState>("idle");
   const [closeBlocked, setCloseBlocked] = useState(false);
-
-  useEffect(() => {
-    setStored(false);
-    setCopyState("idle");
-    setCloseBlocked(false);
-  }, [secret]);
 
   useEffect(() => {
     if (!secret || stored) return;

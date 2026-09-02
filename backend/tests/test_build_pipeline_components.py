@@ -431,7 +431,7 @@ async def test_export_is_deterministic_protocol_compatible_and_contains_required
             200,
             json={
                 "runtime_version": "1.0.0",
-                "protocol_version": "2025-11-25",
+                "protocol_version": "2026-07-28",
                 "manifest_sha256": hashlib.sha256(payload).hexdigest(),
                 "tool_count": len(tools),
                 "tools": tools,

@@ -2,6 +2,7 @@
 
 - Date: 2026-09-02
 - Implementation baseline: `708401dc47a7684c8c95ab0e4061d595657c57dc`
+- Final code and repository-validation baseline: `801f0ee57e0ed73bf7feeb85649a5ca9b6014c1a`
 - Scope: all 55 findings in the root `issues_002.md`
 
 ## Outcome
@@ -93,6 +94,23 @@ A blank database upgraded through every revision to the unique head and `alembic
 ORM drift. The legacy-constraint-name upgrade and downgrade/re-upgrade safety scenarios are covered
 by `test_schema_drift_postgres.py`.
 
+## Validation-path corrections found during final re-verification
+
+The complete release-branch rerun found four integration defects in the repository's existing
+validation path. They were corrected at their shared source and covered by repository-policy tests:
+
+- the root `Makefile` backend test target now passes `-c pyproject.toml`, so invoking pytest from the
+  monorepo root cannot silently omit backend markers and warning policy;
+- the root and backend Ruff configurations explicitly classify both `app` and `scripts` as
+  first-party modules, making import-order results independent of the caller's file selection;
+- `scripts/checksum_manifest.py` hashes canonical staged Git blobs in one batch, so CRLF/LF checkout
+  conversion cannot invalidate the source manifest across Windows and Linux; and
+- `scripts/validate_docs.py` validates Git-tracked Markdown only, preventing ignored scratch or
+  generated files from changing authoritative documentation results.
+
+These are corrections to the canonical Make, Ruff, manifest, and documentation-validation paths;
+no alternate runner, compatibility path, or environment-specific bypass was introduced.
+
 ## Verification record
 
 The final commit was validated with the repository environments and Docker Desktop's Linux engine.
@@ -100,7 +118,7 @@ Exact final commands and counts are recorded here after manifest regeneration:
 
 | Boundary | Result |
 | --- | --- |
-| Backend, contracts, and fixture-server tests | 381 passed, 2 environment-gated skips; all 26 critical coverage floors passed |
+| Backend, contracts, and fixture-server tests | 386 passed, 2 environment-gated skips; all 26 critical coverage floors passed |
 | PostgreSQL integration and concurrency | 42 passed within the backend suite |
 | Runtime unit/protocol/security | 69 passed |
 | Frontend unit/API | 154 passed |
@@ -108,8 +126,8 @@ Exact final commands and counts are recorded here after manifest regeneration:
 | Backend/runtime Ruff, formatting, and strict Pyright | Passed |
 | Blank/legacy migration and ORM drift | Passed within the 42 PostgreSQL cases; explicit `alembic check` found no operations |
 | Real Linux Docker runtime isolation/replacement/rollback | 1 passed |
-| Compose render, images, health, workflow, vector isolation, and browser E2E | 13/13 services valid; 102.398-second workflow passed; real Milvus passed; live Chromium 1 passed; fixture browser matrix 16 passed/8 intentional skips |
-| Dependency and secret/repository security scans | Python and pnpm audits found no known vulnerabilities; staged and 38-commit Gitleaks scans found no leaks with the rule/path/shape-scoped fixture allowlist; Trivy HIGH/CRITICAL scan passed |
+| Compose render, images, health, workflow, vector isolation, and browser E2E | 13/13 services valid; 126.437-second workflow passed; real Milvus passed; live Chromium 1 passed; fixture browser matrix 16 passed/8 intentional skips |
+| Dependency and secret/repository security scans | Python and pnpm audits found no known vulnerabilities; complete-history Gitleaks found no leaks with the rule/path/shape-scoped fixture allowlist; Trivy source and all three image scans found no unaccepted HIGH/CRITICAL results |
 | Deterministic source manifest and clean-tree checks | Generated from the final tracked-source set, verified before and after commit |
 
 The first host-side Docker test intentionally failed before application execution because Windows

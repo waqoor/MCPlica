@@ -20,6 +20,36 @@ async def _key() -> str:
     return "test-key"
 
 
+@pytest.mark.parametrize(
+    ("site_url", "expected_referer"),
+    [
+        (None, None),
+        ("https://mcplica.example", "https://mcplica.example"),
+    ],
+)
+async def test_base_url_routes_requests_while_site_url_controls_attribution(
+    site_url: str | None,
+    expected_referer: str | None,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.host == "gateway.example"
+        assert request.url.path == "/api/v1/models"
+        assert request.headers.get("HTTP-Referer") == expected_referer
+        assert request.headers["X-Title"] == "MCPlica test"
+        return httpx.Response(200, json={"data": []})
+
+    http = HttpClient(transport=httpx.MockTransport(handler))
+    client = OpenRouterClient(
+        http,
+        _key,
+        "https://gateway.example/api/v1/",
+        site_url=site_url,
+        app_name="MCPlica test",
+    )
+    assert await client.models() == []
+    await http.close()
+
+
 async def test_structured_generation_retries_transport_rate_limit_and_validates() -> None:
     calls = 0
 

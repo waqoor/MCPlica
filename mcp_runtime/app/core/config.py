@@ -3,6 +3,7 @@ from typing import Literal
 from urllib.parse import urlsplit
 from uuid import UUID
 
+from mcp_contracts import VERSION
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -11,7 +12,7 @@ class RuntimeSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="MCP_", extra="ignore")
 
     environment: Literal["development", "test", "production"] = "production"
-    runtime_version: str = "1.0.0"
+    runtime_version: str = VERSION
     deployment_id: UUID | None = None
     manifest_path: str = "/runtime/manifest.json"
     manifest_sha256: str | None = None

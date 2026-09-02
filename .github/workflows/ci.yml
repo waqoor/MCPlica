@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 30
     services:
       postgres:
-        image: postgres:18.6@sha256:1957b2ff3137e4ef7f3bc813e74fff50b1e1ffddc85c8b9d6f14ade972be8687
+        image: postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
         env:
           POSTGRES_DB: mcplica_test
           POSTGRES_USER: mcplica_test
@@ -38,7 +38,14 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Verify release version and repository documentation
+        working-directory: .
+        run: |
+          python scripts/release_version.py --check
+          python scripts/github_labels.py --check
+          python scripts/validate_docs.py
+          python scripts/validate_starter.py
       - name: Verify tracked source checksum manifest
         working-directory: .
         run: python scripts/checksum_manifest.py --check
@@ -52,16 +59,17 @@ jobs:
           path: ${{ runner.temp }}/mcplica-source.tar.gz
           retention-days: 1
           if-no-files-found: error
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           python-version: "3.13"
           enable-cache: true
           cache-dependency-glob: uv.lock
       - run: uv sync --frozen --extra dev
-      - run: uv run --frozen --extra dev ruff check app tests ../packages/contracts/src ../packages/contracts/tests
-      - run: uv run --frozen --extra dev ruff format --check app tests ../packages/contracts/src ../packages/contracts/tests
+      - run: uv run --frozen --extra dev ruff check app tests scripts ../packages/contracts/src ../packages/contracts/tests ../packages/contracts/scripts ../scripts ../tests/integration ../migrations
+      - run: uv run --frozen --extra dev ruff format --check app tests scripts ../packages/contracts/src ../packages/contracts/tests ../packages/contracts/scripts ../scripts ../tests/integration ../migrations
       - run: uv run --frozen --extra dev pyright app ../packages/contracts/src
       - run: uv run --frozen --extra dev alembic -c ../migrations/alembic.ini upgrade head
+      - run: uv run --frozen --extra dev python generate_openapi.py --check
       - run: uv run --frozen --extra dev pytest -c pyproject.toml tests ../packages/contracts/tests ../tests/integration/test_fixture_server.py --cov=app --cov-report=json:coverage-critical.json
       - run: uv run --frozen --extra dev python scripts/check_critical_coverage.py coverage-critical.json
       - run: uv run --frozen --extra dev alembic -c ../migrations/alembic.ini check
@@ -73,8 +81,8 @@ jobs:
       run:
         working-directory: mcp_runtime
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           python-version: "3.13"
           enable-cache: true
@@ -92,8 +100,8 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
           package-manager-cache: false
@@ -115,8 +123,8 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
           package-manager-cache: false
@@ -138,12 +146,39 @@ jobs:
   dependency-review:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Review introduced dependencies on supported public repositories
+        if: github.event.repository.private == false
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: high
+      - name: Set up Node for the private-repository dependency audit
+        if: github.event.repository.private
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - name: Audit the locked frontend dependency graph
+        if: github.event.repository.private
+        working-directory: frontend
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+          pnpm audit --audit-level high
+      - name: Set up uv for the private-repository dependency audit
+        if: github.event.repository.private
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Audit the locked Python dependency graph
+        if: github.event.repository.private
+        run: |
+          uv export --frozen --all-packages --no-dev --no-emit-workspace --output-file "$RUNNER_TEMP/mcplica-requirements.txt"
+          uvx pip-audit --requirement "$RUNNER_TEMP/mcplica-requirements.txt"
 
   docker:
     needs: [backend, runtime, frontend, e2e]
@@ -154,17 +189,17 @@ jobs:
       TEST_RUNTIME_IMAGE: mcplica/runtime:test
       TEST_RUNTIME_PULL_POLICY: never
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Set runner-local test paths
         run: |
           printf 'TEST_RUNTIME_WORKER_ROOT=%s/dynamic-runtime-test\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
           printf 'TEST_RUNTIME_HOST_ROOT=%s/dynamic-runtime-test\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           python-version: "3.13"
           enable-cache: true
           cache-dependency-glob: uv.lock
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
           package-manager-cache: false
@@ -181,6 +216,32 @@ jobs:
         run: python tests/integration/docker_context_check.py
       - name: Build canonical application images
         run: docker compose --env-file .env -f infra/compose.yaml build api runtime-validator frontend
+      - name: Verify image versions, OCI metadata, and runtime users
+        run: python tests/integration/image_metadata_check.py
+      - name: Scan backend candidate image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: mcplica/backend:test
+          version: v0.74.0
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Scan runtime candidate image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: mcplica/runtime:test
+          version: v0.74.0
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Scan frontend candidate image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: mcplica/frontend:test
+          version: v0.74.0
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
       - name: Start the complete platform, including schema and mount initialization
         run: docker compose --env-file .env -f infra/compose.yaml up --no-build --detach --wait --wait-timeout 300
       - name: Check every required service and one-shot initialization
@@ -213,6 +274,29 @@ jobs:
           corepack enable
           pnpm install --frozen-lockfile
           pnpm exec playwright install --with-deps chromium
+          PYTHONPATH=../tests/integration uv run --project ../backend --frozen --extra dev \
+            python -m uvicorn mock_openrouter.app:app \
+            --host 0.0.0.0 --port 9010 \
+            > "$RUNNER_TEMP/openrouter-browser-fixture.log" 2>&1 &
+          fixture_pid=$!
+          cleanup_fixture() {
+            kill "$fixture_pid" 2>/dev/null || true
+            wait "$fixture_pid" 2>/dev/null || true
+          }
+          trap cleanup_fixture EXIT
+          for _ in $(seq 1 100); do
+            if ! kill -0 "$fixture_pid" 2>/dev/null; then
+              cat "$RUNNER_TEMP/openrouter-browser-fixture.log"
+              exit 1
+            fi
+            if curl --fail --silent --show-error http://127.0.0.1:9010/healthz \
+              | grep --fixed-strings --quiet '"service":"mock-openrouter"'; then
+              break
+            fi
+            sleep 0.1
+          done
+          curl --fail --silent --show-error http://127.0.0.1:9010/healthz \
+            | grep --fixed-strings --quiet '"service":"mock-openrouter"'
           pnpm exec playwright test e2e/live-stack.spec.ts --project=chromium
       - name: Verify service recovery after all acceptance checks
         run: python tests/integration/compose_evidence.py --check

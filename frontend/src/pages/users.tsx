@@ -7,6 +7,7 @@ import { useAuth } from "@/auth/use-auth";
 import { MutationError } from "@/components/error-notice";
 import { QueryError, QueryPending } from "@/components/query-state";
 import { PageHeader } from "@/components/page-header";
+import { SettingsNavigation } from "@/components/settings-navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -43,6 +44,7 @@ export function UsersPage() {
         eyebrow="Settings"
         title="Users and roles"
       />
+      <SettingsNavigation canManageInstallation />
       {users.data.length === 0 ? (
         <EmptyState
           action={

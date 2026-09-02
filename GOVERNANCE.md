@@ -13,6 +13,11 @@ Roles progress from contributor to reviewer/maintainer only through sustained te
 
 Routine changes are decided through pull-request review against the authoritative documents and passing required checks. Material changes to contracts, security boundaries, persistence, deployment, governance, or licensing require an explicit written decision and migration/rollback analysis. Security incidents may be handled privately until coordinated disclosure.
 
+Releases follow Semantic Versioning and the repository release process. The founder or an
+explicitly delegated maintainer confirms the checklist, but cannot waive a failed deterministic,
+authentication, secret, migration, image-integrity, or runtime-health gate. Published tags and
+image tags are immutable; corrections use a new version.
+
 Maintainers must disclose conflicts, recuse themselves when impartial review is not possible, protect embargoed reports and contributor data, and never trade approval for sponsorship or commercial benefit. Appointment and removal are recorded by pull request. Inactivity alone is not misconduct, but access may be removed to reduce security risk.
 
 If the founder becomes unavailable, existing maintainers may keep security fixes and existing release lines operating. A permanent succession decision must be recorded publicly, preserve already granted license rights, and maintain the stated project boundaries unless governance is formally amended.

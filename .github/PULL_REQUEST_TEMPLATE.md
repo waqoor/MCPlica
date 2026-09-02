@@ -6,6 +6,11 @@ Describe the user-visible or operational result and link the issue/design decisi
 
 Identify affected API/domain contracts, migrations, generated artifacts, security boundaries, and rollback behavior. State “none” where applicable.
 
+## Release and compatibility impact
+
+State the SemVer impact, supported-platform/configuration impact, changelog/release-note entry, and
+upgrade/rollback requirements. State “none” with a reason when no release-facing change exists.
+
 ## Evidence
 
 List the exact commands and behavior/E2E scenarios run. Include sanitized screenshots only when they prove functional behavior.
@@ -19,5 +24,6 @@ List the exact commands and behavior/E2E scenarios run. Include sanitized screen
 - [ ] `make lint`, `make typecheck`, and `make test` pass for affected workspaces.
 - [ ] Frontend changes pass `pnpm test`, `pnpm build`, and relevant Playwright journeys.
 - [ ] Migrations, documentation, operations, and rollback instructions are updated where applicable.
+- [ ] `VERSION`, package/image metadata, generated contracts, changelog, and release notes are synchronized where applicable.
 - [ ] No credentials, private specifications, generated secret material, or sensitive logs are included.
 - [ ] External contributors have verified CLA status; DCO sign-off is not requested.

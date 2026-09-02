@@ -7,6 +7,9 @@
 **/__pycache__
 **/.pytest_cache
 **/.ruff_cache
+**/.coverage
+**/.coverage.*
+**/coverage*.json
 **/node_modules
 frontend/dist
 frontend/playwright-report
@@ -19,6 +22,8 @@ output
 # Local runtime state and nested private settings are never build inputs.
 .runtime
 **/.runtime
+.runtime-*
+**/.runtime-*
 **/.env
 **/.env.*
 !**/.env.example

@@ -25,7 +25,12 @@ from app.core.exceptions import (
     RuntimeHealthError,
     SecretMaterializationError,
 )
-from app.domain.deployments import DeploymentRecord, DeploymentStatus
+from app.domain.deployments import (
+    DeploymentActivationPhase,
+    DeploymentActivationProof,
+    DeploymentRecord,
+    DeploymentStatus,
+)
 from app.services.deployment.runtime_manager import RuntimeManager
 from app.services.deployment.service import is_retryable_deployment_error
 
@@ -64,6 +69,37 @@ def _secret_bundle() -> RuntimeSecretBundle:
                 "mode": "static_bearer",
                 "static_tokens": [{"id": "token-1", "sha256": "a" * 64}],
             }
+        }
+    )
+
+
+def _active_deployment() -> DeploymentRecord:
+    base = _deployment()
+    verified_at = datetime.now(UTC)
+    container_id = "container-1"
+    image_digest = "sha256:runtime"
+    proof = DeploymentActivationProof.verified(
+        deployment_id=base.id,
+        project_id=base.project_id,
+        build_id=base.build_id,
+        container_id=container_id,
+        image_digest=image_digest,
+        hostname=base.hostname,
+        manifest_sha256=base.manifest_sha256,
+        runtime_version=base.runtime_version,
+        verified_at=verified_at,
+    )
+    return base.model_copy(
+        update={
+            "status": DeploymentStatus.RUNNING,
+            "container_id": container_id,
+            "image_digest": image_digest,
+            "health_status": "healthy",
+            "started_at": verified_at,
+            "activated_at": verified_at,
+            "activation_phase": DeploymentActivationPhase.RUNNING,
+            "activation_verified_at": verified_at,
+            "activation_proof_sha256": proof.proof_sha256,
         }
     )
 
@@ -322,6 +358,31 @@ async def test_activation_retry_revalidates_exact_candidate_before_cleanup() -> 
     docker.inspect_result = None
     with pytest.raises(RuntimeHealthError, match="no longer exists"):
         await manager.revalidate_activation_candidate(deployment)
+
+
+@pytest.mark.asyncio
+async def test_edge_route_reconciliation_restores_network_before_revalidation() -> None:
+    docker = _RecordingDocker()
+    manager = RuntimeManager(docker, Settings(env="test"))
+
+    proof = await manager.restore_edge_route(_active_deployment())
+
+    assert proof.container_id == "container-1"
+    assert docker.events == ["network", "edge", "route"]
+
+
+@pytest.mark.asyncio
+async def test_edge_route_reconciliation_rejects_changed_runtime_identity() -> None:
+    docker = _RecordingDocker()
+    docker.inspect_result = ContainerInfo(
+        "replacement-container", "runtime", "running", "healthy", "sha256:runtime"
+    )
+    manager = RuntimeManager(docker, Settings(env="test"))
+
+    with pytest.raises(RuntimeHealthError, match="identity changed"):
+        await manager.restore_edge_route(_active_deployment())
+
+    assert docker.events == []
 
 
 @pytest.mark.asyncio

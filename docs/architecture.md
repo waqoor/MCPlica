@@ -390,7 +390,8 @@ Validation is multi-layered:
    generic-runtime factory in an isolated subprocess, then an official MCP client performs
    initialize, list-tools/list-resources, and a successful schema-valid call for every enabled
    tool under bounded startup/call/teardown timeouts. Error-result fallbacks never count as
-   exercised tools.
+   exercised tools. Candidate certification pins the latest supported protocol revision
+   (`2026-07-28`); the canonical server retains tested legacy negotiation compatibility.
 8. **Artifact validation** — manifest hashes, runtime compatibility, and exported bundle structure are valid.
 
 A build cannot become `ready` unless all blocking deterministic validators pass.
@@ -796,7 +797,7 @@ Generated MCP runtime containers are dynamic Docker resources managed by the Run
 The installation defines:
 
 ```text
-MCP_BASE_DOMAIN=mcp.example.com
+MCP_DOMAIN=mcp.example.com
 ```
 
 A project slug `inventory` receives:

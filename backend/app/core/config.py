@@ -2,6 +2,7 @@ from functools import lru_cache
 from pathlib import PurePosixPath, PureWindowsPath
 from typing import Annotated, Literal
 
+from mcp_contracts import VERSION
 from pydantic import (
     AnyHttpUrl,
     BeforeValidator,
@@ -88,6 +89,7 @@ class Settings(BaseSettings):
     runtime_command_dispatch_lease_seconds: float = Field(default=30.0, ge=5, le=300)
     runtime_command_execution_lease_seconds: float = Field(default=1_200.0, ge=60, le=7_200)
     runtime_command_execution_heartbeat_seconds: float = Field(default=30.0, ge=1, le=300)
+    runtime_route_reconcile_interval_seconds: float = Field(default=15.0, ge=5, le=300)
     cleanup_dispatch_interval_seconds: float = Field(default=5.0, ge=0.1, le=300)
     cleanup_lease_seconds: float = Field(default=60.0, ge=5, le=3_600)
     cleanup_max_attempts: int = Field(default=8, ge=1, le=100)
@@ -177,8 +179,8 @@ class Settings(BaseSettings):
     )
 
     docker_base_url: str = "unix:///var/run/docker.sock"
-    mcp_runtime_image: str = "mcplica/mcp-runtime:1.0.0"
-    mcp_runtime_version: str = Field(default="1.0.0", min_length=1, max_length=64)
+    mcp_runtime_image: str = "mcplica-runtime:local"
+    mcp_runtime_version: str = Field(default=VERSION, min_length=1, max_length=64)
     mcp_runtime_pull_policy: Literal["never", "missing", "always"] = "missing"
     mcp_runtime_validator_url: AnyHttpUrl = AnyHttpUrl("http://runtime-validator:8090/validate")
     mcp_runtime_validator_timeout_seconds: float = Field(default=60.0, gt=0, le=600)

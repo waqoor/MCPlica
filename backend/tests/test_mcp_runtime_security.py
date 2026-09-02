@@ -43,6 +43,7 @@ def test_mcp_runtime_evidence_limit_cannot_exceed_schema_capacity() -> None:
 @pytest.mark.asyncio
 async def test_mcp_manifest_validation_requires_and_verifies_runtime_evidence() -> None:
     manifest = _fixture()
+    protocol_version = "2025-11-25"
     with pytest.raises(ProtocolValidationError, match="not configured"):
         await MCPValidationClient().inspect_manifest(
             manifest,
@@ -58,7 +59,7 @@ async def test_mcp_manifest_validation_requires_and_verifies_runtime_evidence() 
             200,
             json={
                 "runtime_version": "1.0.0",
-                "protocol_version": "2025-11-25",
+                "protocol_version": protocol_version,
                 "manifest_sha256": hashlib.sha256(payload).hexdigest(),
                 "tool_count": len(tools),
                 "tools": tools,
@@ -70,13 +71,18 @@ async def test_mcp_manifest_validation_requires_and_verifies_runtime_evidence() 
             },
         )
 
-    inspected = await MCPValidationClient(
+    validator = MCPValidationClient(
         validator_endpoint="http://runtime-validator:8090/validate",
         validator_transport=httpx2.MockTransport(handler),
-    ).inspect_manifest(manifest, runtime_version="1.0.0")
+    )
+    with pytest.raises(ProtocolValidationError, match="latest MCP protocol revision"):
+        await validator.inspect_manifest(manifest, runtime_version="1.0.0")
+
+    protocol_version = "2026-07-28"
+    inspected = await validator.inspect_manifest(manifest, runtime_version="1.0.0")
     assert inspected["tools"] == [tool.name for tool in manifest.enabled_tools()]
     assert inspected["resources"] == [str(resource.uri) for resource in manifest.resources]
-    assert inspected["protocol_version"] == "2025-11-25"
+    assert inspected["protocol_version"] == "2026-07-28"
 
 
 @pytest.mark.asyncio
@@ -106,7 +112,7 @@ async def test_runtime_evidence_accepts_more_than_ten_thousand_tools() -> None:
             200,
             json={
                 "runtime_version": "1.0.0",
-                "protocol_version": "2025-11-25",
+                "protocol_version": "2026-07-28",
                 "manifest_sha256": hashlib.sha256(payload).hexdigest(),
                 "tool_count": len(tools),
                 "tools": tools,
