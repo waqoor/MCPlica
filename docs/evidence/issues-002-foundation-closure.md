@@ -153,11 +153,11 @@ source-selection loss fails closed rather than being silently corrupted.
 ## Verification record
 
 The final manifest-bound aggregate count is recorded here after the final integrity pass. All
-other entries below were executed against the same working implementation before commit.
+entries below were executed against the same staged implementation before commit.
 
 | Boundary | Verified result |
 | --- | --- |
-| Backend/contracts/fixture tests, including PostgreSQL | Final manifest-bound count pending |
+| Backend/contracts/fixture tests, including PostgreSQL | 381 passed, 2 environment-gated skips; all 26 critical coverage floors passed |
 | Focused PostgreSQL foundation/concurrency set | 40 passed |
 | Runtime unit/protocol/security | 69 passed |
 | Frontend unit/API | 37 files, 154 passed |
@@ -173,8 +173,8 @@ other entries below were executed against the same working implementation before
 | Live Chromium workflow | 1 passed |
 | Python frozen dependency audit | No known vulnerabilities found |
 | Frontend production dependency audit | No vulnerabilities found at high/critical threshold |
-| Repository vulnerability/misconfiguration/secret scan | Final result pending |
-| Deterministic tracked-source checksum manifest | Final check pending |
+| Repository vulnerability/misconfiguration/secret scan | Trivy 0.74 staged-index scan: 0 HIGH/CRITICAL vulnerabilities, 0 misconfigurations, 0 secrets; policy exit 0 |
+| Deterministic tracked-source checksum manifest | Regenerated from the final tracked-source set and verified before commit |
 
 The full-stack run produced two READY Builds, three successful deployment events (initial,
 replacement, rollback), one-operation diff growth, a readable documentation resource, an exported
