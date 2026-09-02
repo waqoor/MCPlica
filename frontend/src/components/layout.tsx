@@ -10,8 +10,8 @@ import {
   Rocket,
   Settings,
 } from "lucide-react";
-import { useEffect, useState } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { useState } from "react";
+import { NavLink, Outlet } from "react-router-dom";
 import { systemApi } from "@/api/system";
 import { useCapabilities } from "@/auth/capabilities";
 import { useAuth } from "@/auth/use-auth";
@@ -120,10 +120,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 export function Layout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const { user, logout, logoutError, isLoggingOut } = useAuth();
-  const location = useLocation();
   const desktop = useMediaQuery("(min-width: 1024px)");
-
-  useEffect(() => setMenuOpen(false), [location.pathname]);
 
   return (
     <div className="min-h-screen text-foreground">

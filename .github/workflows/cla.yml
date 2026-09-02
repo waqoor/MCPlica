@@ -17,13 +17,28 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       CLA_STATUS_CONTEXT: ${{ vars.CLA_STATUS_CONTEXT }}
       HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      AUTHOR_ASSOCIATION: ${{ github.event.pull_request.author_association }}
+      AUTHOR_LOGIN: ${{ github.event.pull_request.user.login }}
     steps:
-      - name: Verify configured CLA service status
+      - name: Verify contributor authorization
         shell: bash
         run: |
           set -euo pipefail
+
+          if [[ "${AUTHOR_LOGIN}" == "dependabot[bot]" ]]; then
+            echo "Dependabot is repository automation; no contributor CLA is required."
+            exit 0
+          fi
+
+          case "${AUTHOR_ASSOCIATION}" in
+            OWNER|MEMBER|COLLABORATOR)
+              echo "Trusted repository contributor (${AUTHOR_ASSOCIATION}); authorization is inherent in repository access."
+              exit 0
+              ;;
+          esac
+
           if [[ -z "${CLA_STATUS_CONTEXT}" ]]; then
-            echo "::error::CLA verification is unavailable: configure the CLA_STATUS_CONTEXT repository variable."
+            echo "::error::External contributor CLA verification is unavailable: configure the CLA_STATUS_CONTEXT repository variable."
             exit 2
           fi
 

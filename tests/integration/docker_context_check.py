@@ -22,6 +22,9 @@ def main() -> None:
         "mcp_runtime/client.pem",
         "nested/.runtime/manifest.json",
         "nested/.runtime-release-candidate/manifest.json",
+        ".coverage",
+        "backend/.coverage",
+        "backend/coverage-critical.json",
     ]
     public = [".env.example", "backend/.env.example", "backend/app/main.py", "README.md"]
     with TemporaryDirectory(prefix="mcplica-context-check-") as directory:

@@ -89,6 +89,7 @@ class Settings(BaseSettings):
     runtime_command_dispatch_lease_seconds: float = Field(default=30.0, ge=5, le=300)
     runtime_command_execution_lease_seconds: float = Field(default=1_200.0, ge=60, le=7_200)
     runtime_command_execution_heartbeat_seconds: float = Field(default=30.0, ge=1, le=300)
+    runtime_route_reconcile_interval_seconds: float = Field(default=15.0, ge=5, le=300)
     cleanup_dispatch_interval_seconds: float = Field(default=5.0, ge=0.1, le=300)
     cleanup_lease_seconds: float = Field(default=60.0, ge=5, le=3_600)
     cleanup_max_attempts: int = Field(default=8, ge=1, le=100)

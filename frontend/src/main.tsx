@@ -1,3 +1,7 @@
+// Configure Zod before any lazy route can construct a schema. Firefox reports
+// even a caught `new Function` capability probe as a CSP violation.
+import "@/lib/schemas";
+
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";

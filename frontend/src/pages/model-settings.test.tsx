@@ -40,7 +40,7 @@ beforeEach(() => {
     );
 });
 
-test("keeps stored model and key recovery controls usable during catalog outage", async () => {
+test("keeps stored model recovery controls usable during catalog outage", async () => {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -54,11 +54,12 @@ test("keeps stored model and key recovery controls usable during catalog outage"
     </QueryClientProvider>,
   );
 
-  expect(await screen.findByText("Status: configured")).toBeVisible();
-  expect(screen.getByLabelText("New API key")).toBeEnabled();
-  expect(
-    screen.getByRole("button", { name: "Test capabilities" }),
-  ).toBeEnabled();
+  expect(await screen.findByRole("heading", { name: "Models" })).toBeVisible();
+  expect(screen.getByRole("link", { name: "Providers" })).toHaveAttribute(
+    "href",
+    "/settings/providers",
+  );
+  expect(screen.queryByLabelText("New API key")).not.toBeInTheDocument();
   expect(screen.getByLabelText("Analysis model")).toHaveValue(
     "provider/analysis-current",
   );

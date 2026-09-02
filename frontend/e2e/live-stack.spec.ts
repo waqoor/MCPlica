@@ -39,12 +39,16 @@ test("authenticates against Compose and exposes the active rollback runtime", as
   ).toBeVisible();
   await expect(page).toHaveTitle("MCPlica control plane");
 
-  const navigationToggle = page.getByRole("button", {
-    name: "Open navigation",
-  });
-  if (await navigationToggle.isVisible()) {
-    await navigationToggle.click();
-  }
+  const openPrimaryNavigation = async () => {
+    const navigationToggle = page.getByRole("button", {
+      name: "Open navigation",
+    });
+    if (await navigationToggle.isVisible()) {
+      await navigationToggle.click();
+    }
+  };
+
+  await openPrimaryNavigation();
   await page.getByRole("link", { name: "Projects" }).click();
   await page
     .getByRole("region", { name: "Project list" })
@@ -96,5 +100,28 @@ test("authenticates against Compose and exposes the active rollback runtime", as
   await expect(
     page.getByText("Healthy", { exact: true }).first(),
   ).toBeVisible();
+
+  await openPrimaryNavigation();
+  await page
+    .getByRole("navigation", { name: "Primary" })
+    .getByRole("link", { name: "Settings" })
+    .click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Settings" }),
+  ).toBeVisible();
+  await page
+    .getByRole("navigation", { name: "Settings sections" })
+    .getByRole("link", { name: "Providers" })
+    .click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Providers" }),
+  ).toBeVisible();
+  await expect(page.getByText("https://openrouter.ai/api/v1")).toBeVisible();
+  await page.getByRole("button", { name: "Test connection" }).click();
+  await expect(
+    page.getByText(/OpenRouter connected; \d+ models are visible/),
+  ).toBeVisible({
+    timeout: 30_000,
+  });
   expect(cspViolations).toEqual([]);
 });

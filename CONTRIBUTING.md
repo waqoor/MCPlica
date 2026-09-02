@@ -4,9 +4,9 @@ Thank you for contributing.
 
 ## Contributor License Agreement
 
-MCPlica uses a **CLA-only** contribution model. **DCO is not used.** External code contributions may not be merged until the contributor's applicable individual/entity CLA status is verified.
+MCPlica uses a **CLA-only** contribution model for external code contributions. **DCO is not used.** External code contributions may not be merged until the contributor's applicable individual/entity CLA status is verified. Repository owners, organization members, explicitly authorized collaborators, and Dependabot are trusted repository actors and do not require an external CLA-service result.
 
-The repository-level automation in `.github/workflows/cla.yml` reads the exact status/check name configured in the `CLA_STATUS_CONTEXT` repository variable. It succeeds only when the founder-approved CLA service reports success for the pull request head commit, reports an ordinary policy failure for unsigned contributions, and reports service unavailability separately. Maintainers must not bypass that required check or treat DCO sign-off as a substitute.
+The repository-level automation in `.github/workflows/cla.yml` first validates trusted repository actors from GitHub's pull-request metadata. For any other contributor, it reads the exact status/check name configured in the `CLA_STATUS_CONTEXT` repository variable. It succeeds only when the founder-approved CLA service reports success for the pull request head commit, reports an ordinary policy failure for unsigned contributions, and reports service unavailability separately. Maintainers must not bypass that external-contributor check or treat DCO sign-off as a substitute.
 
 All contributors must follow `CODE_OF_CONDUCT.md`. Security vulnerabilities belong in private vulnerability reporting, not normal issues or pull requests.
 
@@ -45,7 +45,7 @@ See `docs/operations/installation.md` and `docs/operations/configuration.md` for
 4. For frontend changes, run `pnpm --dir frontend test`, `pnpm --dir frontend build`, and the relevant `pnpm --dir frontend test:e2e` journeys.
 5. Update user, operator, security, and release documentation affected by the change.
 6. Explain architecture, security, data, compatibility, and rollback impact in the pull request.
-7. Ensure CLA verification passes before merge.
+7. Ensure contributor authorization passes before merge: trusted repository actors are recognized automatically, while external contributors require successful CLA verification.
 
 ## Versions and changelog
 

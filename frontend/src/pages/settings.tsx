@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, ExternalLink, Save, ServerCog, Users } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Bot, Cloud, ExternalLink, Save, ServerCog, Users } from "lucide-react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { buildApi } from "@/api/builds";
 import type { SystemSettings } from "@/api/contracts";
@@ -10,6 +10,7 @@ import { useCapabilities } from "@/auth/capabilities";
 import { PageHeader } from "@/components/page-header";
 import { ErrorNotice, MutationError } from "@/components/error-notice";
 import { QueryError, QueryPending } from "@/components/query-state";
+import { SettingsNavigation } from "@/components/settings-navigation";
 import { HealthBadge } from "@/components/status-badge";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -40,15 +41,22 @@ export function SettingsPage() {
     refetchInterval: (query) =>
       query.state.data?.waiting_count ? 2_000 : false,
   });
-  const [form, setForm] = useState<SystemSettings | null>(null);
-  useEffect(() => {
-    if (settings.data) setForm((current) => current ?? settings.data);
-  }, [settings.data]);
+  const [draft, setDraft] = useState<{
+    source: SystemSettings;
+    value: SystemSettings;
+  } | null>(null);
+  const form =
+    settings.data && draft?.source === settings.data
+      ? draft.value
+      : (settings.data ?? null);
+  const setForm = (value: SystemSettings) => {
+    if (settings.data) setDraft({ source: settings.data, value });
+  };
   const save = useMutation({
     mutationFn: (payload: SystemSettings) => settingsApi.update(payload),
     onSuccess: (value) => {
       queryClient.setQueryData(["settings"], value);
-      setForm(value);
+      setDraft(null);
     },
   });
   const admin = capabilities.canManageInstallation;
@@ -75,16 +83,26 @@ export function SettingsPage() {
     <div className="space-y-7">
       <UnsavedChangesGuard active={dirty && !save.isPending} />
       <PageHeader
-        description="Installation-level build, retention, resource, model, and access controls. PostgreSQL remains authoritative."
+        description="Installation-level provider, model, access, retention, and resource controls. PostgreSQL remains authoritative."
         eyebrow="Administration"
         title="Settings"
       />
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <SettingsNavigation canManageInstallation={admin} />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <SettingsLink
+          adminOnly
           authorized={admin}
-          description="Configure the OpenRouter key, compatible analysis/validation models, embedding model, and documentation processing policy."
+          description="Connect the public OpenRouter service, securely save or rotate its API key, and test live reachability."
+          icon={Cloud}
+          label="Providers"
+          to="providers"
+        />
+        <SettingsLink
+          adminOnly
+          authorized={admin}
+          description="Select compatible analysis, validation, and embedding models from the live provider catalog."
           icon={Bot}
-          label="Models and OpenRouter"
+          label="Models"
           to="models"
         />
         <SettingsLink

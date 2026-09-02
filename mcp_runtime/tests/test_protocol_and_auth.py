@@ -60,6 +60,7 @@ async def test_official_client_lists_calls_and_reads_exact_contract() -> None:
         "1.0.0",
     )
     async with Client(server) as client:
+        assert client.protocol_version == "2026-07-28"
         tools = await client.list_tools()
         result = await client.call_tool("get_pet", {"pet_id": "pet-1"})
         resources = await client.list_resources()
@@ -164,4 +165,62 @@ def test_streamable_http_requires_valid_static_bearer_token() -> None:
             json=initialize,
             headers={**headers, "Authorization": f"Bearer {token}"},
         )
-    assert authenticated.status_code == 200
+    assert authenticated.status_code == 200, authenticated.text
+
+
+def test_modern_streamable_http_is_stateless_and_requires_authentication() -> None:
+    token = "test-token-with-at-least-256-bits-of-entropy-1234567890"
+    manifest = _manifest()
+    bundle = RuntimeSecretBundle.model_validate(
+        {
+            "upstream_credentials": {"bearer": {"type": "bearer", "token": "upstream-secret"}},
+            "inbound_auth": {
+                "mode": "static_bearer",
+                "static_tokens": [
+                    {"id": "token-1", "sha256": hashlib.sha256(token.encode()).hexdigest()}
+                ],
+            },
+        }
+    )
+    settings = RuntimeSettings(
+        environment="test",
+        deployment_id=UUID("00000000-0000-0000-0000-000000000123"),
+        public_base_url="https://testserver",
+        allowed_hosts="testserver",
+        allowed_origins="https://testserver",
+        require_secure_secret_permissions=False,
+    )
+    app = build_app(manifest, bundle, settings)
+    request = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/list",
+        "params": {
+            "_meta": {
+                "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+                "io.modelcontextprotocol/clientCapabilities": {},
+                "io.modelcontextprotocol/clientInfo": {
+                    "name": "runtime-test",
+                    "version": "1.0",
+                },
+            }
+        },
+    }
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "Origin": "https://testserver",
+        "MCP-Protocol-Version": "2026-07-28",
+        "Mcp-Method": "tools/list",
+    }
+    with TestClient(app) as client:
+        assert client.post("/mcp", json=request, headers=headers).status_code == 401
+        authenticated = client.post(
+            "/mcp",
+            json=request,
+            headers={**headers, "Authorization": f"Bearer {token}"},
+        )
+
+    assert authenticated.status_code == 200, authenticated.text
+    assert authenticated.json()["result"]["tools"][0]["name"] == "get_pet"
+    assert "mcp-session-id" not in authenticated.headers

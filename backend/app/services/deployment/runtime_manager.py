@@ -243,6 +243,29 @@ class RuntimeManager:
             image_digest=confirmed.image_id,
         )
 
+    async def restore_edge_route(self, deployment: DeploymentRecord) -> DeploymentActivationProof:
+        """Restore an edge attachment lost when the proxy container was recreated."""
+
+        info = await self._docker.inspect_container(deployment.container_name)
+        if info is None:
+            raise RuntimeHealthError("Active runtime container no longer exists")
+        if deployment.container_id is None or info.id != deployment.container_id:
+            raise RuntimeHealthError("Active runtime container identity changed")
+        if deployment.image_digest is None or info.image_id != deployment.image_digest:
+            raise RuntimeHealthError("Active runtime image identity changed")
+        if info.status != "running" or info.health != "healthy":
+            raise RuntimeHealthError("Active runtime is not healthy")
+        await self._docker.ensure_network(
+            deployment.network_name,
+            project_id=str(deployment.project_id),
+            edge_container_name=self._settings.traefik_container_name,
+        )
+        await self._docker.connect_edge_container_to_network(
+            deployment.network_name,
+            self._settings.traefik_container_name,
+        )
+        return await self.revalidate_activation_candidate(deployment)
+
     async def restore_activation_predecessor(
         self, deployment: DeploymentRecord
     ) -> DeploymentActivationProof:

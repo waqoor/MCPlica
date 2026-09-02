@@ -118,6 +118,23 @@ class DeploymentRepository:
         )
         return [_to_domain(model) for model in result]
 
+    async def list_active_for_route_reconciliation(
+        self,
+        session: AsyncSession,
+    ) -> list[DeploymentRecord]:
+        """Return only enabled projects' exact active build/deployment pair."""
+
+        result = await session.scalars(
+            select(Deployment)
+            .join(Project, Project.active_deployment_id == Deployment.id)
+            .where(
+                Project.is_enabled.is_(True),
+                Project.active_build_id == Deployment.build_id,
+            )
+            .order_by(Deployment.project_id, Deployment.id)
+        )
+        return [_to_domain(model) for model in result]
+
     async def count_for_project(self, session: AsyncSession, project_id: UUID) -> int:
         return int(
             await session.scalar(

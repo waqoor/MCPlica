@@ -22,8 +22,9 @@ release is not ready; local evidence cannot satisfy a hosted or production-host 
 - [ ] `master` protection/rulesets require pull requests, sensitive CODEOWNERS review,
       conversation resolution, current CI/Security/CLA checks, and block force pushes/deletion with
       administrator enforcement.
-- [ ] The founder-approved CLA service and `CLA_STATUS_CONTEXT` work for the exact pull-request
-      head; no external contribution bypassed it.
+- [ ] Trusted repository actors are recognized from GitHub pull-request metadata, and the
+      founder-approved CLA service plus `CLA_STATUS_CONTEXT` work for the exact head of every
+      external contribution; no external contribution bypassed verification.
 - [ ] Private vulnerability reporting and the conduct-reporting channel work; maintainer access and
       release/OIDC/GHCR permissions were reviewed.
 - [ ] License, trademarks, maintainers, governance, support, sponsorship, generated-output,
@@ -53,8 +54,9 @@ release is not ready; local evidence cannot satisfy a hosted or production-host 
 - [ ] Canonical Compose render/build/start, image metadata, Docker context, dynamic runtime,
       real-Milvus isolation, live browser, authenticated MCP calls, rebuild/redeploy, rollback,
       outage recovery, and persistence-after-recreation checks pass on a disposable Linux runner.
-- [ ] Gitleaks, dependency review, `pip-audit`, `pnpm audit`, Trivy source/misconfiguration/secret
-      scan, and all three pre-publication image scans have no unaccepted HIGH/CRITICAL blocker.
+- [ ] Gitleaks, GitHub introduced-dependency review where the repository supports it, private-repo
+      locked-graph `pip-audit`/`pnpm audit`, Trivy source/misconfiguration/secret scans, and all
+      three pre-publication image scans have no unaccepted HIGH/CRITICAL blocker.
 - [ ] `python scripts/checksum_manifest.py --check` passes and CI preserves the exact tracked source
       plus bounded/redacted diagnostics for the release commit.
 

@@ -14,7 +14,7 @@ dependencies = [
   "httpx2>=2.12,<3",
   "jsonschema>=4.25,<5",
   "markdown-it-py>=4,<5",
-  "mcp==2.0.0",
+  "mcp==2.1.1",
   "openpyxl>=3.1.5,<4",
   "openapi-spec-validator>=0.7.2,<1",
   "packaging>=26,<27",

@@ -1,4 +1,5 @@
 import asyncio
+import gzip
 
 import httpx
 import pytest
@@ -15,6 +16,36 @@ from app.core.network_policy import UrlPolicy
 
 async def _public_resolver(_hostname: str, _port: int) -> list[str]:
     return ["93.184.216.34"]
+
+
+@pytest.mark.asyncio
+async def test_authenticated_bounded_request_returns_once_decoded_content() -> None:
+    encoded = gzip.compress(b'{"data":[{"id":"provider/model"}]}')
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            content=encoded,
+            headers={
+                "Content-Encoding": "gzip",
+                "Content-Length": str(len(encoded)),
+                "Content-Type": "application/json",
+            },
+        )
+
+    client = HttpClient(transport=httpx.MockTransport(handler))
+    try:
+        response = await client.request_bounded(
+            "GET",
+            "https://provider.example/models",
+            max_response_bytes=1_024,
+        )
+
+        assert response.json() == {"data": [{"id": "provider/model"}]}
+        assert "content-encoding" not in response.headers
+        assert response.headers["content-length"] == str(len(response.content))
+    finally:
+        await client.close()
 
 
 @pytest.mark.asyncio

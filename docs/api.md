@@ -20,6 +20,23 @@ curl --fail --silent --show-error http://localhost:8000/openapi.json -o openapi.
 The health payload reports the running product version. Readiness distinguishes core
 PostgreSQL/Redis/artifact/queue failure from degraded Milvus/OpenRouter build capability.
 
+## Provider and model settings
+
+Administrators configure the build-time provider through the canonical v1 routes:
+
+- `PUT /api/v1/settings/openrouter` accepts a new API key and returns only non-secret model
+  settings. The normalized key is encrypted at rest and is never returned by a read endpoint.
+- `POST /api/v1/settings/openrouter/test` performs a live authenticated OpenRouter model-catalog
+  request and returns a bounded success/failure message; it does not invoke a project upstream.
+- `GET/PUT /api/v1/settings/models` reads or changes the three required model roles and the
+  documentation-processing policy.
+- `GET /api/v1/settings/models/catalog` exposes compatible capabilities from the live provider.
+
+The provider API root is an installation environment boundary and defaults to
+`https://openrouter.ai/api/v1`. `OPENROUTER_SITE_URL`, when present, is sent only as attribution
+metadata. The UI exposes key rotation and testing under `/settings/providers` and model selection
+under `/settings/models`; it never treats a browser field as credential authority.
+
 ## Browser authentication and CSRF
 
 The control plane uses secure HTTP-only session/refresh cookies. State-changing requests require

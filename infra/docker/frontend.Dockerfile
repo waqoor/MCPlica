@@ -11,7 +11,7 @@ RUN test -n "${VERSION}" \
 COPY frontend/ ./
 RUN pnpm build
 
-FROM nginxinc/nginx-unprivileged:1.30.4-alpine3.24-slim@sha256:11f3f6249b4ae3d7a4ec2a51797060107b88ead52b33b6ed3c6c33f55ca96200
+FROM nginxinc/nginx-unprivileged:1.31.4-alpine3.24-slim@sha256:d668aa123a6ec3216ba5ae6b398ae8001d5e81d3142d3659e20354fd0c3c3125
 ARG VERSION
 ARG VCS_REF=local
 ARG SOURCE_URL=https://github.com/yazeedhasan97/MCPlica

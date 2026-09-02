@@ -1,6 +1,6 @@
 # Connect an MCP client
 
-Use the endpoint recorded on the project's Deployment page, normally `https://<project>.<mcp-domain>/mcp`. A client must support MCP Streamable HTTP and the authentication mode configured for that project.
+Use the endpoint recorded on the project's Deployment page, normally `https://<project>.<mcp-domain>/mcp`. A client must support MCP Streamable HTTP and the authentication mode configured for that project. Candidate runtimes are certified against protocol revision `2026-07-28`; the canonical runtime also retains tested `2025-11-25` negotiation compatibility.
 
 MCPlica is client-neutral. Client configuration formats change independently, so use that client's
 current documentation to register an HTTP/Streamable HTTP server with the exact endpoint and an

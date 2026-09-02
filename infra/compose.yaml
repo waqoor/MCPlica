@@ -16,6 +16,7 @@ x-control-plane-environment: &control-plane-environment
   FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:8080}
   BUILD_QUEUE_NAME: ${BUILD_QUEUE_NAME:-mcplica-builds}
   DEPLOYMENT_QUEUE_NAME: ${DEPLOYMENT_QUEUE_NAME:-mcplica-deployments}
+  RUNTIME_ROUTE_RECONCILE_INTERVAL_SECONDS: ${RUNTIME_ROUTE_RECONCILE_INTERVAL_SECONDS:-15}
   MCP_RUNTIME_IMAGE: ${MCP_RUNTIME_IMAGE:-mcplica-runtime:local}
   MCP_RUNTIME_VERSION: ${MCPLICA_VERSION:?Set MCPLICA_VERSION in .env}
   MCP_DOMAIN: ${MCP_DOMAIN:-mcp.localhost}
@@ -50,7 +51,7 @@ services:
   postgres:
     logging: *bounded-logging
     restart: unless-stopped
-    image: postgres:18.6@sha256:1957b2ff3137e4ef7f3bc813e74fff50b1e1ffddc85c8b9d6f14ade972be8687
+    image: postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
     environment:
       POSTGRES_DB: mcplica
       POSTGRES_USER: mcplica
@@ -118,7 +119,7 @@ services:
 
   milvus:
     logging: *bounded-logging
-    image: milvusdb/milvus:v3.0.0@sha256:49371c30af46b1013e4d3e0b980e691d81376d69cdbe1b372725baf1d7255862
+    image: milvusdb/milvus:v3.0.1@sha256:7984f52e02fc14df553615acbf3ecf3cc131e7ce77c79e7ee23c63652919cae8
     command: ["milvus", "run", "standalone"]
     # Recover from transient standalone failures (for example, an etcd timeout)
     # without requiring an operator to notice and restart the container manually.
@@ -340,8 +341,9 @@ services:
     <<: *backend
     command:
       [
-        "rq",
-        "worker",
+        "python",
+        "-m",
+        "app.jobs.deployment_worker",
         "--with-scheduler",
         "--url",
         "redis://redis:6379/0",
@@ -387,6 +389,9 @@ services:
         condition: service_healthy
       runtime-init:
         condition: service_completed_successfully
+      traefik:
+        condition: service_healthy
+        restart: true
     networks: [builder]
 
   frontend:
@@ -434,7 +439,7 @@ services:
   traefik:
     logging: *bounded-logging
     restart: unless-stopped
-    image: traefik:v3.7.11@sha256:5203c3f39ca70de6790d964624e042463ffbd57715bc82be155cf224c0dd5144
+    image: traefik:v3.7.12@sha256:9c2a54d87f76f5c2f5f2682c68394af92fb12c0a2686798d6462a3f84bd78eaf
     command: ["--configFile=/etc/traefik/traefik.yml"]
     ports:
       - "${EDGE_PORT:-80}:80"

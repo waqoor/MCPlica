@@ -385,6 +385,7 @@ class _Runner:
         self.error = error
         self.calls = 0
         self.rollback_target_ids: list[UUID | None] = []
+        self.restart_target_ids: list[UUID | None] = []
 
     async def run(
         self,
@@ -392,11 +393,13 @@ class _Runner:
         *,
         final_attempt: bool,
         rollback_target_id: UUID | None = None,
+        restart_target_id: UUID | None = None,
         execution_checkpoint: object | None = None,
     ) -> None:
         del deployment_id, final_attempt, execution_checkpoint
         self.calls += 1
         self.rollback_target_ids.append(rollback_target_id)
+        self.restart_target_ids.append(restart_target_id)
         if self.error is not None:
             raise self.error
         self.deployments.status = DeploymentStatus.RUNNING
@@ -428,6 +431,7 @@ async def test_command_replay_is_idempotent_after_exact_effect_acknowledgement()
     assert commands.effective is True
     assert runner.calls == 1
     assert runner.rollback_target_ids == [None]
+    assert runner.restart_target_ids == [None]
 
 
 async def test_stop_command_is_effective_only_after_runtime_is_stopped() -> None:
@@ -476,6 +480,35 @@ async def test_rollback_command_passes_its_durable_target_to_worker_preflight() 
 
     assert commands.effective is True
     assert runner.rollback_target_ids == [rollback_target_id]
+    assert runner.restart_target_ids == [None]
+
+
+async def test_restart_command_passes_its_durable_target_to_worker_preflight() -> None:
+    commands = _ExecutionCommands()
+    restart_target_id = UUID(int=8)
+    commands.command = commands.command.model_copy(
+        update={
+            "reason": "deployment.restarted",
+            "subject_type": "deployment",
+            "subject_id": restart_target_id,
+        }
+    )
+    deployments = _ExecutionDeployments()
+    runner = _Runner(deployments)
+    executor = RuntimeCommandExecutor(
+        cast(DatabaseClient, _Database()),
+        cast(RuntimeCommandRepository, commands),
+        cast(DeploymentRepository, deployments),
+        cast(DeploymentRunner, runner),
+        lease_seconds=60,
+        heartbeat_seconds=10,
+    )
+
+    await executor.run(UUID(int=1), UUID(int=9))
+
+    assert commands.effective is True
+    assert runner.rollback_target_ids == [None]
+    assert runner.restart_target_ids == [restart_target_id]
 
 
 async def test_asynchronous_replacement_failure_is_retryable_and_never_effective() -> None:
