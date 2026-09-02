@@ -17,6 +17,9 @@ version is not published until its immutable tag and release workflow complete.
   protocol revision, and retained explicit legacy negotiation coverage on the same runtime.
 - Refreshed compatible container, frontend, Python, and GitHub Actions dependencies while
   preserving the Node 24, Python 3.13, and single-host service compatibility boundaries.
+- Made each cleanup dispatch use one eligibility snapshot, preventing a failed target from
+  consuming multiple retry attempts in the same worker cycle when its backoff is short or the
+  database is under load.
 
 ## [1.0.0] - 2026-09-02
 

@@ -328,8 +328,10 @@ class CleanupRepository:
         *,
         limit: int,
         lease_seconds: float,
+        eligible_at: datetime | None = None,
     ) -> list[CleanupTargetRecord]:
-        now = datetime.now(UTC)
+        claim_time = datetime.now(UTC)
+        eligibility_cutoff = eligible_at or claim_time
         due = (
             CleanupTarget.status.in_(
                 {
@@ -338,10 +340,10 @@ class CleanupRepository:
                     CleanupTargetStatus.RETRYING,
                 }
             ),
-            CleanupTarget.next_attempt_at <= now,
+            CleanupTarget.next_attempt_at <= eligibility_cutoff,
             or_(
                 CleanupTarget.lease_expires_at.is_(None),
-                CleanupTarget.lease_expires_at <= now,
+                CleanupTarget.lease_expires_at <= eligibility_cutoff,
             ),
         )
         models: list[CleanupTarget] = []
@@ -369,7 +371,7 @@ class CleanupRepository:
             model.status = CleanupTargetStatus.RUNNING
             model.attempt_count += 1
             model.execution_token = uuid4()
-            lease_expires_at = now + timedelta(seconds=lease_seconds)
+            lease_expires_at = claim_time + timedelta(seconds=lease_seconds)
             model.lease_expires_at = lease_expires_at
             model.next_attempt_at = lease_expires_at
             model.last_error_code = None
