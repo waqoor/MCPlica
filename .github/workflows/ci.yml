@@ -162,10 +162,11 @@ jobs:
           package-manager-cache: false
       - name: Audit the locked frontend dependency graph
         if: github.event.repository.private
+        working-directory: frontend
         run: |
           corepack enable
-          pnpm --dir frontend install --frozen-lockfile
-          pnpm --dir frontend audit --audit-level high
+          pnpm install --frozen-lockfile
+          pnpm audit --audit-level high
       - name: Set up uv for the private-repository dependency audit
         if: github.event.repository.private
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1

@@ -36,8 +36,9 @@ def test_dependency_review_has_an_executable_private_repository_fallback() -> No
     workflow = (root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 
     assert "github.event.repository.private == false" in workflow
-    assert "pnpm --dir frontend install --frozen-lockfile" in workflow
-    assert "pnpm --dir frontend audit --audit-level high" in workflow
+    assert "working-directory: frontend" in workflow
+    assert "pnpm install --frozen-lockfile" in workflow
+    assert "pnpm audit --audit-level high" in workflow
     assert "uv export --frozen --all-packages --no-dev --no-emit-workspace" in workflow
     assert "uvx pip-audit" in workflow
 
