@@ -57,6 +57,7 @@ class RetrievalService:
             collection=generation.collection_name,
             project_id=generation.project_id,
             generation_id=generation.id,
+            execution_token=generation.execution_token,
             vector=embedded.vectors[0],
             limit=limit,
             include_documentation=include_documentation,

@@ -2,17 +2,31 @@ from collections.abc import Awaitable
 from typing import cast
 
 from redis.asyncio import Redis
+from redis.backoff import NoBackoff
 from redis.exceptions import RedisError
+from redis.retry import Retry
 
 from app.clients.base import AsyncClient
 from app.core.exceptions import ClientUnavailableError
 
 
 class RedisClient(AsyncClient):
-    def __init__(self, url: str) -> None:
+    def __init__(
+        self,
+        url: str,
+        *,
+        socket_connect_timeout_seconds: float = 2.0,
+        socket_timeout_seconds: float = 4.0,
+    ) -> None:
+        if socket_connect_timeout_seconds <= 0 or socket_timeout_seconds <= 0:
+            raise ValueError("Redis socket timeouts must be positive")
         self.redis = Redis.from_url(  # pyright: ignore[reportUnknownMemberType]
             url,
             decode_responses=True,
+            socket_connect_timeout=socket_connect_timeout_seconds,
+            socket_timeout=socket_timeout_seconds,
+            retry=Retry(NoBackoff(), 0),
+            retry_on_timeout=False,
         )
 
     async def health(self) -> bool:

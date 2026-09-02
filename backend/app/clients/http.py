@@ -78,6 +78,7 @@ class HttpClient(AsyncClient):
         )
         self._sleep = sleep
         self._jitter = jitter
+        self._operation_timeout_seconds = timeout_seconds
 
     async def health(self) -> bool:
         return not self.client.is_closed
@@ -90,6 +91,50 @@ class HttpClient(AsyncClient):
         except httpx.TransportError as exc:
             raise ClientConnectionError("HTTP request failed to connect") from exc
         return response
+
+    async def request_bounded(
+        self,
+        method: str,
+        url: str,
+        *,
+        max_response_bytes: int,
+        **kwargs: Any,
+    ) -> httpx.Response:
+        """Read an authenticated response incrementally with a decoded-byte cap."""
+
+        if max_response_bytes <= 0:
+            raise ValueError("HTTP response byte limit must be positive")
+        request = self.client.build_request(method, url, **kwargs)
+        response: httpx.Response | None = None
+        try:
+            response = await self.client.send(request, stream=True)
+            declared_length = response.headers.get("Content-Length")
+            if declared_length is not None:
+                try:
+                    declared_size = int(declared_length)
+                except ValueError:
+                    declared_size = 0
+                if declared_size > max_response_bytes:
+                    raise ClientResponseError("HTTP response exceeds configured byte limit")
+            body = bytearray()
+            async for chunk in response.aiter_bytes():
+                if len(body) + len(chunk) > max_response_bytes:
+                    raise ClientResponseError("HTTP response exceeds configured byte limit")
+                body.extend(chunk)
+            return httpx.Response(
+                response.status_code,
+                headers=response.headers,
+                content=bytes(body),
+                request=request,
+                extensions=response.extensions,
+            )
+        except httpx.TimeoutException as exc:
+            raise ClientTimeoutError("HTTP request timed out") from exc
+        except httpx.TransportError as exc:
+            raise ClientConnectionError("HTTP request failed to connect") from exc
+        finally:
+            if response is not None:
+                await response.aclose()
 
     async def fetch_bounded(
         self,
@@ -107,6 +152,29 @@ class HttpClient(AsyncClient):
             raise ValueError("Remote source redirect limit cannot be negative")
         if not 1 <= max_attempts <= 8:
             raise ValueError("Remote source attempts must be between 1 and 8")
+        try:
+            async with asyncio.timeout(self._operation_timeout_seconds):
+                return await self._fetch_bounded_with_retries(
+                    url,
+                    policy=policy,
+                    max_bytes=max_bytes,
+                    max_redirects=max_redirects,
+                    headers=headers,
+                    max_attempts=max_attempts,
+                )
+        except TimeoutError as exc:
+            raise ClientTimeoutError("Remote source fetch exceeded its total deadline") from exc
+
+    async def _fetch_bounded_with_retries(
+        self,
+        url: str,
+        *,
+        policy: UrlPolicy,
+        max_bytes: int,
+        max_redirects: int,
+        headers: dict[str, str] | None,
+        max_attempts: int,
+    ) -> FetchedResponse:
         current_url = url
         safe_headers = {
             name: value

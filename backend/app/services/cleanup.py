@@ -20,7 +20,11 @@ from app.domain.cleanup import (
 from app.providers.storage import ArtifactStorage
 from app.providers.vector import VectorStore
 from app.repositories.audit import AuditRepository
-from app.repositories.cleanup import CleanupRepository, lock_object_reference
+from app.repositories.cleanup import (
+    CleanupRepository,
+    lock_object_reference,
+    lock_vector_reference,
+)
 from app.services.settings import OperationalSettingsProvider
 
 logger = logging.getLogger("mcplica.cleanup")
@@ -44,6 +48,10 @@ class CleanupService:
 
     def notify(self) -> None:
         self._notify()
+
+    @property
+    def repository(self) -> CleanupRepository:
+        return self._repository
 
     async def get(self, job_id: UUID) -> CleanupJobRecord:
         async with self._database.session_scope() as session:
@@ -205,11 +213,14 @@ class CleanupWorker:
         self._batch_size = batch_size
         self._wake_event = asyncio.Event()
         self._next_retention_at = datetime.min.replace(tzinfo=UTC)
+        self._retention_failure_streak = 0
+        self._retention_had_failures = False
 
     def wake(self) -> None:
         self._wake_event.set()
 
     async def prepare_retention_once(self) -> int:
+        self._retention_had_failures = False
         operational = await self._settings.get_operational()
         if operational.build_retention_count is None and operational.source_retention_days is None:
             return 0
@@ -217,52 +228,101 @@ class CleanupWorker:
             project_ids = await self._repository.list_project_ids(session)
         created = 0
         for project_id in project_ids:
-            async with self._database.session_scope() as session:
-                job = await self._repository.prepare_retention_job(
-                    session,
-                    project_id=project_id,
-                    build_retention_count=operational.build_retention_count,
-                    source_retention_days=operational.source_retention_days,
-                )
-                if job is not None:
-                    created += 1
-                    await self._audit.append(
+            try:
+                async with self._database.session_scope() as session:
+                    job = await self._repository.prepare_retention_job(
                         session,
-                        actor_user_id=None,
-                        event_type="cleanup.retention_scheduled",
-                        entity_type="cleanup_job",
-                        entity_id=job.id,
                         project_id=project_id,
-                        metadata={
-                            "build_retention_count": operational.build_retention_count,
-                            "source_retention_days": operational.source_retention_days,
-                            "target_count": job.total_targets,
-                        },
+                        build_retention_count=operational.build_retention_count,
+                        source_retention_days=operational.source_retention_days,
                     )
+                    if job is not None:
+                        created += 1
+                        await self._audit.append(
+                            session,
+                            actor_user_id=None,
+                            event_type="cleanup.retention_scheduled",
+                            entity_type="cleanup_job",
+                            entity_id=job.id,
+                            project_id=project_id,
+                            metadata={
+                                "build_retention_count": operational.build_retention_count,
+                                "source_retention_days": operational.source_retention_days,
+                                "target_count": job.total_targets,
+                            },
+                        )
+            except Exception as exc:
+                self._retention_had_failures = True
+                logger.warning(
+                    "cleanup_retention_project_failed",
+                    extra={
+                        "project_id": str(project_id),
+                        "error_code": (
+                            exc.code if isinstance(exc, MCPlicaError) else type(exc).__name__
+                        ),
+                    },
+                )
         return created
 
     async def dispatch_once(self) -> int:
         now = datetime.now(UTC)
         if now >= self._next_retention_at:
-            await self.prepare_retention_once()
-            self._next_retention_at = now + timedelta(seconds=self._retention_interval_seconds)
+            try:
+                await self.prepare_retention_once()
+            except Exception as exc:
+                self._retention_had_failures = True
+                logger.warning(
+                    "cleanup_retention_cycle_failed",
+                    extra={
+                        "error_code": (
+                            exc.code if isinstance(exc, MCPlicaError) else type(exc).__name__
+                        )
+                    },
+                )
+            if self._retention_had_failures:
+                self._retention_failure_streak += 1
+                retry_seconds = min(
+                    self._retention_interval_seconds,
+                    max(5.0, self._interval_seconds)
+                    * (2 ** min(self._retention_failure_streak - 1, 10)),
+                )
+            else:
+                self._retention_failure_streak = 0
+                retry_seconds = self._retention_interval_seconds
+            self._next_retention_at = now + timedelta(seconds=retry_seconds)
         return await self.process_due_targets_once()
 
     async def process_due_targets_once(self) -> int:
         """Process leased cleanup targets without running the retention scheduler."""
-        async with self._database.session_scope() as session:
-            targets = await self._repository.claim_due_targets(
-                session,
-                limit=self._batch_size,
-                lease_seconds=self._lease_seconds,
-            )
-        for target in targets:
-            await self._process(target)
-        return len(targets)
+        processed = 0
+        while processed < self._batch_size:
+            async with self._database.session_scope() as session:
+                targets = await self._repository.claim_due_targets(
+                    session,
+                    limit=1,
+                    lease_seconds=self._lease_seconds,
+                )
+            if not targets:
+                break
+            await self._process(targets[0])
+            processed += 1
+        return processed
 
     async def _process(self, target: CleanupTargetRecord) -> None:
+        if target.execution_token is None:
+            return
+        execution_token = target.execution_token
         try:
             async with self._database.session_scope() as session:
+                claimed = await self._repository.lock_claimed_target(
+                    session,
+                    target.id,
+                    execution_token=execution_token,
+                    attempt_count=target.attempt_count,
+                )
+                if claimed is None:
+                    return
+                target = claimed
                 if target.target_type is CleanupTargetType.OBJECT:
                     assert target.storage_key is not None
                     await lock_object_reference(session, target.storage_key)
@@ -275,6 +335,12 @@ class CleanupWorker:
                     assert target.collection_name is not None
                     assert target.vector_project_id is not None
                     assert target.generation_id is not None
+                    await lock_vector_reference(
+                        session,
+                        collection_name=target.collection_name,
+                        project_id=target.vector_project_id,
+                        generation_id=target.generation_id,
+                    )
                     referenced = await self._repository.vector_is_referenced(
                         session,
                         collection_name=target.collection_name,
@@ -287,12 +353,15 @@ class CleanupWorker:
                             project_id=target.vector_project_id,
                             generation_id=target.generation_id,
                         )
-                await self._repository.mark_completed(
+                completed = await self._repository.mark_completed(
                     session,
                     target.id,
                     skipped_referenced=referenced,
+                    execution_token=execution_token,
+                    attempt_count=target.attempt_count,
                 )
-                await self._append_terminal_audit(session, target.job_id)
+                if completed:
+                    await self._append_terminal_audit(session, target.job_id)
         except Exception as exc:
             code = exc.code.lower() if isinstance(exc, MCPlicaError) else "cleanup_target_failed"
             summary = str(exc) if isinstance(exc, MCPlicaError) else type(exc).__name__
@@ -301,15 +370,18 @@ class CleanupWorker:
                 self._interval_seconds * (2 ** max(0, target.attempt_count - 1)),
             )
             async with self._database.session_scope() as session:
-                await self._repository.mark_failed(
+                failed = await self._repository.mark_failed(
                     session,
                     target.id,
                     error_code=code,
                     error_summary=summary,
                     max_attempts=self._max_attempts,
                     retry_delay_seconds=delay,
+                    execution_token=execution_token,
+                    attempt_count=target.attempt_count,
                 )
-                await self._append_terminal_audit(session, target.job_id)
+                if failed:
+                    await self._append_terminal_audit(session, target.job_id)
             logger.warning(
                 "cleanup_target_failed",
                 extra={

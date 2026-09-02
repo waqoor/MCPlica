@@ -44,6 +44,25 @@ async def lock_object_reference(session: AsyncSession, storage_key: str) -> None
     )
 
 
+async def lock_vector_reference(
+    session: AsyncSession,
+    *,
+    collection_name: str,
+    project_id: UUID,
+    generation_id: UUID,
+) -> None:
+    """Serialize vector-generation publication with reference-aware deletion."""
+
+    identity = f"{collection_name}:{project_id}:{generation_id}"
+    await session.execute(
+        select(
+            func.pg_advisory_xact_lock(
+                func.hashtextextended(f"mcplica:vector-reference:{identity}", 0)
+            )
+        )
+    )
+
+
 def _target_key(*parts: object) -> str:
     return hashlib.sha256("\x00".join(str(part) for part in parts).encode()).hexdigest()
 
@@ -61,6 +80,7 @@ def _to_target(model: CleanupTarget) -> CleanupTargetRecord:
         attempt_count=model.attempt_count,
         next_attempt_at=model.next_attempt_at,
         lease_expires_at=model.lease_expires_at,
+        execution_token=model.execution_token,
         last_error_code=model.last_error_code,
         last_error_summary=model.last_error_summary,
     )
@@ -310,46 +330,85 @@ class CleanupRepository:
         lease_seconds: float,
     ) -> list[CleanupTargetRecord]:
         now = datetime.now(UTC)
-        models = list(
-            await session.scalars(
+        due = (
+            CleanupTarget.status.in_(
+                {
+                    CleanupTargetStatus.PENDING,
+                    CleanupTargetStatus.RUNNING,
+                    CleanupTargetStatus.RETRYING,
+                }
+            ),
+            CleanupTarget.next_attempt_at <= now,
+            or_(
+                CleanupTarget.lease_expires_at.is_(None),
+                CleanupTarget.lease_expires_at <= now,
+            ),
+        )
+        models: list[CleanupTarget] = []
+        while len(models) < limit:
+            job_id = await session.scalar(
+                select(CleanupJob.id)
+                .join(CleanupTarget, CleanupTarget.job_id == CleanupJob.id)
+                .where(*due)
+                .order_by(CleanupTarget.next_attempt_at, CleanupTarget.created_at)
+                .with_for_update(of=CleanupJob, skip_locked=True)
+                .limit(1)
+            )
+            if job_id is None:
+                break
+            model = await session.scalar(
                 select(CleanupTarget)
-                .where(
-                    CleanupTarget.status.in_(
-                        {
-                            CleanupTargetStatus.PENDING,
-                            CleanupTargetStatus.RUNNING,
-                            CleanupTargetStatus.RETRYING,
-                        }
-                    ),
-                    CleanupTarget.next_attempt_at <= now,
-                    or_(
-                        CleanupTarget.lease_expires_at.is_(None),
-                        CleanupTarget.lease_expires_at <= now,
-                    ),
-                )
+                .where(CleanupTarget.job_id == job_id, *due)
                 .order_by(CleanupTarget.next_attempt_at, CleanupTarget.created_at)
                 .with_for_update(skip_locked=True)
-                .limit(limit)
+                .limit(1)
             )
-        )
-        lease_expires = now + timedelta(seconds=lease_seconds)
-        job_ids: set[UUID] = set()
-        for model in models:
+            if model is None:
+                continue
+            models.append(model)
             model.status = CleanupTargetStatus.RUNNING
             model.attempt_count += 1
-            model.lease_expires_at = lease_expires
-            model.next_attempt_at = lease_expires
+            model.execution_token = uuid4()
+            lease_expires_at = now + timedelta(seconds=lease_seconds)
+            model.lease_expires_at = lease_expires_at
+            model.next_attempt_at = lease_expires_at
             model.last_error_code = None
             model.last_error_summary = None
-            job_ids.add(model.job_id)
-        if job_ids:
             await session.execute(
                 update(CleanupJob)
-                .where(CleanupJob.id.in_(job_ids))
+                .where(CleanupJob.id == job_id)
                 .values(status=CleanupJobStatus.RUNNING, completed_at=None)
             )
         await session.flush()
         return [_to_target(model) for model in models]
+
+    async def lock_claimed_target(
+        self,
+        session: AsyncSession,
+        target_id: UUID,
+        *,
+        execution_token: UUID,
+        attempt_count: int,
+    ) -> CleanupTargetRecord | None:
+        job_id = await session.scalar(
+            select(CleanupTarget.job_id).where(CleanupTarget.id == target_id)
+        )
+        if job_id is None:
+            return None
+        await session.scalar(select(CleanupJob.id).where(CleanupJob.id == job_id).with_for_update())
+        model = await session.scalar(
+            select(CleanupTarget).where(CleanupTarget.id == target_id).with_for_update()
+        )
+        if (
+            model is None
+            or model.status is not CleanupTargetStatus.RUNNING
+            or model.execution_token != execution_token
+            or model.attempt_count != attempt_count
+            or model.lease_expires_at is None
+            or model.lease_expires_at <= datetime.now(UTC)
+        ):
+            return None
+        return _to_target(model)
 
     async def object_is_referenced(self, session: AsyncSession, storage_key: str) -> bool:
         checks = (
@@ -398,22 +457,31 @@ class CleanupRepository:
         target_id: UUID,
         *,
         skipped_referenced: bool = False,
-    ) -> None:
-        model = await session.scalar(
-            select(CleanupTarget).where(CleanupTarget.id == target_id).with_for_update()
-        )
+        execution_token: UUID | None = None,
+        attempt_count: int | None = None,
+    ) -> bool:
+        model = await self._lock_job_and_target(session, target_id)
         if model is None or model.status in _TERMINAL_TARGETS:
-            return
+            return False
+        if model.status is CleanupTargetStatus.RUNNING and (
+            execution_token is None
+            or attempt_count is None
+            or model.execution_token != execution_token
+            or model.attempt_count != attempt_count
+        ):
+            return False
         model.status = (
             CleanupTargetStatus.SKIPPED_REFERENCED
             if skipped_referenced
             else CleanupTargetStatus.COMPLETED
         )
         model.lease_expires_at = None
+        model.execution_token = None
         model.last_error_code = None
         model.last_error_summary = None
         await session.flush()
         await self._refresh_job(session, model.job_id)
+        return True
 
     async def mark_failed(
         self,
@@ -424,20 +492,42 @@ class CleanupRepository:
         error_summary: str,
         max_attempts: int,
         retry_delay_seconds: float,
-    ) -> None:
-        model = await session.scalar(
-            select(CleanupTarget).where(CleanupTarget.id == target_id).with_for_update()
-        )
-        if model is None or model.status in _TERMINAL_TARGETS:
-            return
+        execution_token: UUID,
+        attempt_count: int,
+    ) -> bool:
+        model = await self._lock_job_and_target(session, target_id)
+        if (
+            model is None
+            or model.status is not CleanupTargetStatus.RUNNING
+            or model.execution_token != execution_token
+            or model.attempt_count != attempt_count
+        ):
+            return False
         terminal = model.attempt_count >= max_attempts
         model.status = CleanupTargetStatus.FAILED if terminal else CleanupTargetStatus.RETRYING
         model.lease_expires_at = None
+        model.execution_token = None
         model.next_attempt_at = datetime.now(UTC) + timedelta(seconds=retry_delay_seconds)
         model.last_error_code = error_code[:128]
         model.last_error_summary = error_summary[:2_000]
         await session.flush()
         await self._refresh_job(session, model.job_id)
+        return True
+
+    async def _lock_job_and_target(
+        self,
+        session: AsyncSession,
+        target_id: UUID,
+    ) -> CleanupTarget | None:
+        job_id = await session.scalar(
+            select(CleanupTarget.job_id).where(CleanupTarget.id == target_id)
+        )
+        if job_id is None:
+            return None
+        await session.scalar(select(CleanupJob.id).where(CleanupJob.id == job_id).with_for_update())
+        return await session.scalar(
+            select(CleanupTarget).where(CleanupTarget.id == target_id).with_for_update()
+        )
 
     async def make_job_due(self, session: AsyncSession, job_id: UUID) -> None:
         await session.execute(
@@ -452,6 +542,7 @@ class CleanupRepository:
         )
 
     async def _refresh_job(self, session: AsyncSession, job_id: UUID) -> None:
+        await session.scalar(select(CleanupJob.id).where(CleanupJob.id == job_id).with_for_update())
         rows = await session.execute(
             select(CleanupTarget.status, func.count(CleanupTarget.id))
             .where(CleanupTarget.job_id == job_id)

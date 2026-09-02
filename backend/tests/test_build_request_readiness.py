@@ -103,10 +103,11 @@ class _Sources:
 
 class _Configuration:
     async def discover_configuration(self, project_id: UUID) -> SourceConfigurationDiscoveryRecord:
+        bindings = await _Sources().latest_bound_versions(cast(AsyncSession, object()), project_id)
         return SourceConfigurationDiscoveryRecord(
             source_version_ids=[VERSION_ID],
             configuration_sha256=source_configuration_fingerprint(
-                source_version_ids=[VERSION_ID],
+                bindings=bindings,
                 default_base_url="https://api.example.com",
                 active_server_ref=None,
                 server_mappings={},

@@ -4,13 +4,44 @@ on:
   pull_request_target:
     types: [opened, synchronize, reopened]
 
+permissions:
+  checks: read
+  contents: read
+  pull-requests: read
+  statuses: read
+
 jobs:
   policy:
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLA_STATUS_CONTEXT: ${{ vars.CLA_STATUS_CONTEXT }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
     steps:
-      - name: Enforce configured CLA verification
+      - name: Verify configured CLA service status
+        shell: bash
         run: |
-          echo "MCPlica requires a CLA and does not use DCO."
-          echo "Repository policy fails closed until the GitHub organization-approved CLA verification service is wired here."
-          echo "Do not remove this required check or merge external contributions without verified CLA acceptance."
+          set -euo pipefail
+          if [[ -z "${CLA_STATUS_CONTEXT}" ]]; then
+            echo "::error::CLA verification is unavailable: configure the CLA_STATUS_CONTEXT repository variable."
+            exit 2
+          fi
+
+          status_state="$({ gh api \
+            "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/status" \
+            --jq '.statuses | map(select(.context == env.CLA_STATUS_CONTEXT)) | first | .state // "missing"'; } 2>/dev/null || echo unavailable)"
+          check_conclusion="$({ gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs" \
+            --jq '.check_runs | map(select(.name == env.CLA_STATUS_CONTEXT)) | first | (.conclusion // .status) // "missing"'; } 2>/dev/null || echo unavailable)"
+
+          if [[ "${status_state}" == "success" || "${check_conclusion}" == "success" ]]; then
+            echo "Configured CLA verification succeeded."
+            exit 0
+          fi
+          if [[ "${status_state}" == "unavailable" && "${check_conclusion}" == "unavailable" ]]; then
+            echo "::error::CLA verification service status could not be queried."
+            exit 2
+          fi
+          echo "::error::CLA verification is not successful (status=${status_state}, check=${check_conclusion})."
           exit 1

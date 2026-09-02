@@ -1,6 +1,4 @@
 import hashlib
-from pathlib import PurePosixPath
-from urllib.parse import urlsplit
 from uuid import UUID
 
 from mcp_contracts import CanonicalApi, DocumentationRef
@@ -61,33 +59,39 @@ class CanonicalizationService:
         self._storage = storage
 
     async def current_source_versions(self, project_id: UUID) -> list[UUID]:
+        return [binding.version.id for binding in await self.current_source_bindings(project_id)]
+
+    async def current_source_bindings(
+        self,
+        project_id: UUID,
+    ) -> list[BoundSourceVersionRecord]:
         async with self._database.session_scope() as session:
             if await self._projects.get(session, project_id) is None:
                 raise NotFoundError("Project was not found")
-            bindings = await self._sources.latest_bound_versions(session, project_id)
-        return [binding.version.id for binding in bindings]
+            return await self._sources.latest_bound_versions(session, project_id)
 
     async def canonicalize(
         self,
         project_id: UUID,
-        source_version_ids: list[UUID],
+        bindings: list[BoundSourceVersionRecord],
         *,
         max_source_bytes: int,
         routing: ProjectRoutingConfiguration | None = None,
     ) -> CanonicalApi:
+        source_version_ids = [binding.version.id for binding in bindings]
         if len(set(source_version_ids)) != len(source_version_ids):
             raise SourceParseError("Source version bindings must be unique")
         async with self._database.session_scope() as session:
             project = await self._projects.get(session, project_id)
             if project is None:
                 raise NotFoundError("Project was not found")
-            bindings = await self._sources.list_bound_versions(
-                session,
-                project_id,
-                source_version_ids,
-            )
-        if len(bindings) != len(source_version_ids):
+        if any(binding.source.project_id != project_id for binding in bindings):
             raise SourceParseError("One or more source versions do not belong to the Project")
+        if any(not binding.binding_metadata_trustworthy for binding in bindings):
+            raise SourceParseError(
+                "Historical Build source identity cannot be proven; create a new Build",
+                details={"reason_code": "BUILD_SOURCE_BINDINGS_UNTRUSTWORTHY"},
+            )
         effective_routing = routing or ProjectRoutingConfiguration(
             default_base_url=project.default_base_url,
             active_server_ref=project.active_server_ref,
@@ -130,13 +134,7 @@ class CanonicalizationService:
                     _attribute_source_error(exc, binding.version.id, pointer="#")
                     raise
                 captured = ExternalOpenApiDocument(external, binding.version.id)
-                keys = {binding.source.name}
-                if binding.source.source_url:
-                    keys.add(binding.source.source_url)
-                    path_name = PurePosixPath(urlsplit(binding.source.source_url).path).name
-                    if path_name:
-                        keys.add(path_name)
-                for key in keys:
+                for key in binding.effective_dependency_aliases:
                     if key in external_documents:
                         raise SourceParseError(
                             f"Ambiguous external OpenAPI dependency name: {key}",
@@ -198,14 +196,14 @@ class CanonicalizationService:
     async def create_snapshot(
         self,
         project_id: UUID,
-        source_version_ids: list[UUID],
+        bindings: list[BoundSourceVersionRecord],
         *,
         max_source_bytes: int,
         routing: ProjectRoutingConfiguration | None = None,
     ) -> CanonicalSnapshotRecord:
         canonical = await self.canonicalize(
             project_id,
-            source_version_ids,
+            bindings,
             max_source_bytes=max_source_bytes,
             routing=routing,
         )
@@ -216,7 +214,10 @@ class CanonicalizationService:
                 project_id=project_id,
                 canonical=canonical,
                 canonical_sha256=digest,
-                source_version_ids=sorted(source_version_ids, key=str),
+                source_version_ids=sorted(
+                    (binding.version.id for binding in bindings),
+                    key=str,
+                ),
             )
 
     async def get_snapshot(self, snapshot_id: UUID) -> CanonicalSnapshotRecord:

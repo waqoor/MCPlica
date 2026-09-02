@@ -1,10 +1,11 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 
 from app.api.deps import AdminPrincipal, CsrfProtection, user_service
 from app.schemas.auth import UserCreate, UserRead, UserUpdate
+from app.schemas.pagination import Page
 from app.services.users import UserService
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -14,12 +15,20 @@ def _to_read(user: object) -> UserRead:
     return UserRead.model_validate(user)
 
 
-@router.get("", response_model=list[UserRead])
+@router.get("", response_model=Page[UserRead])
 async def list_users(
     _principal: AdminPrincipal,
     service: Annotated[UserService, Depends(user_service)],
-) -> list[UserRead]:
-    return [_to_read(user) for user in await service.list()]
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> Page[UserRead]:
+    users, total = await service.list(page=page, page_size=page_size)
+    return Page(
+        items=[_to_read(user) for user in users],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.post("", response_model=UserRead, status_code=status.HTTP_201_CREATED)

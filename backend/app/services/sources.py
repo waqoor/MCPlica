@@ -24,6 +24,7 @@ from app.domain.cleanup import CleanupJobRecord
 from app.domain.indexing import DocumentIndexGenerationRecord, IndexGenerationStatus
 from app.domain.projects import ProjectRoutingConfiguration
 from app.domain.sources import (
+    BoundSourceVersionRecord,
     OperationSecurityRequirementRecord,
     OperationServerRoutingRecord,
     ProjectSourceRecord,
@@ -135,10 +136,15 @@ class SourceCreationResult:
 class SourceCanonicalizer(Protocol):
     async def current_source_versions(self, project_id: UUID) -> list[UUID]: ...
 
+    async def current_source_bindings(
+        self,
+        project_id: UUID,
+    ) -> list[BoundSourceVersionRecord]: ...
+
     async def canonicalize(
         self,
         project_id: UUID,
-        source_version_ids: list[UUID],
+        bindings: list[BoundSourceVersionRecord],
         *,
         max_source_bytes: int,
         routing: ProjectRoutingConfiguration | None = None,
@@ -422,12 +428,13 @@ class SourceService:
             project = await self._projects.get(session, project_id)
             if project is None:
                 raise NotFoundError("Project was not found")
-        source_version_ids = await self._canonicalization.current_source_versions(project_id)
-        if not source_version_ids:
+        source_bindings = await self._canonicalization.current_source_bindings(project_id)
+        if not source_bindings:
             raise InvalidStateError("Project has no source versions to inspect")
+        source_version_ids = [binding.version.id for binding in source_bindings]
         canonical = await self._canonicalization.canonicalize(
             project_id,
-            source_version_ids,
+            source_bindings,
             max_source_bytes=max(self._document_max_bytes, self._fetch_max_bytes),
             routing=ProjectRoutingConfiguration(default_base_url=project.default_base_url),
         )
@@ -522,7 +529,7 @@ class SourceService:
         return SourceConfigurationDiscoveryRecord(
             source_version_ids=source_version_ids,
             configuration_sha256=source_configuration_fingerprint(
-                source_version_ids=source_version_ids,
+                bindings=source_bindings,
                 default_base_url=project.default_base_url,
                 active_server_ref=project.active_server_ref,
                 server_mappings=project.server_mappings,
@@ -958,10 +965,10 @@ class SourceService:
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             )
         }
-        if latest and latest.source_etag:
-            headers["If-None-Match"] = latest.source_etag
-        if latest and latest.source_last_modified:
-            headers["If-Modified-Since"] = latest.source_last_modified
+        if latest and source.last_observed_etag:
+            headers["If-None-Match"] = source.last_observed_etag
+        if latest and source.last_observed_last_modified:
+            headers["If-Modified-Since"] = source.last_observed_last_modified
         response = await self._http.fetch_bounded(
             source.source_url,
             policy=self._url_policy,
@@ -975,7 +982,17 @@ class SourceService:
                 raise InvalidStateError(
                     "Remote source returned not-modified without a prior version"
                 )
-            return SourceVersionResult(latest, deduplicated=True)
+            async with self._database.session_scope() as session:
+                current = await self._sources.observe_not_modified(
+                    session,
+                    source_id=source_id,
+                    expected_version_id=latest.id,
+                    source_etag=response.headers.get("ETag", source.last_observed_etag),
+                    source_last_modified=response.headers.get(
+                        "Last-Modified", source.last_observed_last_modified
+                    ),
+                )
+            return SourceVersionResult(current, deduplicated=True)
         media_type = response.headers.get("Content-Type", "application/octet-stream")
         remote_name = PurePath(urlsplit(source.source_url).path).name or source.name
         detected_format = _detect_format(
@@ -1130,7 +1147,7 @@ class SourceService:
                             message=generation.error_summary or "Documentation indexing failed",
                         )
                     )
-        elif findings:
+        else:
             errors.extend(
                 SourceIssueRecord(
                     source_version_id=finding.source_version_id,
@@ -1145,27 +1162,27 @@ class SourceService:
                 )
                 for finding in findings
             )
-            parse_status = (
-                "invalid" if any(item.severity == "error" for item in errors) else "pending"
-            )
-        elif snapshot is not None:
-            canonical = snapshot.canonical
-            parse_status = "valid"
-            spec_version = canonical.source_format
-            operation_count = sum(
-                operation.provenance.operation.source_version_id == version.id
-                for operation in canonical.operations
-            )
-            servers = [
-                str(server.url)
-                for server in canonical.servers
-                if server.source_ref.source_version_id == version.id
-            ]
-            auth_schemes = sorted(
-                name
-                for name, scheme in canonical.security_schemes.items()
-                if scheme.source_ref.source_version_id == version.id
-            )
+            has_blocking_finding = any(item.severity == "error" for item in errors)
+            if snapshot is not None:
+                canonical = snapshot.canonical
+                parse_status = "invalid" if has_blocking_finding else "valid"
+                spec_version = canonical.source_format
+                operation_count = sum(
+                    operation.provenance.operation.source_version_id == version.id
+                    for operation in canonical.operations
+                )
+                servers = [
+                    str(server.url)
+                    for server in canonical.servers
+                    if server.source_ref.source_version_id == version.id
+                ]
+                auth_schemes = sorted(
+                    name
+                    for name, scheme in canonical.security_schemes.items()
+                    if scheme.source_ref.source_version_id == version.id
+                )
+            elif has_blocking_finding:
+                parse_status = "invalid"
         return SourceVersionMetadataRecord(
             version=version,
             parse_status=parse_status,
@@ -1354,6 +1371,31 @@ class SourceService:
                         "detected_format": detected_format,
                     },
                 )
+            previous_version_id = source.current_version_id
+            source = await self._sources.select_current_version(
+                session,
+                source_id=source.id,
+                version_id=version.id,
+                source_etag=source_etag,
+                source_last_modified=source_last_modified,
+            )
+            if previous_version_id != version.id:
+                await self._audit.append(
+                    session,
+                    actor_user_id=actor_user_id,
+                    event_type="source.version_selected",
+                    entity_type="project_source",
+                    entity_id=source.id,
+                    project_id=project_id,
+                    request_id=request_id,
+                    metadata={
+                        "previous_version_id": (
+                            str(previous_version_id) if previous_version_id else None
+                        ),
+                        "selected_version_id": str(version.id),
+                        "restored_existing_version": deduplicated,
+                    },
+                )
             if kind in {SourceKind.OPENAPI, SourceKind.API_INVENTORY}:
                 current_primary = await self._sources.get_versioned_primary_executable(
                     session,
@@ -1414,48 +1456,62 @@ class SourceService:
             if locked_source is None or locked_source.project_id != source.project_id:
                 raise NotFoundError("Source was not found")
             existing = await self._sources.get_version_by_hash(session, source.id, content_sha256)
-            if existing is not None:
-                if source.kind in {SourceKind.OPENAPI, SourceKind.API_INVENTORY}:
-                    current_primary = await self._sources.get_versioned_primary_executable(
-                        session,
-                        source.project_id,
-                    )
-                    if current_primary is None:
-                        promoted = await self._sources.promote_executable(
-                            session,
-                            project_id=source.project_id,
-                            source_id=source.id,
-                        )
-                        if promoted is None:
-                            raise InvalidStateError("Executable source could not become primary")
-                return SourceVersionResult(existing, deduplicated=True)
-            version = await self._sources.create_version(
+            deduplicated = existing is not None
+            if existing is None:
+                version = await self._sources.create_version(
+                    session,
+                    source_id=source.id,
+                    content_sha256=content_sha256,
+                    media_type=media_type[:200],
+                    storage_key=storage_key,
+                    byte_size=byte_size,
+                    detected_format=detected_format,
+                    source_etag=source_etag,
+                    source_last_modified=source_last_modified,
+                    created_by=actor_user_id,
+                )
+                await self._audit.append(
+                    session,
+                    actor_user_id=actor_user_id,
+                    event_type="source.version_created",
+                    entity_type="source_version",
+                    entity_id=version.id,
+                    project_id=source.project_id,
+                    request_id=request_id,
+                    metadata={
+                        "source_id": str(source.id),
+                        "content_sha256": content_sha256,
+                        "byte_size": byte_size,
+                        "detected_format": detected_format,
+                    },
+                )
+            else:
+                version = existing
+            previous_version_id = locked_source.current_version_id
+            await self._sources.select_current_version(
                 session,
                 source_id=source.id,
-                content_sha256=content_sha256,
-                media_type=media_type[:200],
-                storage_key=storage_key,
-                byte_size=byte_size,
-                detected_format=detected_format,
+                version_id=version.id,
                 source_etag=source_etag,
                 source_last_modified=source_last_modified,
-                created_by=actor_user_id,
             )
-            await self._audit.append(
-                session,
-                actor_user_id=actor_user_id,
-                event_type="source.version_created",
-                entity_type="source_version",
-                entity_id=version.id,
-                project_id=source.project_id,
-                request_id=request_id,
-                metadata={
-                    "source_id": str(source.id),
-                    "content_sha256": content_sha256,
-                    "byte_size": byte_size,
-                    "detected_format": detected_format,
-                },
-            )
+            if previous_version_id != version.id:
+                await self._audit.append(
+                    session,
+                    actor_user_id=actor_user_id,
+                    event_type="source.version_selected",
+                    entity_type="project_source",
+                    entity_id=source.id,
+                    project_id=source.project_id,
+                    request_id=request_id,
+                    metadata={
+                        "previous_version_id": (
+                            str(previous_version_id) if previous_version_id else None
+                        ),
+                        "selected_version_id": str(version.id),
+                        "restored_existing_version": deduplicated,
+                    },
+                )
             if source.kind in {SourceKind.OPENAPI, SourceKind.API_INVENTORY}:
                 current_primary = await self._sources.get_versioned_primary_executable(
                     session,
@@ -1469,7 +1525,7 @@ class SourceService:
                     )
                     if promoted is None:
                         raise InvalidStateError("Executable source could not become primary")
-            return SourceVersionResult(version, deduplicated=False)
+            return SourceVersionResult(version, deduplicated=deduplicated)
 
     async def _arm_staged_guard(
         self,

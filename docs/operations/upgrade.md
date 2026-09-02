@@ -27,6 +27,33 @@ Application rollback is safe only while the older code understands the current s
 
 Project deployment rollback is separate: use the recorded target deployment in the UI/API. The backend creates a new deployment from its immutable READY build and health-checks it; it does not rewrite history.
 
+## 2026-09-02 foundation consistency migrations
+
+This change advances Alembic from `0020` to `0025`. Stop the API and both workers
+before running the migration so no pre-fencing owner can continue external work.
+Keep PostgreSQL, artifacts, runtime files, and Milvus volumes together in the backup.
+
+- `0021` adds explicit current-source selection/observation state and freezes executable
+  metadata on Build/source bindings. It backfills the newest known version as current but
+  marks historical Build metadata untrustworthy because prior roles/aliases cannot be proven.
+  Rebuild before newly activating one of those historical Builds. Its downgrade deliberately
+  refuses when a source has been restored away from creation-time latest; first restore a
+  pre-`0021`-representable selection or retain the migration.
+- `0022` adds runtime-command execution tokens and ownership constraints. Any command that was
+  dispatched/running without a token is requeued for a fresh fenced claim; downgrade likewise
+  requeues token-bearing live attempts before dropping the column.
+- `0023` persists deployment intent and backfills existing rows as `normal`.
+- `0024` fences cleanup attempts. Pre-fencing running cleanup targets become due retries so an
+  unowned external deletion is never treated as current work.
+- `0025` records the accepted Build execution token on new index generations. Existing null-token
+  generations retain legacy retrieval semantics; rebuild them to obtain attempt-scoped Milvus
+  rows. Do not rewrite immutable historical artifacts or bulk-delete shared collections.
+
+The migration rehearsal must run `upgrade head`, `alembic check`, a safe
+`0025→0020→0025` round trip on empty/new-state-free data, and an explicit rejection case for an
+A→B→A restored source. After upgrade, reconcile pending runtime commands and cleanup targets,
+then verify exact active Build/container identity before resuming either worker.
+
 ## 2026-09-01 vector-isolation and Docker corrections
 
 New documentation and semantic vector rows include project, generation, and source

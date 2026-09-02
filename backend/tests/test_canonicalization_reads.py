@@ -70,19 +70,58 @@ async def test_canonicalization_never_reads_documentation_payloads() -> None:
 
     storage = SimpleNamespace(get=AsyncMock(side_effect=read))
     project = SimpleNamespace(default_base_url=None, active_server_ref=None, server_mappings={})
+    live_source_lookup = AsyncMock(
+        side_effect=AssertionError("queued Builds must not re-read mutable source metadata")
+    )
     service = CanonicalizationService(
         cast(Any, _Database()),
         cast(Any, SimpleNamespace(get=AsyncMock(return_value=project))),
-        cast(Any, SimpleNamespace(list_bound_versions=AsyncMock(return_value=bindings))),
+        cast(Any, SimpleNamespace(list_bound_versions=live_source_lookup)),
         cast(Any, object()),
         cast(Any, storage),
     )
     result = await service.canonicalize(
         UUID(int=1),
-        [binding.version.id for binding in bindings],
+        bindings,
         max_source_bytes=10_000,
     )
     assert len(result.operations) == 1
     assert len(result.documentation_refs) == 20
     assert result.provenance.source_version_ids == [binding.version.id for binding in bindings]
     storage.get.assert_awaited_once()
+    live_source_lookup.assert_not_awaited()
+
+
+def test_configuration_fingerprint_includes_frozen_role_name_and_aliases() -> None:
+    from app.domain.sources import source_configuration_fingerprint
+
+    primary = _binding(40, SourceKind.OPENAPI, primary=True)
+    dependency = _binding(41, SourceKind.OPENAPI)
+    before = source_configuration_fingerprint(
+        bindings=[primary, dependency],
+        default_base_url=None,
+        active_server_ref=None,
+        server_mappings={},
+    )
+    renamed = dependency.model_copy(
+        update={
+            "source": dependency.source.model_copy(update={"name": "renamed-reference"}),
+            "dependency_aliases": ["renamed-reference"],
+        }
+    )
+    promoted = [
+        primary.model_copy(
+            update={"source": primary.source.model_copy(update={"is_primary": False})}
+        ),
+        renamed.model_copy(
+            update={"source": renamed.source.model_copy(update={"is_primary": True})}
+        ),
+    ]
+    after = source_configuration_fingerprint(
+        bindings=promoted,
+        default_base_url=None,
+        active_server_ref=None,
+        server_mappings={},
+    )
+
+    assert before != after

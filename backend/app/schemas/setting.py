@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal
+from typing import Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
@@ -23,21 +23,24 @@ class SystemSettingsRead(BaseModel):
 class SystemSettingsUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    builders_can_deploy: bool | None = None
-    mcp_base_domain: str | None = Field(default=None, min_length=1, max_length=253)
-    build_concurrency: int | None = Field(default=None, ge=1, le=32)
+    # These fields are omissible for PATCH but explicit null has no persisted
+    # meaning. A non-optional annotation with a None default expresses that
+    # distinction in both Pydantic validation and the generated OpenAPI schema.
+    builders_can_deploy: bool = Field(default=cast(bool, None))
+    mcp_base_domain: str = Field(default=cast(str, None), min_length=1, max_length=253)
+    build_concurrency: int = Field(default=cast(int, None), ge=1, le=32)
     source_retention_days: int | None = Field(default=None, ge=1, le=3650)
     build_retention_count: int | None = Field(default=None, ge=1, le=10_000)
-    max_upload_bytes: int | None = Field(default=None, ge=1024, le=500_000_000)
-    max_operations_per_project: int | None = Field(default=None, ge=1, le=100_000)
-    max_document_chunks_per_project: int | None = Field(default=None, ge=1, le=100_000)
-    environment: Literal["development", "production", "test"] | None = None
+    max_upload_bytes: int = Field(default=cast(int, None), ge=1024, le=100_000_000)
+    max_operations_per_project: int = Field(default=cast(int, None), ge=1, le=100_000)
+    max_document_chunks_per_project: int = Field(default=cast(int, None), ge=1, le=100_000)
+    environment: Literal["development", "production", "test"] = Field(
+        default=cast(Literal["development", "production", "test"], None)
+    )
 
     @field_validator("mcp_base_domain")
     @classmethod
-    def validate_domain(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
+    def validate_domain(cls, value: str) -> str:
         try:
             return normalize_dns_hostname(value)
         except ValueError as exc:

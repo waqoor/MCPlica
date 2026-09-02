@@ -13,6 +13,19 @@ class BuildAdmissionState(StrEnum):
     RUNNING = "running"
 
 
+class BuildLeaseState(StrEnum):
+    OWNED = "owned"
+    CANCELLATION_REQUESTED = "cancellation_requested"
+    LOST = "lost"
+
+
+class BuildLeaseRenewal(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    state: BuildLeaseState
+    lease_expires_at: datetime | None = None
+
+
 class BuildAdmissionClaim(BaseModel):
     """Internal reservation handed from the durable dispatcher to RQ."""
 
@@ -25,6 +38,7 @@ class BuildAdmissionClaim(BaseModel):
     token: UUID
     attempt_count: int = Field(ge=1)
     lease_expires_at: datetime
+    cancellation_requested: bool = False
 
 
 class QueuedBuildAdmission(BaseModel):

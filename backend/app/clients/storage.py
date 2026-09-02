@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import os
 import tempfile
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Protocol
@@ -61,7 +62,36 @@ class FilesystemStorageClient(AsyncClient):
         self._temporary.mkdir(parents=True, exist_ok=True)
 
     async def health(self) -> bool:
-        return await asyncio.to_thread(lambda: self.root.exists() and self.root.is_dir())
+        return await asyncio.to_thread(self._write_probe)
+
+    def _write_probe(self) -> bool:
+        file_descriptor = -1
+        probe_path: Path | None = None
+        try:
+            if not self.root.is_dir() or not self._temporary.is_dir():
+                return False
+            file_descriptor, temporary_name = tempfile.mkstemp(
+                prefix="health-",
+                dir=self._temporary,
+            )
+            probe_path = Path(temporary_name)
+            with os.fdopen(file_descriptor, "wb") as handle:
+                file_descriptor = -1
+                handle.write(b"mcplica-storage-health\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            probe_path.unlink()
+            probe_path = None
+            return True
+        except OSError:
+            return False
+        finally:
+            if file_descriptor >= 0:
+                with suppress(OSError):
+                    os.close(file_descriptor)
+            if probe_path is not None:
+                with suppress(OSError):
+                    probe_path.unlink(missing_ok=True)
 
     def _safe_path(self, relative_path: str) -> Path:
         pure_path = PurePosixPath(relative_path)

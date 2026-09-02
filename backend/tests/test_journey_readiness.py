@@ -132,3 +132,37 @@ def test_credential_binding_must_name_a_compatible_discovered_scheme() -> None:
             scheme_type=CredentialScheme.BASIC,
             metadata={"security_scheme": "bearerAuth"},
         )
+
+
+def test_readiness_tries_later_alternative_after_invalid_oauth_defaults() -> None:
+    discovery = _discovery([{"oauth": ["read"]}, {"backupAuth": []}]).model_copy(
+        update={
+            "security_schemes": [
+                SecuritySchemeDiscoveryRecord(
+                    name="oauth",
+                    type="oauth2_client_credentials",
+                    token_url="https://identity.example/token",
+                    advertised_scopes=["read"],
+                    applicable_operation_keys=["get_items"],
+                    source_pointer="#/components/securitySchemes/oauth",
+                ),
+                SecuritySchemeDiscoveryRecord(
+                    name="backupAuth",
+                    type="http_bearer",
+                    applicable_operation_keys=["get_items"],
+                    source_pointer="#/components/securitySchemes/backupAuth",
+                ),
+            ]
+        }
+    )
+    oauth = _credential(
+        20,
+        scheme_type=CredentialScheme.OAUTH2_CLIENT_CREDENTIALS,
+        security_scheme="oauth",
+    ).model_copy(update={"metadata": {"security_scheme": "oauth", "scope": "unknown"}})
+    backup = _credential(21, security_scheme="backupAuth")
+
+    result = credential_mapping_readiness(discovery, [oauth, backup])
+
+    assert result.complete
+    assert result.bound_scheme_names == ("backupAuth",)

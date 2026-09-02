@@ -44,7 +44,14 @@ class _Deployments:
             active_deployment_id=None,
         )
 
-    async def has_in_progress(self, session: AsyncSession, project_id: UUID) -> bool:
+    async def has_in_progress(
+        self,
+        session: AsyncSession,
+        project_id: UUID,
+        *,
+        transition_stopping_ids: set[UUID] | None = None,
+    ) -> bool:
+        del transition_stopping_ids
         return False
 
     async def get_build(self, session: AsyncSession, build_id: UUID) -> DeployableBuildRecord:

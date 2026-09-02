@@ -127,6 +127,65 @@ async def test_oidc_discovery_appends_well_known_path_and_rejects_duplicate_kids
     assert requested_paths[0] == "/tenant/.well-known/openid-configuration"
 
 
+@pytest.mark.asyncio
+async def test_oidc_preserves_trailing_slash_as_part_of_exact_issuer_identity() -> None:
+    requested_paths: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requested_paths.append(request.url.path)
+        return httpx.Response(
+            200,
+            json={
+                "issuer": "https://8.8.8.8/tenant/",
+                "jwks_uri": "https://8.8.8.8/tenant/keys",
+            },
+            headers={"content-type": "application/json"},
+        )
+
+    policy = UpstreamUrlPolicy(
+        [ServerDefinition.model_validate({"id": "issuer", "url": "https://8.8.8.8/tenant"})]
+    )
+    client = OidcJwksClient(
+        issuer_url="https://8.8.8.8/tenant/",
+        configured_jwks_url=None,
+        policy=policy,
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        assert await client._discover_jwks_url() == "https://8.8.8.8/tenant/keys"  # pyright: ignore[reportPrivateUsage]
+    finally:
+        await client.close()
+    assert requested_paths == ["/tenant/.well-known/openid-configuration"]
+
+
+@pytest.mark.asyncio
+async def test_oidc_rejects_discovery_issuer_with_different_trailing_slash() -> None:
+    async def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "issuer": "https://8.8.8.8/tenant",
+                "jwks_uri": "https://8.8.8.8/tenant/keys",
+            },
+            headers={"content-type": "application/json"},
+        )
+
+    policy = UpstreamUrlPolicy(
+        [ServerDefinition.model_validate({"id": "issuer", "url": "https://8.8.8.8/tenant"})]
+    )
+    client = OidcJwksClient(
+        issuer_url="https://8.8.8.8/tenant/",
+        configured_jwks_url=None,
+        policy=policy,
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        with pytest.raises(ValueError, match="does not match"):
+            await client._discover_jwks_url()  # pyright: ignore[reportPrivateUsage]
+    finally:
+        await client.close()
+
+
 @pytest.mark.parametrize(
     ("cache_control", "expected_ttl"),
     [

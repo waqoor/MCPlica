@@ -19,9 +19,12 @@ from app.domain.deployments import (
 )
 from app.domain.journey import JourneyStepState
 from app.domain.sources import (
+    BoundSourceVersionRecord,
+    ProjectSourceRecord,
     SourceConfigurationDiscoveryRecord,
     SourceKind,
     SourceOrigin,
+    SourceVersionRecord,
     source_configuration_fingerprint,
 )
 from app.domain.validation import ValidationStatus
@@ -54,6 +57,34 @@ BUILD_ID = UUID(int=506)
 OTHER_BUILD_ID = UUID(int=507)
 SNAPSHOT_ID = UUID(int=510)
 NOW = datetime(2026, 8, 27, tzinfo=UTC)
+
+
+def _binding(version_id: UUID = VERSION_ID) -> BoundSourceVersionRecord:
+    return BoundSourceVersionRecord(
+        source=ProjectSourceRecord(
+            id=SOURCE_ID,
+            project_id=PROJECT_ID,
+            kind=SourceKind.OPENAPI,
+            name="Journey API",
+            origin_type=SourceOrigin.UPLOAD,
+            source_url=None,
+            is_primary=True,
+            created_at=NOW,
+        ),
+        version=SourceVersionRecord(
+            id=version_id,
+            source_id=SOURCE_ID,
+            content_sha256="a" * 64,
+            media_type="application/json",
+            storage_key="sources/journey.json",
+            byte_size=1,
+            detected_format="openapi-3.1-json",
+            source_etag=None,
+            source_last_modified=None,
+            created_by=USER_ID,
+            created_at=NOW,
+        ),
+    )
 
 
 def _database_url() -> str:
@@ -90,7 +121,7 @@ class _SourceService:
         return SourceConfigurationDiscoveryRecord(
             source_version_ids=[self.version_id],
             configuration_sha256=source_configuration_fingerprint(
-                source_version_ids=[self.version_id],
+                bindings=[_binding(self.version_id)],
                 default_base_url=self.default_base_url,
                 active_server_ref=self.active_server_ref,
                 server_mappings=self.server_mappings,
@@ -124,7 +155,7 @@ class _Preflight:
 def _build_configuration() -> dict[str, object]:
     return BuildConfiguration(
         executable_configuration_sha256=source_configuration_fingerprint(
-            source_version_ids=[VERSION_ID],
+            bindings=[_binding()],
             default_base_url="https://api.example.com",
             active_server_ref=None,
             server_mappings={},
@@ -241,6 +272,13 @@ async def _seed(database: DatabaseClient) -> None:
             )
         )
         await session.flush()
+        await SourceRepository().select_current_version(
+            session,
+            source_id=SOURCE_ID,
+            version_id=VERSION_ID,
+            source_etag=None,
+            source_last_modified=None,
+        )
         session.add(
             CanonicalSnapshot(
                 id=SNAPSHOT_ID,
@@ -315,7 +353,21 @@ async def _seed(database: DatabaseClient) -> None:
             ]
         )
         await session.flush()
-        session.add(BuildSourceVersion(build_id=BUILD_ID, source_version_id=VERSION_ID))
+        session.add(
+            BuildSourceVersion(
+                build_id=BUILD_ID,
+                source_version_id=VERSION_ID,
+                source_id=SOURCE_ID,
+                source_kind=SourceKind.OPENAPI,
+                source_name="Primary API",
+                source_origin_type=SourceOrigin.UPLOAD,
+                source_url=None,
+                source_is_primary=True,
+                source_created_at=NOW,
+                dependency_aliases=["Primary API"],
+                binding_metadata_trustworthy=True,
+            )
+        )
         session.add(
             ValidationReport(
                 id=UUID(int=508),

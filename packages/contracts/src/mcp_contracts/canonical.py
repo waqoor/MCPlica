@@ -5,6 +5,7 @@ from uuid import UUID
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .json_types import JsonObject, JsonValue
+from .path_template import path_parameter_names
 
 
 class HttpMethod(StrEnum):
@@ -242,11 +243,7 @@ class CanonicalOperation(BaseModel):
 
     @model_validator(mode="after")
     def validate_path_parameters(self) -> "CanonicalOperation":
-        placeholders = {
-            part[1:-1]
-            for part in self.path_template.split("/")
-            if part.startswith("{") and part.endswith("}")
-        }
+        placeholders = set(path_parameter_names(self.path_template))
         parameters = {
             parameter.name
             for parameter in self.parameters

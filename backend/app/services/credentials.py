@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import UTC, datetime
 from typing import Protocol
 from uuid import UUID, uuid4
@@ -15,8 +17,10 @@ from app.core.exceptions import (
 from app.domain.credentials import (
     CredentialRecord,
     CredentialScheme,
+    credential_secret_aad,
     validate_credential_secret,
 )
+from app.domain.deployments import DeploymentIntent
 from app.domain.sources import SourceConfigurationDiscoveryRecord
 from app.repositories.audit import AuditRepository
 from app.repositories.credentials import CredentialRepository
@@ -38,6 +42,8 @@ class CredentialDeploymentLifecycle(Protocol):
         event_type: str,
         subject_type: str | None = None,
         subject_id: UUID | None = None,
+        intent: DeploymentIntent = DeploymentIntent.NORMAL,
+        fallback_to_stop: bool = False,
     ) -> object | None: ...
 
     async def schedule_stop_project(
@@ -59,10 +65,6 @@ class SourceConfigurationProvider(Protocol):
     async def discover_configuration(
         self, project_id: UUID
     ) -> SourceConfigurationDiscoveryRecord: ...
-
-
-def _aad(project_id: UUID, credential_id: UUID, scheme: CredentialScheme) -> bytes:
-    return (f"project:{project_id}:credential:{credential_id}:scheme:{scheme.value}").encode()
 
 
 class CredentialService:
@@ -95,6 +97,21 @@ class CredentialService:
                 await self._with_runtime_state(session, credential) for credential in credentials
             ]
 
+    async def list_page(
+        self, project_id: UUID, *, page: int, page_size: int
+    ) -> tuple[list[CredentialRecord], int]:
+        async with self._database.session_scope() as session:
+            credentials, total = await self._credentials.list_page(
+                session,
+                project_id,
+                page=page,
+                page_size=page_size,
+            )
+            return (
+                [await self._with_runtime_state(session, credential) for credential in credentials],
+                total,
+            )
+
     async def create(
         self,
         *,
@@ -118,7 +135,7 @@ class CredentialService:
         credential_id = uuid4()
         encrypted = self._cipher.encrypt_json(
             secret,
-            associated_data=_aad(project_id, credential_id, scheme_type),
+            associated_data=credential_secret_aad(project_id, credential_id, scheme_type),
         )
         async with self._database.session_scope() as session:
             if await self._projects.get(session, project_id) is None:
@@ -177,7 +194,7 @@ class CredentialService:
         _validate_secret(observed.scheme_type, secret, effective_metadata)
         encrypted = self._cipher.encrypt_json(
             secret,
-            associated_data=_aad(project_id, credential_id, observed.scheme_type),
+            associated_data=credential_secret_aad(project_id, credential_id, observed.scheme_type),
         )
         async with self._database.session_scope() as session:
             current = await self._credentials.get_for_update(session, credential_id)
@@ -220,6 +237,8 @@ class CredentialService:
                 event_type="deployment.credential_rotation_requested",
                 subject_type="project_credential",
                 subject_id=credential_id,
+                intent=DeploymentIntent.SECURITY_REFRESH,
+                fallback_to_stop=True,
             )
         self._deployments.notify_runtime_commands()
         return await self._load_runtime_state(rotated)
@@ -321,7 +340,7 @@ class CredentialService:
             return self._cipher.decrypt_json(
                 encrypted.encrypted_payload,
                 key_version=encrypted.metadata.key_version,
-                associated_data=_aad(
+                associated_data=credential_secret_aad(
                     project_id,
                     credential_id,
                     encrypted.metadata.scheme_type,
@@ -350,7 +369,9 @@ class CredentialService:
                     self._cipher.decrypt_json(
                         encrypted.encrypted_payload,
                         key_version=metadata.key_version,
-                        associated_data=_aad(project_id, metadata.id, metadata.scheme_type),
+                        associated_data=credential_secret_aad(
+                            project_id, metadata.id, metadata.scheme_type
+                        ),
                     ),
                 )
             return result

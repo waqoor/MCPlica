@@ -1,8 +1,8 @@
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.deployments import (
@@ -88,9 +88,31 @@ class MCPAccessRepository:
         result = await session.scalars(
             select(MCPAccessToken)
             .where(MCPAccessToken.project_id == project_id)
-            .order_by(MCPAccessToken.created_at.desc())
+            .order_by(MCPAccessToken.created_at.desc(), MCPAccessToken.id.desc())
         )
         return [_token_to_domain(model) for model in result]
+
+    async def list_tokens_page(
+        self,
+        session: AsyncSession,
+        project_id: UUID,
+        *,
+        page: int,
+        page_size: int,
+    ) -> tuple[list[MCPAccessTokenRecord], int]:
+        predicate = MCPAccessToken.project_id == project_id
+        total = int(
+            await session.scalar(select(func.count()).select_from(MCPAccessToken).where(predicate))
+            or 0
+        )
+        result = await session.scalars(
+            select(MCPAccessToken)
+            .where(predicate)
+            .order_by(MCPAccessToken.created_at.desc(), MCPAccessToken.id.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        return [_token_to_domain(model) for model in result], total
 
     async def get_token(self, session: AsyncSession, token_id: UUID) -> MCPAccessTokenRecord | None:
         model = await session.get(MCPAccessToken, token_id)
@@ -167,7 +189,8 @@ class MCPAccessRepository:
     async def active_verifiers(
         self, session: AsyncSession, project_id: UUID
     ) -> list[MCPTokenVerifierRecord]:
-        now = datetime.now(UTC)
+        now = await session.scalar(select(func.clock_timestamp()))
+        assert now is not None
         result = await session.scalars(
             select(MCPAccessToken).where(
                 MCPAccessToken.project_id == project_id,

@@ -6,7 +6,12 @@ from uuid import UUID, uuid4
 
 from app.clients.vector import MilvusVectorClient
 from app.core.config import Settings
-from app.parsers.documentation import DocumentSection, NormalizedDocument, chunk_document
+from app.parsers.documentation import (
+    DocumentChunk,
+    DocumentSection,
+    NormalizedDocument,
+    chunk_document,
+)
 from app.parsers.openapi.parser import parse_openapi
 from app.providers.milvus import MilvusVectorStore
 from app.services.indexing.service import semantic_chunks
@@ -22,6 +27,8 @@ async def main() -> None:
     project_a, project_b, generation_a, generation_b, source_id = (uuid4() for _ in range(5))
     scopes = [(project_a, generation_a), (project_a, generation_b), (project_b, generation_a)]
     expected: dict[tuple[UUID, UUID], set[str]] = {}
+    execution_tokens = {scope: uuid4() for scope in scopes}
+    chunks_by_scope: dict[tuple[UUID, UUID], list[DocumentChunk]] = {}
     try:
         await store.ensure_index(collection=collection, dimensions=2)
         for project, generation in scopes:
@@ -29,7 +36,9 @@ async def main() -> None:
                 source_version_id=source_id,
                 title="Shared guide",
                 text="Identical documentation",
-                sections=[DocumentSection(path=["Guide"], text="Identical documentation", ordinal=0)],
+                sections=[
+                    DocumentSection(path=["Guide"], text="Identical documentation", ordinal=0)
+                ],
             )
             chunks = chunk_document(
                 document,
@@ -59,21 +68,61 @@ async def main() -> None:
                 )
             )
             expected[(project, generation)] = {chunk.chunk_id for chunk in chunks}
+            chunks_by_scope[(project, generation)] = chunks
             for _ in range(2):
                 await store.upsert_chunks(
                     collection=collection,
                     chunks=chunks,
                     vectors=[[1.0, 0.0]] * len(chunks),
+                    execution_token=execution_tokens[(project, generation)],
                 )
         for project, generation in scopes:
             matches = await store.search(
                 collection=collection,
                 project_id=project,
                 generation_id=generation,
+                execution_token=execution_tokens[(project, generation)],
                 vector=[1.0, 0.0],
                 limit=100,
             )
             assert {match.chunk.chunk_id for match in matches} == expected[(project, generation)]
+
+        # A reclaimed Build may publish the same canonical chunks under a new token.
+        # Cleaning the obsolete attempt must preserve the replacement rows.
+        first_scope = scopes[0]
+        replacement_token = uuid4()
+        replacement_chunks = chunks_by_scope[first_scope]
+        await store.upsert_chunks(
+            collection=collection,
+            chunks=replacement_chunks,
+            vectors=[[1.0, 0.0]] * len(replacement_chunks),
+            execution_token=replacement_token,
+        )
+        await store.delete_generation(
+            collection=collection,
+            project_id=project_a,
+            generation_id=generation_a,
+            execution_token=execution_tokens[first_scope],
+        )
+        stale_matches = await store.search(
+            collection=collection,
+            project_id=project_a,
+            generation_id=generation_a,
+            execution_token=execution_tokens[first_scope],
+            vector=[1.0, 0.0],
+            limit=100,
+        )
+        replacement_matches = await store.search(
+            collection=collection,
+            project_id=project_a,
+            generation_id=generation_a,
+            execution_token=replacement_token,
+            vector=[1.0, 0.0],
+            limit=100,
+        )
+        assert stale_matches == []
+        assert {match.chunk.chunk_id for match in replacement_matches} == expected[first_scope]
+
         await store.delete_generation(
             collection=collection, project_id=project_a, generation_id=generation_a
         )
@@ -82,12 +131,22 @@ async def main() -> None:
                 collection=collection,
                 project_id=project,
                 generation_id=generation,
+                execution_token=(
+                    replacement_token
+                    if (project, generation) == first_scope
+                    else execution_tokens[(project, generation)]
+                ),
                 vector=[1.0, 0.0],
                 limit=100,
             )
-            wanted = set() if (project, generation) == scopes[0] else expected[(project, generation)]
+            wanted: set[str] = (
+                set() if (project, generation) == scopes[0] else expected[(project, generation)]
+            )
             assert {match.chunk.chunk_id for match in matches} == wanted
-        print("Real Milvus: project/generation isolation, repeat upsert, and scoped cleanup passed.")
+        print(
+            "Real Milvus: project/generation/attempt isolation, repeat upsert, and scoped cleanup "
+            "passed."
+        )
     finally:
         try:
             for project, generation in scopes:

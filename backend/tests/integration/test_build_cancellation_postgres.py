@@ -33,6 +33,7 @@ from app.repositories.validation import ValidationRepository
 from app.services.artifacts import ArtifactService
 from app.services.build_admission import BuildAdmissionDispatcher
 from app.services.builds import BuildService
+from app.services.builds.cancellation import BuildCancellationService
 from app.services.builds.service import SourceConfigurationProvider
 from app.services.cleanup import CleanupService, CleanupWorker
 from app.services.settings import OperationalSettingsProvider, SettingsService
@@ -44,6 +45,7 @@ PROJECT_ID = UUID(int=9_002)
 QUEUED_BUILD_ID = UUID(int=9_003)
 RUNNING_BUILD_ID = UUID(int=9_004)
 QUEUED_ADMISSION_TOKEN = UUID(int=9_005)
+RUNNING_ADMISSION_TOKEN = UUID(int=9_006)
 
 
 def _database_url() -> str:
@@ -246,14 +248,19 @@ async def test_cancellation_is_request_then_effective_acknowledgement(
         partial_manifest_key = "build-cancellation/running-manifest.json"
         await storage.put_exact(partial_manifest_key, b"partial manifest")
         async with database.session_scope() as session:
-            session.add(
-                _build(
-                    RUNNING_BUILD_ID,
-                    2,
-                    BuildStatus.ANALYZING,
-                    manifest_storage_key=partial_manifest_key,
-                )
+            running_model = _build(
+                RUNNING_BUILD_ID,
+                2,
+                BuildStatus.ANALYZING,
+                manifest_storage_key=partial_manifest_key,
             )
+            lease_time = datetime.now(UTC)
+            running_model.admission_token = RUNNING_ADMISSION_TOKEN
+            running_model.admission_acquired_at = lease_time
+            running_model.admission_heartbeat_at = lease_time
+            running_model.admission_lease_expires_at = lease_time + timedelta(minutes=5)
+            running_model.admission_attempt_count = 1
+            session.add(running_model)
 
         running = await service.cancel(
             RUNNING_BUILD_ID,
@@ -266,24 +273,32 @@ async def test_cancellation_is_request_then_effective_acknowledgement(
         assert running.completed_at is None
 
         async with database.session_scope() as session:
-            with pytest.raises(InvalidStateError, match="transition"):
+            with pytest.raises(InvalidStateError, match="cancellation"):
                 await builds.transition(
                     session,
                     RUNNING_BUILD_ID,
                     expected=BuildStatus.ANALYZING,
                     target=BuildStatus.COMPILING,
+                    admission_token=RUNNING_ADMISSION_TOKEN,
                 )
         async with database.session_scope() as session:
             build = await builds.get(session, RUNNING_BUILD_ID)
             assert build is not None
-            job = await cleanup.capture_build_cancellation(
+            result = await BuildCancellationService(
+                builds,
+                cleanup_repository,
+                AuditRepository(),
+            ).acknowledge(
                 session,
-                project_id=PROJECT_ID,
                 build_id=RUNNING_BUILD_ID,
+                admission_token=RUNNING_ADMISSION_TOKEN,
                 actor_user_id=USER_ID,
                 request_id="worker-ack",
+                acknowledgement="worker",
             )
-            acknowledged = await builds.acknowledge_cancellation(session, RUNNING_BUILD_ID)
+            acknowledged = result.build
+            job = result.cleanup_job
+            assert job is not None
             assert acknowledged.status is BuildStatus.CANCELLED
             assert acknowledged.pipeline_stage is BuildStatus.ANALYZING
             assert acknowledged.cancellation_acknowledged_at is not None
@@ -325,7 +340,7 @@ async def test_cancellation_is_request_then_effective_acknowledgement(
                 )
             )
             assert [event.event_type for event in events].count("build.cancellation_requested") == 2
-            assert [event.event_type for event in events].count("build.cancelled") == 1
+            assert [event.event_type for event in events].count("build.cancelled") == 2
     finally:
         await _cleanup(database)
         await database.close()

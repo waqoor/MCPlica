@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 
 from app.api.deps import (
     AdminPrincipal,
@@ -29,8 +29,10 @@ async def get_mcp_access(
     project_id: UUID,
     _principal: AdminPrincipal,
     service: Annotated[MCPAccessService, Depends(mcp_access_service)],
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> MCPAccessRead:
-    snapshot = await service.get(project_id)
+    snapshot, total = await service.get_page(project_id, page=page, page_size=page_size)
     return MCPAccessRead(
         auth_config=(
             MCPAuthConfigRead.model_validate(snapshot.auth_config)
@@ -38,6 +40,9 @@ async def get_mcp_access(
             else None
         ),
         tokens=[MCPAccessTokenRead.model_validate(token) for token in snapshot.tokens],
+        total=total,
+        page=page,
+        page_size=page_size,
     )
 
 

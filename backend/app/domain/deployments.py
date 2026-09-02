@@ -23,6 +23,12 @@ class DeploymentStatus(StrEnum):
         return self in {self.UNHEALTHY, self.STOPPED, self.FAILED}
 
 
+class DeploymentIntent(StrEnum):
+    NORMAL = "normal"
+    SECURITY_REFRESH = "security_refresh"
+    ROLLBACK = "rollback"
+
+
 class DeploymentActivationPhase(StrEnum):
     VERIFIED = "verified"
     RETIRING_PREVIOUS = "retiring_previous"
@@ -156,6 +162,19 @@ class RuntimeCommandStatus(StrEnum):
         return self in {self.FAILED, self.EFFECTIVE}
 
 
+class RuntimeCommandLeaseState(StrEnum):
+    OWNED = "owned"
+    LOST = "lost"
+
+
+class RuntimeCommandLeaseRenewal(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    state: RuntimeCommandLeaseState
+    database_now: datetime
+    lease_expires_at: datetime | None = None
+
+
 class RuntimeEffectState(StrEnum):
     EFFECTIVE = "effective"
     PENDING = "pending"
@@ -168,6 +187,7 @@ class DeploymentRecord(BaseModel):
     id: UUID
     project_id: UUID
     build_id: UUID
+    intent: DeploymentIntent = DeploymentIntent.NORMAL
     previous_active_deployment_id: UUID | None = None
     status: DeploymentStatus
     hostname: str
@@ -211,7 +231,6 @@ def has_successful_activation(record: DeploymentRecord) -> bool:
         record.activation_verified_at is None
         or record.activation_verified_at.utcoffset() is None
         or record.activation_proof_sha256 is None
-        or record.activated_at < record.activation_verified_at
     ):
         return False
     expected = activation_proof_sha256(
@@ -261,6 +280,7 @@ class RuntimeCommandRecord(BaseModel):
     effective_at: datetime | None
     failed_at: datetime | None
     lease_expires_at: datetime | None
+    execution_token: UUID | None
     last_error_code: str | None
     last_error_summary: str | None
     created_at: datetime
@@ -273,6 +293,7 @@ class DeployableBuildRecord(BaseModel):
     id: UUID
     project_id: UUID
     status: str
+    source_binding_metadata_trustworthy: bool = True
     executable_configuration_sha256: str | None = None
     runtime_manifest_max_bytes: int = Field(ge=1_024, le=50_000_000)
     manifest_sha256: str | None

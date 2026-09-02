@@ -191,8 +191,8 @@ class BuildAIRunRecord(BaseModel):
     response_schema_id: str
     response_sha256: str | None
     response: JsonObject | None
-    usage: dict[str, object] | None
-    cost: dict[str, object] | None
+    usage: JsonObject | None
+    cost: JsonObject | None
     latency_ms: int | None
     status: str
     error_code: str | None

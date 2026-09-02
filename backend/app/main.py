@@ -3,7 +3,8 @@ import logging
 import secrets
 import time
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
+from dataclasses import dataclass
 from urllib.parse import urlsplit
 from uuid import uuid4
 
@@ -28,8 +29,10 @@ from app.core.auth import PasswordManager, TokenManager, constant_time_equal
 from app.core.config import Settings, get_settings
 from app.core.crypto import AesGcmSecretCipher, configured_secret_cipher
 from app.core.exceptions import AuthenticationError, MCPlicaError
+from app.core.lifecycle import DispatcherGroup, register_bounded_close
 from app.core.logging import configure_logging
 from app.core.network_policy import UrlPolicy
+from app.core.request_limits import MultipartSpoolLimitMiddleware
 from app.observability import observe_http_request, render_metrics
 from app.observability.metrics import METRICS_CONTENT_TYPE
 from app.providers.ai.openrouter import OpenRouterProvider
@@ -83,6 +86,10 @@ def _cipher(config: Settings) -> AesGcmSecretCipher:
             else None
         ),
         config.secret_encryption_key_version,
+        previous_encoded_keys={
+            version: key.get_secret_value()
+            for version, key in config.secret_encryption_previous_keys.items()
+        },
         allow_ephemeral=config.env == "test",
     )
 
@@ -99,6 +106,114 @@ def _validate_api_security(config: Settings) -> None:
         raise ValueError("production API requires a metrics_bearer_token of at least 32 characters")
 
 
+@dataclass(slots=True)
+class _AppClients:
+    database: DatabaseClient
+    redis: RedisClient
+    deployment_queue: DeploymentQueueClient
+    build_queue: BuildQueueClient
+    http: HttpClient
+    milvus: MilvusVectorClient
+    storage: FilesystemStorageClient
+    stack: AsyncExitStack
+
+    async def close(self) -> None:
+        await self.stack.aclose()
+
+
+async def _create_app_clients(config: Settings) -> _AppClients:
+    """Acquire clients transactionally and register cleanup immediately."""
+
+    stack = AsyncExitStack()
+    await stack.__aenter__()
+    try:
+        database = DatabaseClient(
+            config.database_url,
+            pool_size=config.database_pool_size,
+            max_overflow=config.database_max_overflow,
+            pool_timeout_seconds=config.database_pool_timeout_seconds,
+        )
+        register_bounded_close(
+            stack,
+            name="database",
+            callback=database.close,
+            timeout_seconds=config.shutdown_timeout_seconds,
+        )
+        redis = RedisClient(
+            config.redis_url,
+            socket_connect_timeout_seconds=config.redis_socket_connect_timeout_seconds,
+            socket_timeout_seconds=config.redis_socket_timeout_seconds,
+        )
+        register_bounded_close(
+            stack,
+            name="redis",
+            callback=redis.close,
+            timeout_seconds=config.shutdown_timeout_seconds,
+        )
+        deployment_queue = DeploymentQueueClient(
+            config.redis_url,
+            config.deployment_queue_name,
+            job_timeout_seconds=config.deployment_job_timeout_seconds,
+            max_attempts=config.deployment_job_max_attempts,
+            socket_connect_timeout_seconds=config.redis_socket_connect_timeout_seconds,
+            socket_timeout_seconds=config.redis_socket_timeout_seconds,
+        )
+        register_bounded_close(
+            stack,
+            name="deployment-queue",
+            callback=deployment_queue.close,
+            timeout_seconds=config.shutdown_timeout_seconds,
+        )
+        build_queue = BuildQueueClient(
+            config.redis_url,
+            config.build_queue_name,
+            job_timeout_seconds=config.build_job_timeout_seconds,
+            max_attempts=config.build_job_max_attempts,
+            socket_connect_timeout_seconds=config.redis_socket_connect_timeout_seconds,
+            socket_timeout_seconds=config.redis_socket_timeout_seconds,
+        )
+        register_bounded_close(
+            stack,
+            name="build-queue",
+            callback=build_queue.close,
+            timeout_seconds=config.shutdown_timeout_seconds,
+        )
+        http = HttpClient(timeout_seconds=config.fetch_timeout_seconds)
+        register_bounded_close(
+            stack,
+            name="http",
+            callback=http.close,
+            timeout_seconds=config.shutdown_timeout_seconds,
+        )
+        milvus = MilvusVectorClient(config.milvus_uri, config.milvus_token)
+        register_bounded_close(
+            stack,
+            name="milvus",
+            callback=milvus.close,
+            timeout_seconds=config.shutdown_timeout_seconds,
+        )
+        storage = FilesystemStorageClient(config.artifact_root)
+        register_bounded_close(
+            stack,
+            name="storage",
+            callback=storage.close,
+            timeout_seconds=config.shutdown_timeout_seconds,
+        )
+    except BaseException:
+        await stack.aclose()
+        raise
+    return _AppClients(
+        database=database,
+        redis=redis,
+        deployment_queue=deployment_queue,
+        build_queue=build_queue,
+        http=http,
+        milvus=milvus,
+        storage=storage,
+        stack=stack,
+    )
+
+
 def create_app(settings_override: Settings | None = None) -> FastAPI:
     config = settings_override or get_settings()
     _validate_api_security(config)
@@ -107,27 +222,13 @@ def create_app(settings_override: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-        database = DatabaseClient(
-            config.database_url,
-            pool_size=config.database_pool_size,
-            max_overflow=config.database_max_overflow,
-            pool_timeout_seconds=config.database_pool_timeout_seconds,
-        )
-        redis = RedisClient(config.redis_url)
-        deployment_queue = DeploymentQueueClient(
-            config.redis_url,
-            config.deployment_queue_name,
-            job_timeout_seconds=config.deployment_job_timeout_seconds,
-            max_attempts=config.deployment_job_max_attempts,
-        )
-        build_queue = BuildQueueClient(
-            config.redis_url,
-            config.build_queue_name,
-            job_timeout_seconds=config.build_job_timeout_seconds,
-            max_attempts=config.build_job_max_attempts,
-        )
-        http = HttpClient(timeout_seconds=config.fetch_timeout_seconds)
-        milvus = MilvusVectorClient(config.milvus_uri, config.milvus_token)
+        clients = await _create_app_clients(config)
+        database = clients.database
+        redis = clients.redis
+        deployment_queue = clients.deployment_queue
+        build_queue = clients.build_queue
+        http = clients.http
+        milvus = clients.milvus
 
         audit = AuditRepository()
         settings_repository = SettingsRepository()
@@ -156,7 +257,7 @@ def create_app(settings_override: Settings | None = None) -> FastAPI:
             openrouter,
             structured_attempts=config.openrouter_structured_max_attempts,
         )
-        storage = FilesystemStorageClient(config.artifact_root)
+        storage = clients.storage
         artifact_storage = FilesystemArtifactStorage(storage)
         url_policy = UrlPolicy(
             allow_http=config.allow_http_source_urls,
@@ -357,10 +458,17 @@ def create_app(settings_override: Settings | None = None) -> FastAPI:
             ),
             cleanup=cleanup_service,
         )
+        dispatchers = DispatcherGroup(timeout_seconds=config.shutdown_timeout_seconds)
         runtime_command_stop = asyncio.Event()
         runtime_command_task = asyncio.create_task(
             runtime_command_dispatcher.run(runtime_command_stop),
             name="runtime-command-dispatcher",
+        )
+        dispatchers.add(
+            name="runtime-command-dispatcher",
+            task=runtime_command_task,
+            stop_event=runtime_command_stop,
+            wake=runtime_command_dispatcher.wake,
         )
         runtime_command_dispatcher.wake()
         cleanup_stop = asyncio.Event()
@@ -368,33 +476,30 @@ def create_app(settings_override: Settings | None = None) -> FastAPI:
             cleanup_worker.run(cleanup_stop),
             name="cleanup-dispatcher",
         )
+        dispatchers.add(
+            name="cleanup-dispatcher",
+            task=cleanup_task,
+            stop_event=cleanup_stop,
+            wake=cleanup_worker.wake,
+        )
         cleanup_worker.wake()
         build_admission_stop = asyncio.Event()
         build_admission_task = asyncio.create_task(
             build_admission.run(build_admission_stop),
             name="build-admission-dispatcher",
         )
+        dispatchers.add(
+            name="build-admission-dispatcher",
+            task=build_admission_task,
+            stop_event=build_admission_stop,
+            wake=build_admission.wake,
+        )
         build_admission.wake()
         try:
             yield
         finally:
-            runtime_command_stop.set()
-            runtime_command_dispatcher.wake()
-            await runtime_command_task
-            cleanup_stop.set()
-            cleanup_worker.wake()
-            await cleanup_task
-            build_admission_stop.set()
-            build_admission.wake()
-            await build_admission_task
-            await database.close()
-            await redis.close()
-            await deployment_queue.close()
-            await build_queue.close()
-            await http.close()
-            await milvus.close()
-            await openrouter.close()
-            await storage.close()
+            await dispatchers.shutdown()
+            await clients.close()
 
     app = FastAPI(
         title="MCPlica API",
@@ -403,6 +508,11 @@ def create_app(settings_override: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.settings = config
+    app.add_middleware(
+        MultipartSpoolLimitMiddleware,
+        request_max_bytes=config.upload_max_bytes + 1_048_576,
+        capacity_bytes=config.multipart_spool_capacity_bytes,
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[config.frontend_origin],

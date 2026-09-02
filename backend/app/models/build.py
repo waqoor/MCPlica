@@ -3,10 +3,12 @@ from enum import StrEnum
 from uuid import UUID
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     Enum,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     String,
@@ -19,6 +21,7 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.domain.builds import BuildStatus, BuildTrigger
+from app.domain.sources import SourceKind, SourceOrigin
 from app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
 
 
@@ -207,7 +210,34 @@ class Build(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 
 class BuildSourceVersion(Base):
     __tablename__ = "build_source_versions"
-    __table_args__ = (Index("ix_build_source_versions_source_version_id", "source_version_id"),)
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["source_id", "source_version_id"],
+            ["source_versions.source_id", "source_versions.id"],
+            name="fk_build_source_versions_version_same_source",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "char_length(btrim(source_name)) > 0",
+            name="ck_build_source_versions_name_nonempty",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(dependency_aliases) = 'array' "
+            "AND jsonb_array_length(dependency_aliases) > 0",
+            name="ck_build_source_versions_aliases_array",
+        ),
+        Index("ix_build_source_versions_source_version_id", "source_version_id"),
+        Index("ix_build_source_versions_source_id", "source_id"),
+        Index(
+            "uq_build_source_versions_primary_executable",
+            "build_id",
+            unique=True,
+            postgresql_where=text(
+                "binding_metadata_trustworthy AND source_is_primary "
+                "AND source_kind IN ('openapi'::source_kind, 'api_inventory'::source_kind)"
+            ),
+        ),
+    )
 
     build_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True),
@@ -218,6 +248,27 @@ class BuildSourceVersion(Base):
         PGUUID(as_uuid=True),
         ForeignKey("source_versions.id", ondelete="RESTRICT"),
         primary_key=True,
+    )
+    source_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("project_sources.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    source_kind: Mapped[SourceKind] = mapped_column(
+        Enum(SourceKind, name="source_kind", values_callable=_enum_values),
+        nullable=False,
+    )
+    source_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    source_origin_type: Mapped[SourceOrigin] = mapped_column(
+        Enum(SourceOrigin, name="source_origin", values_callable=_enum_values),
+        nullable=False,
+    )
+    source_url: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    source_is_primary: Mapped[bool] = mapped_column(Boolean(), nullable=False)
+    source_created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    dependency_aliases: Mapped[list[str]] = mapped_column(JSONB(), nullable=False)
+    binding_metadata_trustworthy: Mapped[bool] = mapped_column(
+        Boolean(), default=True, server_default=text("false"), nullable=False
     )
 
 

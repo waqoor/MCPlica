@@ -285,6 +285,10 @@ Requirements are normative. IDs must be referenced by implementation/tests where
 
 **FR-SRC-008** — Documentation alone shall not produce executable tools.
 
+**FR-SRC-009** — Each logical source shall have one explicit transactionally selected immutable
+current version. Reaccepting historical bytes shall reselect that version and update observation
+validators without rewriting immutable version history.
+
 ### OpenAPI/API normalization
 
 **FR-NORM-001** — The platform shall validate supported source specifications before compilation.
@@ -307,6 +311,10 @@ Requirements are normative. IDs must be referenced by implementation/tests where
 
 **FR-VEC-004** — The system shall record embedding model and dimensions per index generation.
 
+**FR-VEC-005** — Vector row identity and cleanup shall remain isolated across Project, generation,
+source binding, and reclaimed Build execution attempt while content-based embedding reuse remains
+project scoped.
+
 ### OpenRouter build intelligence
 
 **FR-AI-001** — OpenRouter shall be configurable once at the installation level with analysis, semantic-validation, and embedding models.
@@ -324,6 +332,9 @@ Requirements are normative. IDs must be referenced by implementation/tests where
 **FR-AI-007** — The user shall be able to explicitly request review/rebuild later; the product shall not continuously spend model tokens on deployed Projects.
 
 **FR-AI-008** — The platform shall display build-time AI usage/cost metadata when OpenRouter returns it, for operator visibility only; this is not end-user billing/metering.
+
+**FR-AI-009** — A structured AI response shall be validated before success/cache publication, and
+usage/cost evidence shall include every accepted, rejected, and failed attempt exactly once.
 
 ### Compilation
 
@@ -379,6 +390,14 @@ probe is blocking.
 
 **FR-BUILD-007** — READY Builds shall be exportable without plaintext secrets.
 
+**FR-BUILD-008** — A Build shall freeze every executable source role/name/alias/routing input used
+for parsing and identity; historical inputs that cannot be established safely shall require a new
+Build before activation.
+
+**FR-BUILD-009** — Reclaimable Build execution shall use a database lease and exact execution token
+on every accepted state/result publication. Cancellation shall be acknowledged by the live owner or
+recovered after owner expiry without executing another stage.
+
 ### Deployment
 
 **FR-DEP-001** — The base platform shall deploy through Docker Compose.
@@ -398,6 +417,14 @@ probe is blocking.
 **FR-DEP-008** — The web/API container shall not need direct Docker socket access; deployment authority belongs to the worker/runtime-manager path.
 
 **FR-DEP-009** — Runtime containers shall not have access to builder PostgreSQL, Redis, Milvus, or Docker socket.
+
+**FR-DEP-010** — Runtime commands shall be ordered, database-time leased, exact-token fenced, and
+serialized per Project around Docker effects; an expired owner shall not finalize or target a
+replacement container.
+
+**FR-DEP-011** — Authentication-only maintenance shall remain bound to the exact active Build and
+may bypass only unrelated source drift. Removing the final valid inbound verifier shall commit a
+durable runtime stop without manufacturing an invalid replacement.
 
 ### MCP serving
 
@@ -437,6 +464,9 @@ probe is blocking.
 
 **FR-SEC-009** — Secrets shall not be included in exported artifacts or routine logs.
 
+**FR-SEC-010** — Control-plane encryption rotation shall support an active write key plus explicit
+prior read keys and a transactional re-encryption operation; unknown versions shall fail closed.
+
 ### UI/administration
 
 **FR-UI-001** — The application shall use a responsive React/Tailwind/shadcn administrative UI.
@@ -451,6 +481,9 @@ probe is blocking.
 
 **FR-UI-006** — There shall be no Chat, Conversations, Agents, or approval-queue UI.
 
+**FR-UI-007** — Management collections shall expose bounded stable pages with total counts; the UI
+shall explicitly traverse pages only when a workflow requires the complete collection.
+
 ### Audit/operations
 
 **FR-OPS-001** — Control-plane security and lifecycle changes shall create durable audit events.
@@ -460,6 +493,12 @@ probe is blocking.
 **FR-OPS-003** — Runtime logs shall be structured and sanitized.
 
 **FR-OPS-004** — The platform shall provide documented backup/restore procedures for PostgreSQL, artifact storage, and secrets/master-key handling; Redis and Milvus shall be treated according to their authoritative/rebuildable roles.
+
+**FR-OPS-005** — Startup and shutdown shall acquire resources transactionally and attempt every
+dispatcher stop/client close within configured bounds, cancelling overdue background tasks.
+
+**FR-OPS-006** — Production logs shall retain allowlisted lifecycle correlation fields while
+omitting raw messages, exception text, query secrets, and arbitrary context.
 
 ---
 

@@ -58,10 +58,15 @@ class ProjectService:
         self._settings = settings
         self._cleanup = cleanup
 
-    async def list(self) -> list[ProjectRecord]:
+    async def list(self, *, page: int, page_size: int) -> tuple[list[ProjectRecord], int]:
         async with self._database.session_scope() as session:
-            projects = await self._repository.list(session)
-            return [await self._with_runtime_state(session, project) for project in projects]
+            projects, total = await self._repository.list_page(
+                session, page=page, page_size=page_size
+            )
+            return (
+                [await self._with_runtime_state(session, project) for project in projects],
+                total,
+            )
 
     async def get(self, project_id: UUID) -> ProjectRecord:
         async with self._database.session_scope() as session:

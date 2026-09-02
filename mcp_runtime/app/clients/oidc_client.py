@@ -40,7 +40,11 @@ class OidcJwksClient:
     ) -> None:
         if trust_env:
             raise ValueError("Runtime HTTP clients cannot inherit environment proxies")
-        self._issuer_url = issuer_url.rstrip("/")
+        # The issuer is an identifier, not a display URL.  A trailing slash is
+        # significant for discovery metadata and JWT ``iss`` validation, so
+        # preserve the exact configured value and normalize only the derived
+        # well-known endpoint below.
+        self._issuer_url = issuer_url
         self._configured_jwks_url = configured_jwks_url
         self._policy = policy
         effective_transport = transport or PolicyAsyncHttpTransport(

@@ -1,4 +1,5 @@
 import base64
+import json
 from urllib.parse import parse_qs
 
 import httpx
@@ -6,7 +7,7 @@ import pytest
 from mcp_contracts import AuthProfile, ServerDefinition, UpstreamCredential
 
 from app.clients.oauth_client import OAuthTokenClient
-from app.executor.errors import DestinationPolicyError
+from app.executor.errors import DestinationPolicyError, UpstreamAuthenticationError
 from app.security.url_policy import UpstreamUrlPolicy
 
 
@@ -86,3 +87,94 @@ async def test_oauth_token_endpoint_requires_https_outside_development() -> None
             await client.fetch_client_credentials(profile, credential)
     finally:
         await client.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "expires_in",
+    [True, False, float("nan"), float("inf"), float("-inf"), -1, 0, "300"],
+)
+async def test_oauth_rejects_nonfinite_boolean_and_malformed_expiry(
+    expires_in: object,
+) -> None:
+    async def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            content=json.dumps(
+                {
+                    "access_token": "issued-token",
+                    "token_type": "Bearer",
+                    "expires_in": expires_in,
+                },
+                allow_nan=True,
+            ).encode("utf-8"),
+            headers={"content-type": "application/json"},
+        )
+
+    profile = AuthProfile.model_validate(
+        {
+            "id": "oauth",
+            "type": "oauth2_client_credentials",
+            "credential_ref": "oauth-ref",
+            "token_url": "https://8.8.8.8/token",
+        }
+    )
+    credential = UpstreamCredential.model_validate(
+        {
+            "type": "oauth2_client_credentials",
+            "client_id": "client",
+            "client_secret": "secret",
+        }
+    )
+    policy = UpstreamUrlPolicy(
+        [ServerDefinition.model_validate({"id": "oauth", "url": "https://8.8.8.8"})]
+    )
+    client = OAuthTokenClient(policy, transport=httpx.MockTransport(handler))
+    try:
+        with pytest.raises(UpstreamAuthenticationError):
+            await client.fetch_client_credentials(profile, credential)
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("expires_in", "expected"), [(0.5, 0.5), (120, 120.0)])
+async def test_oauth_accepts_finite_positive_numeric_expiry(
+    expires_in: object,
+    expected: float,
+) -> None:
+    async def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "access_token": "issued-token",
+                "token_type": "Bearer",
+                "expires_in": expires_in,
+            },
+            headers={"content-type": "application/json"},
+        )
+
+    profile = AuthProfile.model_validate(
+        {
+            "id": "oauth",
+            "type": "oauth2_client_credentials",
+            "credential_ref": "oauth-ref",
+            "token_url": "https://8.8.8.8/token",
+        }
+    )
+    credential = UpstreamCredential.model_validate(
+        {
+            "type": "oauth2_client_credentials",
+            "client_id": "client",
+            "client_secret": "secret",
+        }
+    )
+    policy = UpstreamUrlPolicy(
+        [ServerDefinition.model_validate({"id": "oauth", "url": "https://8.8.8.8"})]
+    )
+    client = OAuthTokenClient(policy, transport=httpx.MockTransport(handler))
+    try:
+        token = await client.fetch_client_credentials(profile, credential)
+    finally:
+        await client.close()
+    assert token.expires_in_seconds == expected

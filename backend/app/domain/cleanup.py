@@ -48,6 +48,7 @@ class CleanupTargetRecord(BaseModel):
     attempt_count: int = Field(ge=0)
     next_attempt_at: datetime
     lease_expires_at: datetime | None
+    execution_token: UUID | None
     last_error_code: str | None
     last_error_summary: str | None
 

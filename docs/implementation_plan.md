@@ -1,6 +1,6 @@
 # MCPlica Implementation Plan
 
-**Status:** Authoritative AI-executable implementation roadmap; second-round repository verification complete
+**Status:** Authoritative AI-executable implementation roadmap; `issues_001.md` and `issues_002.md` repository verification complete
 
 **Date:** 2026-08-27
 
@@ -11,6 +11,12 @@ The current implementation disposition is evidence-backed in
 required VERIFIED COMPLETE/FIXED IN SECOND ROUND/BLOCKED vocabulary and is the current
 verification record: 22 were verified without another code change, 26 were fixed in the second
 round, and none is blocked. This plan remains the implementation-sequence authority.
+
+The 2026-09-02 hardening pass rechecked all 55 `issues_002.md` findings: 12 existing
+corrections were retained and 43 applicable gaps were fixed, with zero repository-scope findings
+open. Migrations `0021` through `0025`, per-finding evidence, and the final validation record are in
+`evidence/issues-002-closure.md`. This closure does not imply an external production rollout or
+complete any separate feature proposal.
 
 ## 1. Document ownership
 

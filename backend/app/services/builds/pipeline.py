@@ -30,6 +30,7 @@ from app.observability import observe_build_stage, observe_generated_operations
 from app.prompts import OPERATION_ENRICHMENT_PROMPT
 from app.providers.storage import ArtifactStorage
 from app.repositories.audit import AuditRepository
+from app.repositories.build_execution import require_build_execution_owner
 from app.repositories.builds import BuildRepository
 from app.repositories.cleanup import CleanupRepository
 from app.repositories.indexing import IndexGenerationRepository
@@ -39,6 +40,7 @@ from app.repositories.validation import ValidationRepository
 from app.services.analysis import AnalysisService
 from app.services.analysis.reuse import select_reusable_enrichment
 from app.services.artifacts import ArtifactService
+from app.services.builds.cancellation import BuildCancellationService
 from app.services.builds.credential_mapping import map_credentials
 from app.services.canonicalization import CanonicalizationService
 from app.services.indexing import IndexingService
@@ -83,8 +85,9 @@ class BuildPipeline:
         self._validation = validation
         self._artifacts = artifacts
         self._cleanup = cleanup
+        self._cancellations = BuildCancellationService(builds, cleanup, audit)
 
-    async def run(self, build_id: UUID) -> BuildRecord:
+    async def run(self, build_id: UUID, admission_token: UUID) -> BuildRecord:
         while True:
             build = await self._get(build_id)
             if build.status in TERMINAL_STATUSES:
@@ -92,38 +95,74 @@ class BuildPipeline:
             started = time.perf_counter()
             stage_outcome = "failed"
             try:
-                await self._cancellation_checkpoint(build.id)
+                await self._execution_checkpoint(build.id, admission_token)
                 if build.status is BuildStatus.QUEUED:
-                    await self._transition(build_id, BuildStatus.QUEUED, BuildStatus.INGESTING)
+                    await self._transition(
+                        build_id,
+                        BuildStatus.QUEUED,
+                        BuildStatus.INGESTING,
+                        admission_token,
+                    )
                 elif build.status is BuildStatus.INGESTING:
-                    await self._verify_bound_sources(build)
-                    await self._transition(build_id, BuildStatus.INGESTING, BuildStatus.PARSING)
+                    await self._verify_bound_sources(build, admission_token)
+                    await self._transition(
+                        build_id,
+                        BuildStatus.INGESTING,
+                        BuildStatus.PARSING,
+                        admission_token,
+                    )
                 elif build.status is BuildStatus.PARSING:
-                    await self._canonicalize(build)
-                    await self._transition(build_id, BuildStatus.PARSING, BuildStatus.INDEXING)
+                    await self._canonicalize(build, admission_token)
+                    await self._transition(
+                        build_id,
+                        BuildStatus.PARSING,
+                        BuildStatus.INDEXING,
+                        admission_token,
+                    )
                 elif build.status is BuildStatus.INDEXING:
-                    await self._index(build)
-                    await self._transition(build_id, BuildStatus.INDEXING, BuildStatus.ANALYZING)
+                    await self._index(build, admission_token)
+                    await self._transition(
+                        build_id,
+                        BuildStatus.INDEXING,
+                        BuildStatus.ANALYZING,
+                        admission_token,
+                    )
                 elif build.status is BuildStatus.ANALYZING:
-                    await self._analyze(build)
-                    await self._transition(build_id, BuildStatus.ANALYZING, BuildStatus.COMPILING)
+                    await self._analyze(build, admission_token)
+                    await self._transition(
+                        build_id,
+                        BuildStatus.ANALYZING,
+                        BuildStatus.COMPILING,
+                        admission_token,
+                    )
                 elif build.status is BuildStatus.COMPILING:
-                    await self._compile(build)
-                    await self._transition(build_id, BuildStatus.COMPILING, BuildStatus.VALIDATING)
+                    await self._compile(build, admission_token)
+                    await self._transition(
+                        build_id,
+                        BuildStatus.COMPILING,
+                        BuildStatus.VALIDATING,
+                        admission_token,
+                    )
                 elif build.status is BuildStatus.VALIDATING:
-                    passed = await self._validate(build)
+                    passed = await self._validate(build, admission_token)
                     if not passed:
                         result = await self.fail(
                             build.id,
+                            admission_token=admission_token,
                             code="VALIDATION_FAILED",
                             summary="Build validation contains blocking findings",
                         )
                         stage_outcome = "succeeded"
                         return result
-                    await self._transition(build_id, BuildStatus.VALIDATING, BuildStatus.PACKAGING)
+                    await self._transition(
+                        build_id,
+                        BuildStatus.VALIDATING,
+                        BuildStatus.PACKAGING,
+                        admission_token,
+                    )
                 elif build.status is BuildStatus.PACKAGING:
-                    await self._package(build)
-                    result = await self._ready(build_id)
+                    await self._package(build, admission_token)
+                    result = await self._ready(build_id, admission_token)
                     stage_outcome = "succeeded"
                     return result
                 else:
@@ -131,7 +170,7 @@ class BuildPipeline:
                 stage_outcome = "succeeded"
             except BuildCancellationRequested:
                 stage_outcome = "cancelled"
-                return await self._acknowledge_cancellation(build.id)
+                return await self._acknowledge_cancellation(build.id, admission_token)
             except InvalidStateError:
                 current = await self._get(build_id)
                 if current.status is BuildStatus.CANCELLED:
@@ -139,7 +178,7 @@ class BuildPipeline:
                     return current
                 if current.cancellation_requested_at is not None:
                     stage_outcome = "cancelled"
-                    return await self._acknowledge_cancellation(build.id)
+                    return await self._acknowledge_cancellation(build.id, admission_token)
                 raise
             finally:
                 observe_build_stage(
@@ -148,10 +187,18 @@ class BuildPipeline:
                     time.perf_counter() - started,
                 )
 
+    async def acknowledge_cancellation(
+        self,
+        build_id: UUID,
+        admission_token: UUID,
+    ) -> BuildRecord:
+        return await self._acknowledge_cancellation(build_id, admission_token)
+
     async def fail(
         self,
         build_id: UUID,
         *,
+        admission_token: UUID,
         code: str,
         summary: str,
     ) -> BuildRecord:
@@ -165,6 +212,7 @@ class BuildPipeline:
                     build_id,
                     error_code=code,
                     error_summary=summary,
+                    admission_token=admission_token,
                 )
                 await self._audit.append(
                     session,
@@ -179,11 +227,23 @@ class BuildPipeline:
             assert failed is not None
             return failed
 
-    async def fail_from_exception(self, build_id: UUID, exc: Exception) -> BuildRecord:
+    async def fail_from_exception(
+        self,
+        build_id: UUID,
+        exc: Exception,
+        *,
+        admission_token: UUID,
+    ) -> BuildRecord:
         if isinstance(exc, MCPlicaError):
-            return await self.fail(build_id, code=exc.code, summary=str(exc))
+            return await self.fail(
+                build_id,
+                admission_token=admission_token,
+                code=exc.code,
+                summary=str(exc),
+            )
         return await self.fail(
             build_id,
+            admission_token=admission_token,
             code="UNEXPECTED_BUILD_ERROR",
             summary="Build failed due to an unexpected internal error",
         )
@@ -195,9 +255,16 @@ class BuildPipeline:
         *,
         attempt_number: int,
         retry_scheduled: bool,
+        admission_token: UUID,
     ) -> None:
         error_code = exc.code if isinstance(exc, MCPlicaError) else "UNEXPECTED_BUILD_ERROR"
         async with self._database.session_scope() as session:
+            await require_build_execution_owner(
+                session,
+                build_id=build_id,
+                admission_token=admission_token,
+                allow_cancellation=True,
+            )
             build = await self._builds.get(session, build_id)
             if build is None:
                 raise NotFoundError("Build was not found")
@@ -217,26 +284,26 @@ class BuildPipeline:
                 },
             )
 
-    async def _verify_bound_sources(self, build: BuildRecord) -> None:
-        source_version_ids = await self._source_version_ids(build.id)
-        async with self._database.session_scope() as session:
-            bindings = await self._sources.list_bound_versions(
-                session,
-                build.project_id,
-                source_version_ids,
+    async def _verify_bound_sources(
+        self,
+        build: BuildRecord,
+        admission_token: UUID,
+    ) -> None:
+        bindings = await self._source_bindings(build.id)
+        if any(not binding.binding_metadata_trustworthy for binding in bindings):
+            raise InvalidStateError(
+                "Historical Build source identity is not trustworthy; create a new Build"
             )
-        if len(bindings) != len(source_version_ids):
-            raise InvalidStateError("One or more bound source versions are unavailable")
         semaphore = asyncio.Semaphore(8)
 
         async def verify(binding: BoundSourceVersionRecord) -> None:
-            await self._cancellation_checkpoint(build.id)
+            await self._execution_checkpoint(build.id, admission_token)
             async with semaphore:
                 value = await self._storage.get(
                     binding.version.storage_key,
                     max_bytes=max(1, binding.version.byte_size),
                 )
-            await self._cancellation_checkpoint(build.id)
+            await self._execution_checkpoint(build.id, admission_token)
             if len(value) != binding.version.byte_size:
                 raise InvalidStateError("Bound source byte size no longer matches metadata")
             if hashlib.sha256(value).hexdigest() != binding.version.content_sha256:
@@ -244,15 +311,15 @@ class BuildPipeline:
 
         await asyncio.gather(*(verify(binding) for binding in bindings))
 
-    async def _canonicalize(self, build: BuildRecord) -> None:
+    async def _canonicalize(self, build: BuildRecord, admission_token: UUID) -> None:
         config = await self._config(build.id)
         if build.canonical_snapshot_id is None:
-            source_version_ids = await self._source_version_ids(build.id)
+            source_bindings = await self._source_bindings(build.id)
             try:
-                await self._cancellation_checkpoint(build.id)
+                await self._execution_checkpoint(build.id, admission_token)
                 snapshot = await self._canonicalization.create_snapshot(
                     build.project_id,
-                    source_version_ids,
+                    source_bindings,
                     max_source_bytes=config.source_max_bytes,
                     routing=ProjectRoutingConfiguration(
                         default_base_url=config.default_base_url,
@@ -260,12 +327,22 @@ class BuildPipeline:
                         server_mappings=config.server_mappings,
                     ),
                 )
-                await self._cancellation_checkpoint(build.id)
+                await self._execution_checkpoint(build.id, admission_token)
             except SourceParseError as exc:
-                await self._record_source_finding(build, exc, stage="parsing")
+                await self._record_source_finding(
+                    build,
+                    exc,
+                    stage="parsing",
+                    admission_token=admission_token,
+                )
                 raise
             async with self._database.session_scope() as session:
-                await self._builds.set_canonical_snapshot(session, build.id, snapshot.id)
+                await self._builds.set_canonical_snapshot(
+                    session,
+                    build.id,
+                    snapshot.id,
+                    admission_token,
+                )
         else:
             snapshot = await self._canonicalization.get_snapshot(build.canonical_snapshot_id)
         if len(snapshot.canonical.operations) > config.max_operations:
@@ -281,6 +358,7 @@ class BuildPipeline:
         exc: SourceParseError,
         *,
         stage: str,
+        admission_token: UUID,
     ) -> None:
         raw_source_version_id = exc.details.get("source_version_id")
         try:
@@ -340,9 +418,10 @@ class BuildPipeline:
                 line=positive_position("line"),
                 column=positive_position("column"),
                 details=typed_safe_details,
+                admission_token=admission_token,
             )
 
-    async def _index(self, build: BuildRecord) -> None:
+    async def _index(self, build: BuildRecord, admission_token: UUID) -> None:
         config = await self._config(build.id)
         if build.canonical_snapshot_id is None:
             raise InvalidStateError("Build has no canonical snapshot")
@@ -350,11 +429,12 @@ class BuildPipeline:
         generation = await self._indexing.index(
             project_id=build.project_id,
             build_id=build.id,
-            source_version_ids=await self._source_version_ids(build.id),
+            source_bindings=await self._source_bindings(build.id),
             canonical=snapshot.canonical,
             embedding_model=build.embedding_model,
             config=config,
-            cancellation_check=lambda: self._cancellation_checkpoint(build.id),
+            admission_token=admission_token,
+            cancellation_check=lambda: self._execution_checkpoint(build.id, admission_token),
         )
         async with self._database.session_scope() as session:
             await self._builds.set_embedding_metadata(
@@ -362,9 +442,10 @@ class BuildPipeline:
                 build.id,
                 model=generation.embedding_model,
                 dimensions=generation.dimensions or 0,
+                admission_token=admission_token,
             )
 
-    async def _analyze(self, build: BuildRecord) -> None:
+    async def _analyze(self, build: BuildRecord, admission_token: UUID) -> None:
         if build.enrichment_sha256 is not None:
             enrichment = await self._enrichment(build.id)
             if canonical_sha256(enrichment) != build.enrichment_sha256:
@@ -390,7 +471,8 @@ class BuildPipeline:
                 generation,
                 config,
             ),
-            cancellation_check=lambda: self._cancellation_checkpoint(build.id),
+            admission_token=admission_token,
+            cancellation_check=lambda: self._execution_checkpoint(build.id, admission_token),
         )
         digest = canonical_sha256(enrichment)
         async with self._database.session_scope() as session:
@@ -399,9 +481,10 @@ class BuildPipeline:
                 build.id,
                 enrichment=enrichment.model_dump(mode="json"),
                 enrichment_sha256=digest,
+                admission_token=admission_token,
             )
 
-    async def _compile(self, build: BuildRecord) -> None:
+    async def _compile(self, build: BuildRecord, admission_token: UUID) -> None:
         config = await self._config(build.id)
         if build.manifest_storage_key and build.manifest_sha256:
             value = await self._artifacts.read_manifest(
@@ -425,7 +508,7 @@ class BuildPipeline:
             project_slug=project.slug,
             max_bytes=config.artifact_max_bytes,
         )
-        await self._cancellation_checkpoint(build.id)
+        await self._execution_checkpoint(build.id, admission_token)
         manifest = compile_manifest(
             canonical,
             project_id=str(project.id),
@@ -467,12 +550,13 @@ class BuildPipeline:
                     build.id,
                     manifest_sha256=stored.sha256,
                     manifest_storage_key=stored.storage_key,
+                    admission_token=admission_token,
                 )
         except InvalidStateError:
             await self._schedule_orphan_object(build, stored.storage_key, "manifest")
             raise
 
-    async def _validate(self, build: BuildRecord) -> bool:
+    async def _validate(self, build: BuildRecord, admission_token: UUID) -> bool:
         config = await self._config(build.id)
         async with self._database.session_scope() as session:
             existing = await self._reports.get_report(session, build.id)
@@ -495,11 +579,12 @@ class BuildPipeline:
             canonical_sha256=snapshot.canonical_sha256,
             manifest=manifest,
             manifest_bytes=manifest_bytes,
-            cancellation_check=lambda: self._cancellation_checkpoint(build.id),
+            admission_token=admission_token,
+            cancellation_check=lambda: self._execution_checkpoint(build.id, admission_token),
         )
         return report.overall_status is ValidationStatus.PASS
 
-    async def _package(self, build: BuildRecord) -> None:
+    async def _package(self, build: BuildRecord, admission_token: UUID) -> None:
         config = await self._config(build.id)
         if build.artifact_storage_key and build.artifact_sha256:
             await self._artifacts.read_export(build, max_bytes=config.artifact_max_bytes)
@@ -530,14 +615,19 @@ class BuildPipeline:
                     build.id,
                     artifact_sha256=stored.sha256,
                     artifact_storage_key=stored.storage_key,
+                    admission_token=admission_token,
                 )
         except InvalidStateError:
             await self._schedule_orphan_object(build, stored.storage_key, "export")
             raise
 
-    async def _ready(self, build_id: UUID) -> BuildRecord:
+    async def _ready(self, build_id: UUID, admission_token: UUID) -> BuildRecord:
         async with self._database.session_scope() as session:
-            build = await self._builds.mark_ready(session, build_id)
+            build = await self._builds.mark_ready(
+                session,
+                build_id,
+                admission_token=admission_token,
+            )
             await self._audit.append(
                 session,
                 actor_user_id=build.requested_by,
@@ -560,44 +650,41 @@ class BuildPipeline:
                 raise NotFoundError("Build was not found")
             return build
 
-    async def _cancellation_checkpoint(self, build_id: UUID) -> None:
+    async def _execution_checkpoint(
+        self,
+        build_id: UUID,
+        admission_token: UUID,
+    ) -> None:
         async with self._database.session_scope() as session:
-            if await self._builds.cancellation_requested(session, build_id):
+            build = await require_build_execution_owner(
+                session,
+                build_id=build_id,
+                admission_token=admission_token,
+                allow_cancellation=True,
+            )
+            if build.cancellation_requested_at is not None:
                 raise BuildCancellationRequested
 
-    async def _acknowledge_cancellation(self, build_id: UUID) -> BuildRecord:
+    async def _acknowledge_cancellation(
+        self,
+        build_id: UUID,
+        admission_token: UUID,
+    ) -> BuildRecord:
         async with self._database.session_scope() as session:
             build = await self._builds.get(session, build_id)
             if build is None:
                 raise NotFoundError("Build was not found")
             if build.status is BuildStatus.CANCELLED:
                 return build
-            cleanup_job = None
-            if self._cleanup is not None:
-                cleanup_job = await self._cleanup.create_job(
-                    session,
-                    kind=CleanupJobKind.ORPHAN_GUARD,
-                    idempotency_key=f"build-cancellation:{build.id}",
-                    project_id=build.project_id,
-                    requested_by=build.cancellation_requested_by,
-                    request_id=None,
-                )
-                await self._cleanup.capture_build_target(session, cleanup_job.id, build.id)
-                await self._cleanup.finalize_empty_job(session, cleanup_job.id)
-            cancelled = await self._builds.acknowledge_cancellation(session, build.id)
-            await self._audit.append(
+            result = await self._cancellations.acknowledge(
                 session,
+                build_id=build_id,
+                admission_token=admission_token,
                 actor_user_id=build.cancellation_requested_by,
-                event_type="build.cancelled",
-                entity_type="build",
-                entity_id=build.id,
-                project_id=build.project_id,
-                metadata={
-                    "acknowledgement": "worker",
-                    "cleanup_job_id": str(cleanup_job.id) if cleanup_job else None,
-                },
+                request_id=None,
+                acknowledgement="worker",
             )
-            return cancelled
+            return result.build
 
     async def _schedule_orphan_object(
         self,
@@ -627,6 +714,7 @@ class BuildPipeline:
         build_id: UUID,
         expected: BuildStatus,
         target: BuildStatus,
+        admission_token: UUID,
     ) -> BuildRecord:
         async with self._database.session_scope() as session:
             return await self._builds.transition(
@@ -634,11 +722,19 @@ class BuildPipeline:
                 build_id,
                 expected=expected,
                 target=target,
+                admission_token=admission_token,
             )
 
     async def _source_version_ids(self, build_id: UUID) -> list[UUID]:
         async with self._database.session_scope() as session:
             values = await self._builds.source_version_ids(session, build_id)
+        if not values:
+            raise InvalidStateError("Build has no bound source versions")
+        return values
+
+    async def _source_bindings(self, build_id: UUID) -> list[BoundSourceVersionRecord]:
+        async with self._database.session_scope() as session:
+            values = await self._builds.source_bindings(session, build_id)
         if not values:
             raise InvalidStateError("Build has no bound source versions")
         return values

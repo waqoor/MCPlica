@@ -6,6 +6,7 @@ from mcp_contracts.json_types import JsonObject
 from pydantic import TypeAdapter
 from sqlalchemy import CursorResult, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import defer
 
 from app.core.exceptions import ConflictError, InvalidStateError
 from app.domain.builds import (
@@ -17,9 +18,12 @@ from app.domain.builds import (
     BuildTrigger,
     next_status,
 )
+from app.domain.sources import BoundSourceVersionRecord, ProjectSourceRecord, SourceVersionRecord
 from app.models.build import Build, BuildAIRun, BuildSourceVersion
 from app.models.indexing import DocumentIndexGeneration
 from app.models.project import Project
+from app.models.source import SourceVersion
+from app.repositories.build_execution import require_build_execution_owner
 from app.repositories.cleanup import lock_object_reference
 
 _JSON_OBJECT: TypeAdapter[JsonObject] = TypeAdapter(JsonObject)
@@ -79,7 +83,7 @@ def _to_domain(model: Build) -> BuildRecord:
     )
 
 
-def _ai_to_domain(model: BuildAIRun) -> BuildAIRunRecord:
+def _ai_to_domain(model: BuildAIRun, *, include_response: bool = True) -> BuildAIRunRecord:
     return BuildAIRunRecord(
         id=model.id,
         build_id=model.build_id,
@@ -96,11 +100,15 @@ def _ai_to_domain(model: BuildAIRun) -> BuildAIRunRecord:
         response_sha256=model.response_sha256,
         response=(
             _JSON_OBJECT.validate_python(model.response_json)
-            if model.response_json is not None
+            if include_response and model.response_json is not None
             else None
         ),
-        usage=model.usage_json,
-        cost=model.cost_json,
+        usage=(
+            _JSON_OBJECT.validate_python(model.usage_json) if model.usage_json is not None else None
+        ),
+        cost=(
+            _JSON_OBJECT.validate_python(model.cost_json) if model.cost_json is not None else None
+        ),
         latency_ms=model.latency_ms,
         status=model.status,
         error_code=model.error_code,
@@ -239,7 +247,7 @@ class BuildRepository:
         build_id: UUID,
         project_id: UUID,
         trigger: BuildTrigger,
-        source_version_ids: list[UUID],
+        source_bindings: list[BoundSourceVersionRecord],
         requested_by: UUID,
         compiler_version: str,
         runtime_compatibility: str,
@@ -288,8 +296,20 @@ class BuildRepository:
         )
         session.add(model)
         session.add_all(
-            BuildSourceVersion(build_id=build_id, source_version_id=source_id)
-            for source_id in sorted(source_version_ids, key=str)
+            BuildSourceVersion(
+                build_id=build_id,
+                source_version_id=binding.version.id,
+                source_id=binding.source.id,
+                source_kind=binding.source.kind,
+                source_name=binding.source.name,
+                source_origin_type=binding.source.origin_type,
+                source_url=binding.source.source_url,
+                source_is_primary=binding.source.is_primary,
+                source_created_at=binding.source.created_at,
+                dependency_aliases=binding.effective_dependency_aliases,
+                binding_metadata_trustworthy=True,
+            )
+            for binding in sorted(source_bindings, key=lambda item: str(item.version.id))
         )
         await session.flush()
         await session.refresh(model)
@@ -328,6 +348,51 @@ class BuildRepository:
         )
         return list(values)
 
+    async def source_bindings(
+        self,
+        session: AsyncSession,
+        build_id: UUID,
+    ) -> list[BoundSourceVersionRecord]:
+        project_id = await session.scalar(select(Build.project_id).where(Build.id == build_id))
+        if project_id is None:
+            raise InvalidStateError("Build is unavailable")
+        rows = await session.execute(
+            select(BuildSourceVersion, SourceVersion)
+            .join(SourceVersion, SourceVersion.id == BuildSourceVersion.source_version_id)
+            .where(BuildSourceVersion.build_id == build_id)
+            .order_by(BuildSourceVersion.source_version_id)
+        )
+        return [
+            BoundSourceVersionRecord(
+                source=ProjectSourceRecord(
+                    id=binding.source_id,
+                    project_id=project_id,
+                    kind=binding.source_kind,
+                    name=binding.source_name,
+                    origin_type=binding.source_origin_type,
+                    source_url=binding.source_url,
+                    is_primary=binding.source_is_primary,
+                    created_at=binding.source_created_at,
+                ),
+                version=SourceVersionRecord(
+                    id=version.id,
+                    source_id=version.source_id,
+                    content_sha256=version.content_sha256,
+                    media_type=version.media_type,
+                    storage_key=version.storage_key,
+                    byte_size=version.byte_size,
+                    detected_format=version.detected_format,
+                    source_etag=version.source_etag,
+                    source_last_modified=version.source_last_modified,
+                    created_by=version.created_by,
+                    created_at=version.created_at,
+                ),
+                dependency_aliases=list(binding.dependency_aliases),
+                binding_metadata_trustworthy=binding.binding_metadata_trustworthy,
+            )
+            for binding, version in rows.tuples()
+        ]
+
     async def transition(
         self,
         session: AsyncSession,
@@ -335,7 +400,13 @@ class BuildRepository:
         *,
         expected: BuildStatus,
         target: BuildStatus,
+        admission_token: UUID,
     ) -> BuildRecord:
+        await require_build_execution_owner(
+            session,
+            build_id=build_id,
+            admission_token=admission_token,
+        )
         if next_status(expected) is not target:
             raise InvalidStateError(
                 f"Build transition {expected.value} -> {target.value} is not monotonic"
@@ -353,6 +424,7 @@ class BuildRepository:
                 update(Build)
                 .where(
                     Build.id == build_id,
+                    Build.admission_token == admission_token,
                     Build.status == expected,
                     Build.cancellation_requested_at.is_(None),
                 )
@@ -372,11 +444,13 @@ class BuildRepository:
         session: AsyncSession,
         build_id: UUID,
         snapshot_id: UUID,
+        admission_token: UUID,
     ) -> None:
         await self._stage_update(
             session,
             build_id,
             status=BuildStatus.PARSING,
+            admission_token=admission_token,
             canonical_snapshot_id=snapshot_id,
         )
 
@@ -387,11 +461,13 @@ class BuildRepository:
         *,
         model: str | None,
         dimensions: int,
+        admission_token: UUID,
     ) -> None:
         await self._stage_update(
             session,
             build_id,
             status=BuildStatus.INDEXING,
+            admission_token=admission_token,
             embedding_model=model,
             embedding_dimensions=dimensions,
         )
@@ -403,11 +479,13 @@ class BuildRepository:
         *,
         enrichment: dict[str, object],
         enrichment_sha256: str,
+        admission_token: UUID,
     ) -> None:
         await self._stage_update(
             session,
             build_id,
             status=BuildStatus.ANALYZING,
+            admission_token=admission_token,
             enrichment_json=enrichment,
             enrichment_sha256=enrichment_sha256,
         )
@@ -435,12 +513,19 @@ class BuildRepository:
         *,
         manifest_sha256: str,
         manifest_storage_key: str,
+        admission_token: UUID,
     ) -> None:
+        await require_build_execution_owner(
+            session,
+            build_id=build_id,
+            admission_token=admission_token,
+        )
         await lock_object_reference(session, manifest_storage_key)
         await self._stage_update(
             session,
             build_id,
             status=BuildStatus.COMPILING,
+            admission_token=admission_token,
             manifest_sha256=manifest_sha256,
             manifest_storage_key=manifest_storage_key,
         )
@@ -452,12 +537,19 @@ class BuildRepository:
         *,
         artifact_sha256: str,
         artifact_storage_key: str,
+        admission_token: UUID,
     ) -> None:
+        await require_build_execution_owner(
+            session,
+            build_id=build_id,
+            admission_token=admission_token,
+        )
         await lock_object_reference(session, artifact_storage_key)
         await self._stage_update(
             session,
             build_id,
             status=BuildStatus.PACKAGING,
+            admission_token=admission_token,
             artifact_sha256=artifact_sha256,
             artifact_storage_key=artifact_storage_key,
         )
@@ -469,12 +561,19 @@ class BuildRepository:
         *,
         error_code: str,
         error_summary: str,
+        admission_token: UUID,
     ) -> None:
+        await require_build_execution_owner(
+            session,
+            build_id=build_id,
+            admission_token=admission_token,
+        )
         now = datetime.now(UTC)
         await session.execute(
             update(Build)
             .where(
                 Build.id == build_id,
+                Build.admission_token == admission_token,
                 Build.status.not_in(TERMINAL_STATUSES),
                 Build.cancellation_requested_at.is_(None),
             )
@@ -487,12 +586,19 @@ class BuildRepository:
             )
         )
 
-    async def mark_ready(self, session: AsyncSession, build_id: UUID) -> BuildRecord:
+    async def mark_ready(
+        self,
+        session: AsyncSession,
+        build_id: UUID,
+        *,
+        admission_token: UUID,
+    ) -> BuildRecord:
         return await self.transition(
             session,
             build_id,
             expected=BuildStatus.PACKAGING,
             target=BuildStatus.READY,
+            admission_token=admission_token,
         )
 
     async def request_cancellation(
@@ -520,7 +626,19 @@ class BuildRepository:
         )
         return requested_at is not None
 
-    async def acknowledge_cancellation(self, session: AsyncSession, build_id: UUID) -> BuildRecord:
+    async def acknowledge_cancellation(
+        self,
+        session: AsyncSession,
+        build_id: UUID,
+        *,
+        admission_token: UUID,
+    ) -> BuildRecord:
+        await require_build_execution_owner(
+            session,
+            build_id=build_id,
+            admission_token=admission_token,
+            allow_cancellation=True,
+        )
         now = datetime.now(UTC)
         result = cast(
             CursorResult[Any],
@@ -528,6 +646,7 @@ class BuildRepository:
                 update(Build)
                 .where(
                     Build.id == build_id,
+                    Build.admission_token == admission_token,
                     Build.status.not_in(TERMINAL_STATUSES),
                     Build.cancellation_requested_at.is_not(None),
                 )
@@ -561,14 +680,21 @@ class BuildRepository:
         build_id: UUID,
         *,
         status: BuildStatus,
+        admission_token: UUID,
         **values: object,
     ) -> None:
+        await require_build_execution_owner(
+            session,
+            build_id=build_id,
+            admission_token=admission_token,
+        )
         result = cast(
             CursorResult[Any],
             await session.execute(
                 update(Build)
                 .where(
                     Build.id == build_id,
+                    Build.admission_token == admission_token,
                     Build.status == status,
                     Build.cancellation_requested_at.is_(None),
                 )
@@ -595,17 +721,62 @@ class BuildAIRunRepository:
         )
         return _ai_to_domain(model) if model else None
 
-    async def list_for_build(
+    async def list_page_for_build(
         self,
         session: AsyncSession,
         build_id: UUID,
-    ) -> list[BuildAIRunRecord]:
+        *,
+        page: int,
+        page_size: int,
+    ) -> tuple[list[BuildAIRunRecord], int]:
+        predicate = BuildAIRun.build_id == build_id
+        total = int(
+            await session.scalar(select(func.count()).select_from(BuildAIRun).where(predicate)) or 0
+        )
         result = await session.scalars(
             select(BuildAIRun)
-            .where(BuildAIRun.build_id == build_id)
+            .options(defer(BuildAIRun.response_json, raiseload=True))
+            .where(predicate)
             .order_by(BuildAIRun.created_at.asc(), BuildAIRun.id.asc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
         )
-        return [_ai_to_domain(model) for model in result]
+        return [_ai_to_domain(model, include_response=False) for model in result], total
+
+    async def invalidate_succeeded(
+        self,
+        session: AsyncSession,
+        *,
+        build_id: UUID,
+        run_key: str,
+        error_code: str,
+        admission_token: UUID,
+    ) -> BuildAIRunRecord | None:
+        """Demote historical output that fails current semantic acceptance checks."""
+
+        await require_build_execution_owner(
+            session,
+            build_id=build_id,
+            admission_token=admission_token,
+        )
+        model = await session.scalar(
+            select(BuildAIRun)
+            .where(
+                BuildAIRun.build_id == build_id,
+                BuildAIRun.run_key == run_key,
+            )
+            .with_for_update()
+        )
+        if model is None:
+            return None
+        if model.status == "succeeded":
+            model.status = "failed"
+            model.response_json = None
+            model.response_sha256 = None
+            model.error_code = error_code[:128]
+            await session.flush()
+            await session.refresh(model)
+        return _ai_to_domain(model)
 
     async def create(
         self,
@@ -623,12 +794,18 @@ class BuildAIRunRepository:
         response_schema_id: str,
         response_sha256: str | None,
         response_json: dict[str, object] | None,
-        usage: dict[str, Any] | None,
-        cost: dict[str, Any] | None,
+        usage: JsonObject | None,
+        cost: JsonObject | None,
         latency_ms: int | None,
         status: str,
         error_code: str | None = None,
+        admission_token: UUID,
     ) -> BuildAIRunRecord:
+        await require_build_execution_owner(
+            session,
+            build_id=build_id,
+            admission_token=admission_token,
+        )
         model_record = await session.scalar(
             select(BuildAIRun).where(
                 BuildAIRun.build_id == build_id,

@@ -17,13 +17,14 @@ from app.clients.mcp import MCPValidationClient
 from app.core.config import Settings
 from app.core.exceptions import InvalidStateError, ProtocolValidationError, ValidationError
 from app.domain.deployments import (
+    DeploymentIntent,
     MCPAccessTokenRecord,
     MCPAuthConfigRecord,
     MCPAuthMode,
 )
 from app.repositories.audit import AuditRepository
 from app.repositories.deployments import DeploymentRepository
-from app.repositories.mcp_access import MCPAccessRepository
+from app.repositories.mcp_access import MCPAccessRepository, MCPTokenVerifierRecord
 from app.repositories.runtime_commands import RuntimeCommandRepository
 from app.services.deployment.service import DeploymentService
 from app.services.mcp_access import MCPAccessService
@@ -187,7 +188,14 @@ class _Access:
         return self.config
 
     async def active_verifiers(self, session: AsyncSession, project_id: UUID) -> list[object]:
-        return []
+        now = datetime.now(UTC)
+        return [
+            MCPTokenVerifierRecord(token.id, self.token_hash, token.expires_at)
+            for token in self.tokens.values()
+            if token.project_id == project_id
+            and token.revoked_at is None
+            and (token.expires_at is None or token.expires_at > now)
+        ]
 
     async def list_tokens(
         self, session: AsyncSession, project_id: UUID
@@ -269,6 +277,17 @@ class _Access:
         self.tokens[token_id] = updated
         return updated
 
+    async def revoke(
+        self, session: AsyncSession, token_id: UUID, revoked_at: datetime
+    ) -> MCPAccessTokenRecord | None:
+        token = self.tokens.get(token_id)
+        if token is None:
+            return None
+        if token.revoked_at is None:
+            token = token.model_copy(update={"expires_at": revoked_at, "revoked_at": revoked_at})
+            self.tokens[token_id] = token
+        return token
+
 
 class _Audit:
     async def append(self, session: AsyncSession, **kwargs: object) -> None:
@@ -278,9 +297,14 @@ class _Audit:
 class _DeploymentService:
     def __init__(self) -> None:
         self.redeploy_requests: list[dict[str, object]] = []
+        self.stop_requests: list[dict[str, object]] = []
 
     async def schedule_redeploy_active(self, *args: object, **kwargs: object) -> None:
         self.redeploy_requests.append(dict(kwargs))
+        return None
+
+    async def schedule_stop_project(self, *args: object, **kwargs: object) -> None:
+        self.stop_requests.append(dict(kwargs))
         return None
 
     def notify_runtime_commands(self) -> None:
@@ -422,6 +446,113 @@ async def test_mcp_access_rotation_enforces_overlap_and_rejects_expired_tokens()
             actor_user_id=actor_id,
             request_id="reject-invalid-overlap",
         )
+
+
+@pytest.mark.asyncio
+async def test_last_token_revocation_stops_and_duplicate_request_is_idempotent() -> None:
+    access = _Access()
+    deployments = _DeploymentService()
+    project_id = UUID(int=1)
+    actor_id = UUID(int=2)
+    access.config = MCPAuthConfigRecord(
+        project_id=project_id,
+        mode=MCPAuthMode.STATIC_BEARER,
+        issuer_url=None,
+        audiences=[],
+        required_scopes=[],
+        metadata={},
+        updated_by=actor_id,
+        updated_at=datetime.now(UTC),
+    )
+    service = MCPAccessService(
+        cast(DatabaseClient, _Database()),
+        cast(MCPAccessRepository, access),
+        cast(DeploymentRepository, _Deployments()),
+        cast(RuntimeCommandRepository, _Commands()),
+        cast(AuditRepository, _Audit()),
+        cast(DeploymentService, deployments),
+        Settings(env="test"),
+    )
+    issued = await service.create_token(
+        project_id=project_id,
+        name="only verifier",
+        expires_at=None,
+        actor_user_id=actor_id,
+        request_id="create-only-token",
+    )
+    deployments.redeploy_requests.clear()
+
+    revoked = await service.revoke_token(
+        project_id=project_id,
+        token_id=issued.token.id,
+        actor_user_id=actor_id,
+        request_id="revoke-only-token",
+    )
+    duplicate = await service.revoke_token(
+        project_id=project_id,
+        token_id=issued.token.id,
+        actor_user_id=actor_id,
+        request_id="revoke-only-token-again",
+    )
+
+    assert revoked.revoked_at is not None
+    assert duplicate.revoked_at == revoked.revoked_at
+    assert deployments.redeploy_requests == []
+    assert len(deployments.stop_requests) == 1
+    assert deployments.stop_requests[0]["subject_id"] == issued.token.id
+
+
+@pytest.mark.asyncio
+async def test_subset_token_revocation_uses_exact_build_security_refresh_intent() -> None:
+    access = _Access()
+    deployments = _DeploymentService()
+    project_id = UUID(int=1)
+    actor_id = UUID(int=2)
+    access.config = MCPAuthConfigRecord(
+        project_id=project_id,
+        mode=MCPAuthMode.STATIC_BEARER,
+        issuer_url=None,
+        audiences=[],
+        required_scopes=[],
+        metadata={},
+        updated_by=actor_id,
+        updated_at=datetime.now(UTC),
+    )
+    service = MCPAccessService(
+        cast(DatabaseClient, _Database()),
+        cast(MCPAccessRepository, access),
+        cast(DeploymentRepository, _Deployments()),
+        cast(RuntimeCommandRepository, _Commands()),
+        cast(AuditRepository, _Audit()),
+        cast(DeploymentService, deployments),
+        Settings(env="test"),
+    )
+    first = await service.create_token(
+        project_id=project_id,
+        name="first",
+        expires_at=None,
+        actor_user_id=actor_id,
+        request_id="first",
+    )
+    await service.create_token(
+        project_id=project_id,
+        name="second",
+        expires_at=None,
+        actor_user_id=actor_id,
+        request_id="second",
+    )
+    deployments.redeploy_requests.clear()
+
+    await service.revoke_token(
+        project_id=project_id,
+        token_id=first.token.id,
+        actor_user_id=actor_id,
+        request_id="revoke-first",
+    )
+
+    assert deployments.stop_requests == []
+    assert len(deployments.redeploy_requests) == 1
+    assert deployments.redeploy_requests[0]["intent"] is DeploymentIntent.SECURITY_REFRESH
 
 
 @pytest.mark.asyncio

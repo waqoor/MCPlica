@@ -45,7 +45,7 @@ class ExecutableConfigurationIdentity:
             )
         bindings = await self._sources.latest_bound_versions(session, project_id)
         return source_configuration_fingerprint(
-            source_version_ids=[binding.version.id for binding in bindings],
+            bindings=bindings,
             default_base_url=project.default_base_url,
             active_server_ref=project.active_server_ref,
             server_mappings=project.server_mappings,

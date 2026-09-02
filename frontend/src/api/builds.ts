@@ -1,4 +1,4 @@
-import { api, download, jsonBody, queryString } from "./client";
+import { api, apiAllPages, download, jsonBody, queryString } from "./client";
 import { endpointResponses } from "./generated/zod";
 import { BUILD_STATUSES } from "./generated/constants";
 import type {
@@ -119,10 +119,10 @@ export const buildApi = {
   downloadManifest: (buildId: string, signal?: AbortSignal) =>
     download(`/api/v1/builds/${buildId}/manifest/download`, signal),
   aiRuns: (buildId: string, signal?: AbortSignal) =>
-    api<BuildAIRun[]>(
+    apiAllPages<BuildAIRun>(
       `/api/v1/builds/${buildId}/ai-runs`,
       endpointResponses["get /api/v1/builds/:build_id/ai-runs"],
-      { signal },
+      signal,
     ),
   operations: (
     buildId: string,

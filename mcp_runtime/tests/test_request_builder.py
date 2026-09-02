@@ -82,6 +82,57 @@ def test_path_query_header_and_auth_mapping_is_deterministic() -> None:
         build_request(tool, {"product_id": "1", "host": "evil"}, _policy(), AuthInjection())
 
 
+def test_embedded_and_multiple_path_parameters_are_substituted_exactly() -> None:
+    tool = MCPTool(
+        name="coordinate_file",
+        title="Coordinate file",
+        description="Read one coordinate file",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "latitude": {"type": "string"},
+                "longitude": {"type": "string"},
+                "format": {"type": "string"},
+            },
+            "required": ["latitude", "longitude", "format"],
+            "additionalProperties": False,
+        },
+        operation_key="op_coordinates",
+        request_mapping=RequestMapping(
+            server_ref="main",
+            method=HttpMethod.GET,
+            path="/coordinates/{lat},{lon}.{format}",
+            parameters=[
+                ParameterMapping(
+                    tool_field="latitude",
+                    source_name="lat",
+                    target=ParameterTarget.PATH,
+                    required=True,
+                ),
+                ParameterMapping(
+                    tool_field="longitude",
+                    source_name="lon",
+                    target=ParameterTarget.PATH,
+                    required=True,
+                ),
+                ParameterMapping(
+                    tool_field="format",
+                    source_name="format",
+                    target=ParameterTarget.PATH,
+                    required=True,
+                ),
+            ],
+        ),
+    )
+    request = build_request(
+        tool,
+        {"latitude": "1/2", "longitude": "3,4", "format": "json"},
+        _policy(),
+        AuthInjection(),
+    )
+    assert request.url == "https://8.8.8.8/api/coordinates/1%2F2,3%2C4.json"
+
+
 def test_multipart_mapping_decodes_only_declared_file_fields() -> None:
     tool = MCPTool(
         name="upload_document",

@@ -1,5 +1,6 @@
 import json
 import logging
+import sys
 
 import httpx
 import pytest
@@ -121,6 +122,49 @@ def test_json_logs_and_metrics_use_bounded_labels() -> None:
     rendered = render_metrics().decode()
     assert 'route="/api/v1/builds/{build_id}"' in rendered
     assert "mcplica_openrouter_usage_total" in rendered
+
+
+def test_json_logs_preserve_safe_lifecycle_context_and_omit_sensitive_content() -> None:
+    sentinel = "SENTINEL-secret-value"
+    try:
+        try:
+            raise ValueError(f"password={sentinel}")
+        except ValueError as cause:
+            raise RuntimeError(f"Bearer {sentinel}") from cause
+    except RuntimeError:
+        record = logging.LogRecord(
+            name="mcplica.worker",
+            level=logging.WARNING,
+            pathname=__file__,
+            lineno=1,
+            msg=f"request failed?api_key={sentinel}",
+            args=(),
+            exc_info=sys.exc_info(),
+        )
+    record.cleanup_target_id = "00000000-0000-0000-0000-000000000001"
+    record.cleanup_job_id = "00000000-0000-0000-0000-000000000002"
+    record.runtime_command_id = "00000000-0000-0000-0000-000000000003"
+    record.admission_attempt = 4
+    record.retryable = True
+    record.route = f"/api/v1/source?api_key={sentinel}"
+    record.password = sentinel
+
+    rendered = JsonLogFormatter().format(record)
+    payload = json.loads(rendered)
+
+    assert sentinel not in rendered
+    assert payload["message"] == "log.message_omitted"
+    assert payload["exception"] == {
+        "type": "RuntimeError",
+        "chain": ["RuntimeError", "ValueError"],
+    }
+    assert payload["cleanup_target_id"].endswith("1")
+    assert payload["cleanup_job_id"].endswith("2")
+    assert payload["runtime_command_id"].endswith("3")
+    assert payload["admission_attempt"] == 4
+    assert payload["retryable"] is True
+    assert payload["route"] == "/api/v1/source"
+    assert "password" not in payload
 
 
 async def test_production_same_origin_ui_proxy_host_is_allowed() -> None:

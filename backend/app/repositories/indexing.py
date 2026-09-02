@@ -13,7 +13,8 @@ from app.domain.indexing import (
     IndexGenerationStatus,
 )
 from app.models.indexing import DocumentIndexGeneration, EmbeddingVectorCache
-from app.repositories.cleanup import lock_object_reference
+from app.repositories.build_execution import require_build_execution_owner
+from app.repositories.cleanup import lock_object_reference, lock_vector_reference
 
 
 def _to_domain(model: DocumentIndexGeneration) -> DocumentIndexGenerationRecord:
@@ -31,6 +32,7 @@ def _to_domain(model: DocumentIndexGeneration) -> DocumentIndexGenerationRecord:
         source_fingerprint=model.source_fingerprint,
         status=model.status,
         error_summary=model.error_summary,
+        execution_token=model.execution_token,
         created_at=model.created_at,
         completed_at=model.completed_at,
     )
@@ -131,7 +133,13 @@ class IndexGenerationRepository:
         embedding_model: str | None,
         generation_key: str,
         source_fingerprint: str,
+        admission_token: UUID,
     ) -> DocumentIndexGenerationRecord:
+        await require_build_execution_owner(
+            session,
+            build_id=build_id,
+            admission_token=admission_token,
+        )
         existing = await self.get_for_build(session, build_id)
         if existing is None:
             return await self.create(
@@ -163,6 +171,7 @@ class IndexGenerationRepository:
                     chunk_count=0,
                     chunk_manifest_storage_key=None,
                     chunk_manifest_sha256=None,
+                    execution_token=None,
                 )
             )
             model = await session.get(DocumentIndexGeneration, existing.id)
@@ -207,8 +216,22 @@ class IndexGenerationRepository:
         chunk_count: int,
         chunk_manifest_storage_key: str,
         chunk_manifest_sha256: str,
+        build_id: UUID,
+        admission_token: UUID,
     ) -> DocumentIndexGenerationRecord:
+        await require_build_execution_owner(
+            session,
+            build_id=build_id,
+            admission_token=admission_token,
+        )
         await lock_object_reference(session, chunk_manifest_storage_key)
+        if collection_name is not None:
+            await lock_vector_reference(
+                session,
+                collection_name=collection_name,
+                project_id=(await self._project_id(session, generation_id)),
+                generation_id=generation_id,
+            )
         now = datetime.now(UTC)
         result = cast(
             CursorResult[Any],
@@ -225,6 +248,7 @@ class IndexGenerationRepository:
                     chunk_count=chunk_count,
                     chunk_manifest_storage_key=chunk_manifest_storage_key,
                     chunk_manifest_sha256=chunk_manifest_sha256,
+                    execution_token=admission_token,
                     status=IndexGenerationStatus.READY,
                     completed_at=now,
                 )
@@ -236,12 +260,31 @@ class IndexGenerationRepository:
         assert model is not None
         return _to_domain(model)
 
+    async def _project_id(self, session: AsyncSession, generation_id: UUID) -> UUID:
+        project_id = await session.scalar(
+            select(DocumentIndexGeneration.project_id).where(
+                DocumentIndexGeneration.id == generation_id
+            )
+        )
+        if project_id is None:
+            raise InvalidStateError("Index generation is unavailable")
+        return project_id
+
     async def fail(
         self,
         session: AsyncSession,
         generation_id: UUID,
         error_summary: str,
+        *,
+        build_id: UUID,
+        admission_token: UUID,
     ) -> None:
+        await require_build_execution_owner(
+            session,
+            build_id=build_id,
+            admission_token=admission_token,
+            allow_cancellation=True,
+        )
         await session.execute(
             update(DocumentIndexGeneration)
             .where(

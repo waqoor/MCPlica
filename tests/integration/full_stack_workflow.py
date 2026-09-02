@@ -126,31 +126,20 @@ class ControlPlaneClient:
             raise RuntimeError(f"{method.upper()} {path} returned a non-object JSON response")
         return cast(dict[str, object], value)
 
-    async def json_list(self, path: str) -> list[dict[str, object]]:
-        response = await self._client.get(path)
-        if response.status_code != 200:
-            raise RuntimeError(
-                f"GET {path} returned HTTP {response.status_code}{self._error_summary(response)}"
-            )
-        value = cast(object, response.json())
-        if not isinstance(value, list) or any(
-            not isinstance(item, dict) for item in cast(list[object], value)
-        ):
-            raise RuntimeError(f"GET {path} returned a malformed list")
-        return cast(list[dict[str, object]], value)
-
     async def json_page_items(self, path: str) -> list[dict[str, object]]:
         page = await self.json("GET", path, csrf=False)
         items = page.get("items")
         total = page.get("total")
+        if not isinstance(items, list):
+            raise RuntimeError(f"GET {path} did not return one complete bounded page")
+        raw_items = cast(list[object], items)
         if (
-            not isinstance(items, list)
-            or any(not isinstance(item, dict) for item in cast(list[object], items))
+            any(not isinstance(item, dict) for item in raw_items)
             or not isinstance(total, int)
-            or total != len(items)
+            or total != len(raw_items)
         ):
             raise RuntimeError(f"GET {path} did not return one complete bounded page")
-        return cast(list[dict[str, object]], items)
+        return [cast(dict[str, object], item) for item in raw_items]
 
     async def upload(
         self,
@@ -647,7 +636,9 @@ async def run(*, api_base: str, email: str, password: str) -> dict[str, object]:
         operations_one = await client.json_page_items(
             f"/builds/{build_one_id}/operations?page=1&page_size=200"
         )
-        ai_runs_one = await client.json_list(f"/builds/{build_one_id}/ai-runs")
+        ai_runs_one = await client.json_page_items(
+            f"/builds/{build_one_id}/ai-runs?page=1&page_size=200"
+        )
         analysis_runs = [item for item in ai_runs_one if item.get("stage") == "analysis"]
         if not analysis_runs or any(item.get("status") != "succeeded" for item in ai_runs_one):
             raise RuntimeError("AI enrichment/semantic validation audit did not succeed")
@@ -845,9 +836,20 @@ async def run(*, api_base: str, email: str, password: str) -> dict[str, object]:
         # Recreate the control plane and database/cache containers without deleting
         # named volumes. Published MCP runtimes must remain independent and live.
         await _compose(
-            "up", "--no-build", "--no-deps", "--force-recreate", "--detach", "--wait",
-            "--wait-timeout", "180", "postgres", "redis", "api", "builder-worker",
-            "deployment-worker", "frontend",
+            "up",
+            "--no-build",
+            "--no-deps",
+            "--force-recreate",
+            "--detach",
+            "--wait",
+            "--wait-timeout",
+            "180",
+            "postgres",
+            "redis",
+            "api",
+            "builder-worker",
+            "deployment-worker",
+            "frontend",
         )
         await _wait_control_plane(client)
         persisted = await client.json("GET", f"/projects/{project_id}", csrf=False)

@@ -287,7 +287,7 @@ Read these before changing product behavior:
 5. `docs/tech_stack.md`
 6. `docs/open_source_and_sponsorship_model.md`
 
-`docs/implementation_plan.md` is the execution order. `docs/README.md` indexes user, API, operations, security, and release documentation. The evidence-backed second-round disposition of all 48 findings in `issues_001.md` (22 verified, 26 fixed, zero blocked) and the fresh repository/runtime verification snapshot are recorded in `docs/evidence/issues-001-closure.md`.
+`docs/implementation_plan.md` is the execution order. `docs/README.md` indexes user, API, operations, security, and release documentation. The evidence-backed second-round disposition of all 48 findings in `issues_001.md` (22 verified, 26 fixed, zero blocked) is recorded in `docs/evidence/issues-001-closure.md`; the verified disposition of all 55 `issues_002.md` findings (12 retained fixes, 43 implemented fixes, zero open) is recorded in `docs/evidence/issues-002-closure.md`, with focused foundation proof for `ISS-002-002` through `ISS-002-009` in `docs/evidence/issues-002-foundation-closure.md`.
 
 ## License and contributions
 

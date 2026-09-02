@@ -182,6 +182,14 @@ const BuildAIRunRead: z.ZodTypeAny = z
     usage: z.union([z.object({}).partial().strict().passthrough(), z.null()]),
   })
   .strict();
+const Page_BuildAIRunRead_: z.ZodTypeAny = z
+  .object({
+    items: z.array(BuildAIRunRead),
+    page: z.number().int().gte(1),
+    page_size: z.number().int().gte(1).lte(200),
+    total: z.number().int().gte(0),
+  })
+  .strict();
 const OperationChangeRead: z.ZodTypeAny = z
   .object({ changes: z.array(z.string()), operation_key: z.string() })
   .strict();
@@ -521,6 +529,11 @@ const DeploymentActivationPhase: z.ZodTypeAny = z.enum([
   "legacy_running",
   "failed",
 ]);
+const DeploymentIntent: z.ZodTypeAny = z.enum([
+  "normal",
+  "security_refresh",
+  "rollback",
+]);
 const DeploymentStatus: z.ZodTypeAny = z.enum([
   "pending",
   "deploying",
@@ -551,6 +564,7 @@ const DeploymentRead: z.ZodTypeAny = z
     id: z.string().uuid(),
     image_digest: z.union([z.string(), z.null()]),
     image_ref: z.string(),
+    intent: DeploymentIntent,
     manifest_sha256: z.string(),
     network_name: z.string(),
     project_id: z.string().uuid(),
@@ -591,6 +605,14 @@ const ProjectRead: z.ZodTypeAny = z
   })
   .strict()
   .passthrough();
+const Page_ProjectRead_: z.ZodTypeAny = z
+  .object({
+    items: z.array(ProjectRead),
+    page: z.number().int().gte(1),
+    page_size: z.number().int().gte(1).lte(200),
+    total: z.number().int().gte(0),
+  })
+  .strict();
 const ProjectCreate: z.ZodTypeAny = z
   .object({
     default_base_url: z.union([z.string(), z.null()]).optional(),
@@ -637,6 +659,14 @@ const CredentialRead: z.ZodTypeAny = z
     runtime_effect_state: RuntimeEffectState,
     runtime_error_code: z.union([z.string(), z.null()]),
     scheme_type: CredentialScheme,
+  })
+  .strict();
+const Page_CredentialRead_: z.ZodTypeAny = z
+  .object({
+    items: z.array(CredentialRead),
+    page: z.number().int().gte(1),
+    page_size: z.number().int().gte(1).lte(200),
+    total: z.number().int().gte(0),
   })
   .strict();
 const CredentialSecretInput: z.ZodTypeAny = z
@@ -782,7 +812,10 @@ const MCPAccessTokenRead: z.ZodTypeAny = z
 const MCPAccessRead: z.ZodTypeAny = z
   .object({
     auth_config: z.union([MCPAuthConfigRead, z.null()]),
+    page: z.number().int().gte(1),
+    page_size: z.number().int().gte(1).lte(200),
     tokens: z.array(MCPAccessTokenRead),
+    total: z.number().int().gte(0),
   })
   .strict();
 const MCPAuthConfigUpdate: z.ZodTypeAny = z
@@ -923,10 +956,15 @@ const SourceOrigin: z.ZodTypeAny = z.enum(["upload", "url"]);
 const SourceSummaryRead: z.ZodTypeAny = z
   .object({
     created_at: z.string().datetime({ offset: true }),
+    current_version_id: z.union([z.string(), z.null()]),
+    current_version_selected_at: z.union([z.string(), z.null()]),
     health: z.enum(["missing", "pending", "valid", "invalid"]),
     id: z.string().uuid(),
     is_primary: z.boolean(),
     kind: SourceKind,
+    last_observed_at: z.union([z.string(), z.null()]),
+    last_observed_etag: z.union([z.string(), z.null()]),
+    last_observed_last_modified: z.union([z.string(), z.null()]),
     latest_version: z.union([SourceVersionSummaryRead, z.null()]),
     name: z.string(),
     origin_type: SourceOrigin,
@@ -955,9 +993,14 @@ const SourceCreate: z.ZodTypeAny = z
 const SourceRead: z.ZodTypeAny = z
   .object({
     created_at: z.string().datetime({ offset: true }),
+    current_version_id: z.union([z.string(), z.null()]),
+    current_version_selected_at: z.union([z.string(), z.null()]),
     id: z.string().uuid(),
     is_primary: z.boolean(),
     kind: SourceKind,
+    last_observed_at: z.union([z.string(), z.null()]),
+    last_observed_etag: z.union([z.string(), z.null()]),
+    last_observed_last_modified: z.union([z.string(), z.null()]),
     name: z.string(),
     origin_type: SourceOrigin,
     project_id: z.string().uuid(),
@@ -1047,17 +1090,14 @@ const SystemSettingsRead: z.ZodTypeAny = z
   .strict();
 const SystemSettingsUpdate: z.ZodTypeAny = z
   .object({
-    build_concurrency: z.union([z.number(), z.null()]),
+    build_concurrency: z.number().int().gte(1).lte(32),
     build_retention_count: z.union([z.number(), z.null()]),
-    builders_can_deploy: z.union([z.boolean(), z.null()]),
-    environment: z.union([
-      z.enum(["development", "production", "test"]),
-      z.null(),
-    ]),
-    max_document_chunks_per_project: z.union([z.number(), z.null()]),
-    max_operations_per_project: z.union([z.number(), z.null()]),
-    max_upload_bytes: z.union([z.number(), z.null()]),
-    mcp_base_domain: z.union([z.string(), z.null()]),
+    builders_can_deploy: z.boolean(),
+    environment: z.enum(["development", "production", "test"]),
+    max_document_chunks_per_project: z.number().int().gte(1).lte(100000),
+    max_operations_per_project: z.number().int().gte(1).lte(100000),
+    max_upload_bytes: z.number().int().gte(1024).lte(100000000),
+    mcp_base_domain: z.string().min(1).max(253),
     source_retention_days: z.union([z.number(), z.null()]),
   })
   .partial()
@@ -1143,6 +1183,14 @@ const SourceVersionMetadataRead: z.ZodTypeAny = z
     spec_version: z.union([z.string(), z.null()]),
   })
   .strict();
+const Page_UserRead_: z.ZodTypeAny = z
+  .object({
+    items: z.array(UserRead),
+    page: z.number().int().gte(1),
+    page_size: z.number().int().gte(1).lte(200),
+    total: z.number().int().gte(0),
+  })
+  .strict();
 const UserCreate: z.ZodTypeAny = z
   .object({
     display_name: z.string().min(1).max(160),
@@ -1181,6 +1229,7 @@ export const schemas = {
   BuildPageRead,
   BuildMetricsRead,
   BuildAIRunRead,
+  Page_BuildAIRunRead_,
   OperationChangeRead,
   BuildDiffRead,
   AuthProfile,
@@ -1213,16 +1262,19 @@ export const schemas = {
   CleanupJobStatus,
   CleanupJobRead,
   DeploymentActivationPhase,
+  DeploymentIntent,
   DeploymentStatus,
   DeploymentRead,
   HealthRead,
   RuntimeEffectState,
   ProjectRead,
+  Page_ProjectRead_,
   ProjectCreate,
   ProjectUpdate,
   BuildCreate,
   CredentialScheme,
   CredentialRead,
+  Page_CredentialRead_,
   CredentialSecretInput,
   CredentialCreate,
   CredentialRotate,
@@ -1275,6 +1327,7 @@ export const schemas = {
   SourceIssueRead,
   IndexGenerationStatus,
   SourceVersionMetadataRead,
+  Page_UserRead_,
   UserCreate,
   UserUpdate,
 };
@@ -1291,7 +1344,7 @@ export const endpointResponses = {
   "get /api/v1/build-admission": BuildAdmissionOverviewRead,
   "get /api/v1/builds": BuildPageRead,
   "get /api/v1/builds/:build_id": BuildRead,
-  "get /api/v1/builds/:build_id/ai-runs": z.array(BuildAIRunRead),
+  "get /api/v1/builds/:build_id/ai-runs": Page_BuildAIRunRead_,
   "post /api/v1/builds/:build_id/cancel": BuildRead,
   "get /api/v1/builds/:build_id/diff": BuildDiffRead,
   "get /api/v1/builds/:build_id/events": z.unknown(),
@@ -1308,14 +1361,14 @@ export const endpointResponses = {
   "post /api/v1/deployments/:deployment_id/restart": DeploymentRead,
   "post /api/v1/deployments/:deployment_id/stop": DeploymentRead,
   "get /api/v1/health": HealthRead,
-  "get /api/v1/projects": z.array(ProjectRead),
+  "get /api/v1/projects": Page_ProjectRead_,
   "post /api/v1/projects": ProjectRead,
   "delete /api/v1/projects/:project_id": CleanupJobRead,
   "get /api/v1/projects/:project_id": ProjectRead,
   "patch /api/v1/projects/:project_id": ProjectRead,
   "get /api/v1/projects/:project_id/builds": BuildPageRead,
   "post /api/v1/projects/:project_id/builds": BuildRead,
-  "get /api/v1/projects/:project_id/credentials": z.array(CredentialRead),
+  "get /api/v1/projects/:project_id/credentials": Page_CredentialRead_,
   "post /api/v1/projects/:project_id/credentials": CredentialRead,
   "delete /api/v1/projects/:project_id/credentials/:credential_id":
     CredentialRead,
@@ -1365,7 +1418,7 @@ export const endpointResponses = {
   "put /api/v1/settings/openrouter": ModelSettingsRead,
   "post /api/v1/settings/openrouter/test": OpenRouterTestResult,
   "get /api/v1/source-versions/:version_id/metadata": SourceVersionMetadataRead,
-  "get /api/v1/users": z.array(UserRead),
+  "get /api/v1/users": Page_UserRead_,
   "post /api/v1/users": UserRead,
   "patch /api/v1/users/:user_id": UserRead,
 };

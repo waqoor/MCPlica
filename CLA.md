@@ -12,4 +12,4 @@ The intended CLA model is a **license CLA, not copyright assignment**:
 - signing a CLA grants no governance, maintainer, sponsorship, roadmap, or voting rights;
 - the project remains AGPL-3.0-only and does not use the CLA as a proprietary dual-licensing escape hatch under the current governance policy.
 
-**Before accepting external contributions, replace/confirm this operational policy with the founder-approved final Individual CLA and Entity CLA legal text and connect automated CLA verification.** The authoritative governance intent is `docs/open_source_and_sponsorship_model.md`.
+**Before accepting external contributions, replace/confirm this operational policy with the founder-approved final Individual CLA and Entity CLA legal text, install the approved verification service, and set `CLA_STATUS_CONTEXT` to the exact commit-status or check-run name it publishes.** The repository workflow verifies that external result without executing pull-request code. The authoritative governance intent is `docs/open_source_and_sponsorship_model.md`.

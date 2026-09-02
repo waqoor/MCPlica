@@ -12,6 +12,7 @@ from app.providers.vector import VectorSearchResult, VectorStore
 _NON_NAME = re.compile(r"[^A-Za-z0-9_]+")
 _OUTPUT_FIELDS = [
     "chunk_id",
+    "document_chunk_id",
     "project_id",
     "generation_id",
     "source_version_id",
@@ -79,14 +80,22 @@ class MilvusVectorStore(VectorStore):
         collection: str,
         chunks: list[DocumentChunk],
         vectors: list[list[float]],
+        execution_token: UUID,
     ) -> None:
         if len(chunks) != len(vectors):
             raise IndexingError("Chunk and embedding counts do not match")
         rows: list[dict[str, Any]] = []
         for chunk, vector in zip(chunks, vectors, strict=True):
+            vector_row_id = (
+                "chunk_"
+                + hashlib.sha256(f"{chunk.chunk_id}\x00{execution_token}".encode()).hexdigest()
+            )
             rows.append(
                 {
                     **chunk.model_dump(mode="json"),
+                    "chunk_id": vector_row_id,
+                    "document_chunk_id": chunk.chunk_id,
+                    "execution_token": str(execution_token),
                     "embedding": vector,
                 }
             )
@@ -98,6 +107,7 @@ class MilvusVectorStore(VectorStore):
         collection: str,
         project_id: UUID,
         generation_id: UUID,
+        execution_token: UUID | None = None,
         vector: list[float],
         limit: int,
         include_documentation: bool = True,
@@ -105,6 +115,8 @@ class MilvusVectorStore(VectorStore):
         if not 1 <= limit <= 100:
             raise ValueError("Vector search limit must be between 1 and 100")
         expression = f'project_id == "{project_id}" and generation_id == "{generation_id}"'
+        if execution_token is not None:
+            expression += f' and execution_token == "{execution_token}"'
         if not include_documentation:
             expression += ' and source_kind != "documentation"'
         raw = await self._client.search(
@@ -121,7 +133,13 @@ class MilvusVectorStore(VectorStore):
             if not isinstance(entity, dict):
                 continue
             try:
-                chunk = DocumentChunk.model_validate(entity)
+                normalized_entity: dict[str, object] = {
+                    str(key): value for key, value in cast(dict[object, object], entity).items()
+                }
+                document_chunk_id = normalized_entity.pop("document_chunk_id", None)
+                if document_chunk_id is not None:
+                    normalized_entity["chunk_id"] = document_chunk_id
+                chunk = DocumentChunk.model_validate(normalized_entity)
                 score = float(match.get("distance", match.get("score", 0)))
             except (TypeError, ValueError) as exc:
                 raise IndexingError("Milvus returned malformed chunk metadata") from exc
@@ -136,6 +154,9 @@ class MilvusVectorStore(VectorStore):
         collection: str,
         project_id: UUID,
         generation_id: UUID,
+        execution_token: UUID | None = None,
     ) -> None:
         expression = f'project_id == "{project_id}" and generation_id == "{generation_id}"'
+        if execution_token is not None:
+            expression += f' and execution_token == "{execution_token}"'
         await self._client.delete(collection=collection, filter_expression=expression)

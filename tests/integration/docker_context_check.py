@@ -34,8 +34,12 @@ def main() -> None:
         (context / "Dockerfile").write_text("FROM scratch\nCOPY . /context/\n")
         result = subprocess.run(
             [
-                "docker", "build", "--quiet", "--output",
-                f"type=local,dest={root / 'result'}", str(context),
+                "docker",
+                "build",
+                "--quiet",
+                "--output",
+                f"type=local,dest={root / 'result'}",
+                str(context),
             ],
             capture_output=True,
             text=True,

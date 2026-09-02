@@ -1,0 +1,12 @@
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+
+[[rules.allowlists]]
+description = "Deterministic operation IDs in generated contract fixtures"
+condition = "AND"
+regexTarget = "line"
+regexes = ['''[[:space:]]*"(key|operation_key)": "op_[0-9a-f]{24}",?[[:space:]]*''']
+paths = ['''tests/fixtures/(canonical|manifests)/[^/]+\.json$''']

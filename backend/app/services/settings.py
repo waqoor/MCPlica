@@ -4,7 +4,7 @@ from uuid import UUID
 
 from app.clients.database import DatabaseClient
 from app.core.config import Settings
-from app.core.crypto import AesGcmSecretCipher
+from app.core.crypto import AesGcmSecretCipher, system_secret_aad
 from app.core.exceptions import ClientError, ValidationError
 from app.providers.ai.base import AIModelInfo, AIProvider
 from app.repositories.audit import AuditRepository
@@ -19,7 +19,6 @@ from app.schemas.setting import (
 )
 
 _OPENROUTER_SECRET_KEY = "openrouter_api_key"
-_OPENROUTER_AAD = b"system-secret:openrouter_api_key"
 _MODEL_SETTING_KEY = "model_policy"
 _OPERATIONAL_SETTING_KEY = "operational_limits"
 
@@ -64,7 +63,7 @@ class SettingsService:
         payload = self._cipher.decrypt_json(
             encrypted.encrypted_payload,
             key_version=encrypted.key_version,
-            associated_data=_OPENROUTER_AAD,
+            associated_data=system_secret_aad(_OPENROUTER_SECRET_KEY),
         )
         value = payload.get("api_key")
         return value if isinstance(value, str) and value else None
@@ -144,14 +143,14 @@ class SettingsService:
             openrouter_configured=(
                 openrouter_secret_exists or self._defaults.openrouter_api_key is not None
             ),
-            analysis_model=_optional_string(
-                stored.get("analysis_model"), self._defaults.openrouter_analysis_model
+            analysis_model=_stored_optional_string(
+                stored, "analysis_model", self._defaults.openrouter_analysis_model
             ),
-            validation_model=_optional_string(
-                stored.get("validation_model"), self._defaults.openrouter_validation_model
+            validation_model=_stored_optional_string(
+                stored, "validation_model", self._defaults.openrouter_validation_model
             ),
-            embedding_model=_optional_string(
-                stored.get("embedding_model"), self._defaults.openrouter_embedding_model
+            embedding_model=_stored_optional_string(
+                stored, "embedding_model", self._defaults.openrouter_embedding_model
             ),
             embedding_dimensions=(
                 stored_dimensions if isinstance(stored_dimensions, int) else None
@@ -251,7 +250,7 @@ class SettingsService:
         normalized_api_key = _normalize_openrouter_api_key(api_key)
         encrypted = self._cipher.encrypt_json(
             {"api_key": normalized_api_key},
-            associated_data=_OPENROUTER_AAD,
+            associated_data=system_secret_aad(_OPENROUTER_SECRET_KEY),
         )
         async with self._database.session_scope() as session:
             await self._repository.lock_key(session, _OPENROUTER_SECRET_KEY)
@@ -303,8 +302,15 @@ class SettingsService:
         )
 
 
-def _optional_string(value: Any, fallback: str | None) -> str | None:
-    return value if isinstance(value, str) and value else fallback
+def _stored_optional_string(
+    stored: dict[str, object],
+    name: str,
+    fallback: str | None,
+) -> str | None:
+    if name not in stored:
+        return fallback
+    value = stored[name]
+    return value if isinstance(value, str) and value else None
 
 
 def _normalize_openrouter_api_key(value: str) -> str:

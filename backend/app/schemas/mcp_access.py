@@ -98,6 +98,9 @@ class MCPAccessRead(BaseModel):
 
     auth_config: MCPAuthConfigRead | None
     tokens: list[MCPAccessTokenRead]
+    total: int = Field(ge=0)
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=200)
 
 
 class MCPAccessStatusRead(BaseModel):

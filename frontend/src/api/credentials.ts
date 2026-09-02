@@ -1,4 +1,4 @@
-import { api, jsonBody } from "./client";
+import { api, apiAllPages, jsonBody } from "./client";
 import type { Credential, SecuritySchemeDiscovery } from "./contracts";
 import { endpointResponses } from "./generated/zod";
 
@@ -96,10 +96,10 @@ export type CredentialInput = {
 
 export const credentialApi = {
   list: (projectId: string, signal?: AbortSignal) =>
-    api<Credential[]>(
+    apiAllPages<Credential>(
       `/api/v1/projects/${projectId}/credentials`,
       endpointResponses["get /api/v1/projects/:project_id/credentials"],
-      { signal },
+      signal,
     ),
   create: (projectId: string, payload: CredentialInput) =>
     api<Credential>(

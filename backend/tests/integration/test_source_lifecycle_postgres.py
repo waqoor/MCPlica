@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -68,6 +69,17 @@ class _Http:
         )
 
 
+class _SequenceHttp:
+    def __init__(self, responses: list[FetchedResponse]) -> None:
+        self._responses = iter(responses)
+        self.request_headers: list[dict[str, str]] = []
+
+    async def fetch_bounded(self, url: str, **kwargs: object) -> FetchedResponse:
+        del url
+        self.request_headers.append(cast(dict[str, str], kwargs.get("headers", {})))
+        return next(self._responses)
+
+
 def _openapi_bytes() -> bytes:
     return b'{"openapi":"3.1.0","info":{"title":"Inventory","version":"1"},"paths":{}}'
 
@@ -124,7 +136,12 @@ async def _seed(database: DatabaseClient) -> None:
         )
 
 
-def _service(database: DatabaseClient, tmp_path: Path) -> SourceService:
+def _service(
+    database: DatabaseClient,
+    tmp_path: Path,
+    *,
+    http: HttpClient | None = None,
+) -> SourceService:
     return SourceService(
         database,
         SourceRepository(),
@@ -134,7 +151,7 @@ def _service(database: DatabaseClient, tmp_path: Path) -> SourceService:
         cast(IndexGenerationRepository, object()),
         AuditRepository(),
         FilesystemArtifactStorage(FilesystemStorageClient(str(tmp_path))),
-        cast(HttpClient, _Http()),
+        http or cast(HttpClient, _Http()),
         UrlPolicy(),
         cast(OperationalSettingsProvider, _Settings()),
         canonicalization=None,
@@ -143,6 +160,166 @@ def _service(database: DatabaseClient, tmp_path: Path) -> SourceService:
         fetch_max_redirects=2,
         fetch_max_attempts=1,
     )
+
+
+def _fetched(body: bytes, etag: str) -> FetchedResponse:
+    return FetchedResponse(
+        status_code=200,
+        url="https://api.example.com/openapi.json",
+        headers={"Content-Type": "application/json", "ETag": etag},
+        body=body,
+    )
+
+
+async def test_hash_reuse_restores_current_source_version_and_validators(
+    tmp_path: Path,
+) -> None:
+    """ISS-002-002: A -> B -> A must select A without duplicating history."""
+
+    database = DatabaseClient(_database_url(), pool_size=4, max_overflow=0)
+    body_a = _openapi_bytes()
+    body_b = body_a.replace(b'"version":"1"', b'"version":"2"')
+    not_modified = FetchedResponse(
+        status_code=304,
+        url="https://api.example.com/openapi.json",
+        headers={},
+        body=b"",
+    )
+    http = _SequenceHttp(
+        [
+            _fetched(body_a, '"a-1"'),
+            _fetched(body_b, '"b-1"'),
+            _fetched(body_a, '"a-2"'),
+            not_modified,
+        ]
+    )
+    try:
+        await _cleanup(database)
+        await _seed(database)
+        service = _service(database, tmp_path, http=cast(HttpClient, http))
+        created = await service.create_with_url(
+            source_id=UUID(int=409),
+            project_id=PROJECT_ID,
+            kind=SourceKind.OPENAPI,
+            name="Restorable API",
+            source_url="https://api.example.com/openapi.json",
+            is_primary=True,
+            actor_user_id=USER_ID,
+            request_id="source-a",
+        )
+        version_b = await service.refresh(
+            project_id=PROJECT_ID,
+            source_id=created.source.id,
+            actor_user_id=USER_ID,
+            request_id="source-b",
+        )
+        restored = await service.refresh(
+            project_id=PROJECT_ID,
+            source_id=created.source.id,
+            actor_user_id=USER_ID,
+            request_id="source-a-restored",
+        )
+        unchanged = await service.refresh(
+            project_id=PROJECT_ID,
+            source_id=created.source.id,
+            actor_user_id=USER_ID,
+            request_id="source-a-304",
+        )
+
+        assert restored.deduplicated
+        assert restored.version.id == created.version.id
+        assert version_b.version.id != created.version.id
+        assert unchanged.version.id == created.version.id
+        assert (await service.latest_version(created.source.id)).id == created.version.id
+        assert http.request_headers[-1]["If-None-Match"] == '"a-2"'
+        assert len(await service.list_versions(PROJECT_ID, created.source.id)) == 2
+    finally:
+        await _cleanup(database)
+        await database.close()
+
+
+async def test_concurrent_source_observations_commit_in_serialized_acceptance_order(
+    tmp_path: Path,
+) -> None:
+    """ISS-002-002: a later accepted observation cannot be lost to a stale writer."""
+
+    database = DatabaseClient(_database_url(), pool_size=4, max_overflow=0)
+    source_id = UUID(int=410)
+    sources = SourceRepository()
+    projects = ProjectRepository()
+    first_locked = asyncio.Event()
+    release_first = asyncio.Event()
+    second_started = asyncio.Event()
+    try:
+        await _cleanup(database)
+        await _seed(database)
+        service = _service(database, tmp_path)
+        version_a = await service.create_with_upload(
+            source_id=source_id,
+            project_id=PROJECT_ID,
+            kind=SourceKind.OPENAPI,
+            name="Concurrent source",
+            is_primary=True,
+            content=BytesReader(_openapi_bytes()),
+            media_type="application/json",
+            filename="openapi.json",
+            actor_user_id=USER_ID,
+            request_id="concurrent-source-a",
+        )
+        version_b = await service.add_upload_version(
+            project_id=PROJECT_ID,
+            source_id=source_id,
+            content=BytesReader(_openapi_bytes().replace(b'"version":"1"', b'"version":"2"')),
+            media_type="application/json",
+            filename="openapi.json",
+            actor_user_id=USER_ID,
+            request_id="concurrent-source-b",
+        )
+
+        async def select_first() -> None:
+            async with database.session_scope() as session:
+                assert await projects.lock(session, PROJECT_ID) is not None
+                assert await sources.lock_source(session, source_id) is not None
+                await sources.select_current_version(
+                    session,
+                    source_id=source_id,
+                    version_id=version_a.version.id,
+                    source_etag='"concurrent-a"',
+                    source_last_modified=None,
+                )
+                first_locked.set()
+                await release_first.wait()
+
+        async def select_second() -> None:
+            second_started.set()
+            async with database.session_scope() as session:
+                assert await projects.lock(session, PROJECT_ID) is not None
+                assert await sources.lock_source(session, source_id) is not None
+                await sources.select_current_version(
+                    session,
+                    source_id=source_id,
+                    version_id=version_b.version.id,
+                    source_etag='"concurrent-b"',
+                    source_last_modified=None,
+                )
+
+        first_task = asyncio.create_task(select_first())
+        await first_locked.wait()
+        second_task = asyncio.create_task(select_second())
+        await second_started.wait()
+        await asyncio.sleep(0.05)
+        release_first.set()
+        await asyncio.gather(first_task, second_task)
+
+        async with database.session_scope() as session:
+            current = await sources.get_source(session, source_id)
+        assert current is not None
+        assert current.current_version_id == version_b.version.id
+        assert current.last_observed_etag == '"concurrent-b"'
+    finally:
+        release_first.set()
+        await _cleanup(database)
+        await database.close()
 
 
 async def test_compound_source_creation_retry_primary_switch_and_recovery(
@@ -319,8 +496,30 @@ async def test_compound_source_creation_retry_primary_switch_and_recovery(
                 BuildSourceVersion(
                     build_id=build.id,
                     source_version_id=first.version.id,
+                    source_id=first.source.id,
+                    source_kind=first.source.kind,
+                    source_name=first.source.name,
+                    source_origin_type=first.source.origin_type,
+                    source_url=first.source.source_url,
+                    source_is_primary=first.source.is_primary,
+                    source_created_at=first.source.created_at,
+                    dependency_aliases=[first.source.name],
+                    binding_metadata_trustworthy=True,
                 )
             )
+        await service.update(
+            project_id=PROJECT_ID,
+            source_id=first.source.id,
+            name="Renamed after queue",
+            is_primary=None,
+            actor_user_id=USER_ID,
+            request_id="rename-after-queue",
+        )
+        async with database.session_scope() as session:
+            frozen = await BuildRepository().source_bindings(session, build.id)
+        assert frozen[0].source.name == "Primary API"
+        assert frozen[0].effective_dependency_aliases == ["Primary API"]
+        assert frozen[0].source.is_primary
         with pytest.raises(ConflictError, match="immutable Build"):
             await service.delete(
                 project_id=PROJECT_ID,

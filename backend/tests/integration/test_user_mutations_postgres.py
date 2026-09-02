@@ -146,3 +146,33 @@ async def test_concurrent_admin_demotions_leave_one_admin_and_rollback_loser() -
     finally:
         await _cleanup(database)
         await database.close()
+
+
+@pytest.mark.asyncio(loop_scope="function")
+async def test_inactive_admin_can_be_demoted_when_only_one_active_admin_remains() -> None:
+    database = DatabaseClient(_database_url())
+    try:
+        await _cleanup(database)
+        await _seed(database)
+        async with database.session_scope() as session:
+            await session.execute(
+                User.__table__.update().where(User.id == ADMIN_TWO).values(is_active=False)
+            )
+
+        updated = await _service(database).update(
+            ADMIN_TWO,
+            display_name=None,
+            password=None,
+            role=UserRole.BUILDER,
+            is_active=False,
+            actor_user_id=ADMIN_ONE,
+            request_id="request-demote-inactive",
+        )
+
+        assert updated.role is UserRole.BUILDER
+        assert updated.is_active is False
+        async with database.session_scope() as session:
+            assert await UserRepository().count_active_admins(session) == 1
+    finally:
+        await _cleanup(database)
+        await database.close()

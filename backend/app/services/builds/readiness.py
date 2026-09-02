@@ -1,9 +1,16 @@
 from dataclasses import dataclass
+from uuid import UUID
 
 from app.domain.credentials import CredentialRecord, CredentialScheme
 from app.domain.sources import (
     SecuritySchemeDiscoveryRecord,
     SourceConfigurationDiscoveryRecord,
+)
+from app.services.builds.auth_selection import (
+    AuthSchemeSpec,
+    CredentialCandidate,
+    credential_is_compatible,
+    select_auth_alternative,
 )
 
 
@@ -31,7 +38,11 @@ def validate_credential_binding(
     )
     if scheme is None:
         raise ValueError(f"Source security scheme {name!r} was not discovered")
-    if not _compatible_values(scheme_type, metadata, name, scheme, []):
+    if not credential_is_compatible(
+        CredentialCandidate(UUID(int=0), scheme_type, metadata),
+        _scheme_spec(scheme),
+        [],
+    ):
         raise ValueError(
             f"Credential type or metadata is incompatible with source security scheme {name!r}"
         )
@@ -43,8 +54,12 @@ def credential_mapping_readiness(
 ) -> CredentialMappingReadiness:
     """Evaluate source auth alternatives with the compiler's fail-closed rules."""
 
-    active = [credential for credential in credentials if credential.revoked_at is None]
-    schemes = {scheme.name: scheme for scheme in discovery.security_schemes}
+    active = [
+        CredentialCandidate(credential.id, credential.scheme_type, credential.metadata)
+        for credential in credentials
+        if credential.revoked_at is None
+    ]
+    schemes = {scheme.name: _scheme_spec(scheme) for scheme in discovery.security_schemes}
     bound: set[str] = set()
     unresolved: list[str] = []
     required = False
@@ -52,34 +67,15 @@ def credential_mapping_readiness(
         if operation.anonymous_allowed:
             continue
         required = True
-        selected: str | None = None
-        for alternative in operation.alternatives:
-            # The canonical compiler intentionally rejects combined requirements.
-            if len(alternative) != 1:
-                continue
-            scheme_name, scopes = next(iter(alternative.items()))
-            scheme = schemes.get(scheme_name)
-            if scheme is None:
-                continue
-            candidates = [
-                credential
-                for credential in active
-                if _compatible(credential, scheme_name, scheme, scopes)
-            ]
-            explicit = [
-                credential
-                for credential in candidates
-                if _explicit_scheme_name(credential) == scheme_name.casefold()
-            ]
-            if explicit:
-                candidates = explicit
-            if len(candidates) == 1:
-                selected = scheme_name
-                break
-        if selected is None:
+        selection, _rejections = select_auth_alternative(
+            operation.alternatives,
+            schemes,
+            active,
+        )
+        if selection is None:
             unresolved.append(operation.operation_key)
         else:
-            bound.add(selected)
+            bound.add(selection.scheme_name)
     return CredentialMappingReadiness(
         required=required,
         complete=not unresolved,
@@ -88,28 +84,7 @@ def credential_mapping_readiness(
     )
 
 
-def _compatible(
-    credential: CredentialRecord,
-    scheme_name: str,
-    scheme: SecuritySchemeDiscoveryRecord,
-    required_scopes: list[str],
-) -> bool:
-    return _compatible_values(
-        credential.scheme_type,
-        credential.metadata,
-        scheme_name,
-        scheme,
-        required_scopes,
-    )
-
-
-def _compatible_values(
-    credential_scheme: CredentialScheme,
-    metadata: dict[str, object],
-    scheme_name: str,
-    scheme: SecuritySchemeDiscoveryRecord,
-    required_scopes: list[str],
-) -> bool:
+def _scheme_spec(scheme: SecuritySchemeDiscoveryRecord) -> AuthSchemeSpec:
     expected = {
         "http_bearer": CredentialScheme.BEARER,
         "http_basic": CredentialScheme.BASIC,
@@ -125,40 +100,10 @@ def _compatible_values(
             if scheme.location is not None
             else None
         )
-    if expected is None or credential_scheme is not expected:
-        return False
-    explicit_name = _explicit_scheme_name(metadata)
-    if explicit_name is not None and explicit_name != scheme_name.casefold():
-        return False
-    if scheme.type == "api_key":
-        configured_name = metadata.get("name")
-        if (
-            not isinstance(configured_name, str)
-            or scheme.parameter_name is None
-            or configured_name.casefold() != scheme.parameter_name.casefold()
-        ):
-            return False
-    if scheme.type == "oauth2_client_credentials":
-        advertised = set(scheme.advertised_scopes)
-        if not set(required_scopes) <= advertised:
-            return False
-        raw_default = metadata.get("scope")
-        default_scopes = raw_default.split() if isinstance(raw_default, str) else []
-        if not set(default_scopes) <= advertised:
-            return False
-        method = metadata.get("token_auth_method", "client_secret_basic")
-        if method not in {"client_secret_basic", "client_secret_post"}:
-            return False
-    elif required_scopes:
-        return False
-    return True
-
-
-def _explicit_scheme_name(
-    credential: CredentialRecord | dict[str, object],
-) -> str | None:
-    metadata = credential.metadata if isinstance(credential, CredentialRecord) else credential
-    value = metadata.get("security_scheme")
-    if not isinstance(value, str) or not value.strip():
-        return None
-    return value.strip().casefold()
+    return AuthSchemeSpec(
+        name=scheme.name,
+        expected_credential_scheme=expected,
+        parameter_name=scheme.parameter_name if scheme.type == "api_key" else None,
+        advertised_scopes=frozenset(scheme.advertised_scopes),
+        oauth=scheme.type == "oauth2_client_credentials",
+    )

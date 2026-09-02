@@ -27,6 +27,7 @@ from app.schemas.build import (
     ValidationReportRead,
     ValidationSourceRefRead,
 )
+from app.schemas.pagination import Page
 from app.services.build_admission import BuildAdmissionDispatcher
 from app.services.builds import BuildService
 
@@ -374,16 +375,23 @@ async def get_build_operations(
     )
 
 
-@router.get("/builds/{build_id}/ai-runs", response_model=list[BuildAIRunRead])
+@router.get("/builds/{build_id}/ai-runs", response_model=Page[BuildAIRunRead])
 async def get_build_ai_runs(
     build_id: UUID,
     _principal: BuilderPrincipal,
     service: Annotated[BuildService, Depends(_builds)],
-) -> list[BuildAIRunRead]:
-    return [
-        BuildAIRunRead.model_validate(item.model_dump(exclude={"response"}))
-        for item in await service.ai_runs(build_id)
-    ]
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> Page[BuildAIRunRead]:
+    runs, total = await service.ai_runs(build_id, page=page, page_size=page_size)
+    return Page(
+        items=[
+            BuildAIRunRead.model_validate(item.model_dump(exclude={"response"})) for item in runs
+        ],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.post(

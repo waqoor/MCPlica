@@ -10,8 +10,9 @@ from sqlalchemy import delete, update
 
 from app.clients.build_queue import BuildQueueClient
 from app.clients.database import DatabaseClient
+from app.core.exceptions import InvalidStateError
 from app.domain.auth import UserRole
-from app.domain.build_admission import BuildAdmissionState
+from app.domain.build_admission import BuildAdmissionState, BuildLeaseState
 from app.domain.builds import BuildConfiguration, BuildStatus, BuildTrigger
 from app.models.audit import AuditEvent
 from app.models.auth import User
@@ -213,6 +214,7 @@ async def test_admission_is_cross_process_safe_and_dynamic_limit_drains(
                 calls[0][0],
                 error_code="TEST_DONE",
                 error_summary="release first permit",
+                admission_token=calls[0][1],
             )
         assert await first.dispatch_once() == 0
 
@@ -222,6 +224,7 @@ async def test_admission_is_cross_process_safe_and_dynamic_limit_drains(
                 calls[1][0],
                 error_code="TEST_DONE",
                 error_summary="release second permit",
+                admission_token=calls[1][1],
             )
         assert await first.dispatch_once() == 1
         assert (await first.overview()).effective_concurrency == 1
@@ -276,14 +279,66 @@ async def test_enqueue_failure_and_expired_worker_are_reclaimed_without_stale_ex
             repository,
             lease_seconds=60,
         )
-        assert not await worker_admission.begin(build_id, stale_token)
-        assert await worker_admission.begin(build_id, current_token)
+        assert (await worker_admission.begin(build_id, stale_token)).state is BuildLeaseState.LOST
+        assert (
+            await worker_admission.begin(build_id, current_token)
+        ).state is BuildLeaseState.OWNED
+        with pytest.raises(InvalidStateError, match="ownership is stale"):
+            async with database.session_scope() as session:
+                await BuildRepository().transition(
+                    session,
+                    build_id,
+                    expected=BuildStatus.ANALYZING,
+                    target=BuildStatus.COMPILING,
+                    admission_token=stale_token,
+                )
         async with database.session_scope() as session:
             resumed = await session.get(Build, build_id)
             assert resumed is not None
             assert resumed.admission_attempt_count == 3
             assert resumed.admission_heartbeat_at is not None
         assert await worker_admission.release(build_id, current_token)
+    finally:
+        await _cleanup(database)
+        await database.close()
+
+
+async def test_cancelled_build_keeps_live_owner_and_dead_owner_is_recovered() -> None:
+    """ISS-002-007: cancellation is a handoff, not silent lease deletion."""
+
+    database = DatabaseClient(_database_url(), pool_size=4, max_overflow=0)
+    repository = BuildAdmissionRepository()
+    queue = _Queue()
+    dispatcher = _dispatcher(database, repository, queue, _Settings(1))
+    try:
+        await _cleanup(database)
+        await _seed(database, 1)
+        assert await dispatcher.dispatch_once() == 1
+        build_id, original_token = queue.calls[-1]
+        async with database.session_scope() as session:
+            await session.execute(
+                update(Build)
+                .where(Build.id == build_id)
+                .values(cancellation_requested_at=datetime.now(UTC))
+            )
+
+        service = BuildAdmissionService(database, repository, lease_seconds=60)
+        renewal = await service.heartbeat(build_id, original_token)
+        assert renewal.state is BuildLeaseState.CANCELLATION_REQUESTED
+        assert await dispatcher.dispatch_once() == 0
+
+        async with database.session_scope() as session:
+            await session.execute(
+                update(Build)
+                .where(Build.id == build_id)
+                .values(admission_lease_expires_at=datetime.now(UTC) - timedelta(seconds=1))
+            )
+        assert await dispatcher.dispatch_once() == 1
+        recovered_build_id, recovered_token = queue.calls[-1]
+        assert recovered_build_id == build_id
+        assert recovered_token != original_token
+        recovered = await service.begin(build_id, recovered_token)
+        assert recovered.state is BuildLeaseState.CANCELLATION_REQUESTED
     finally:
         await _cleanup(database)
         await database.close()

@@ -46,6 +46,11 @@ class SourceRead(BaseModel):
     source_url: str | None
     is_primary: bool
     created_at: datetime
+    current_version_id: UUID | None
+    current_version_selected_at: datetime | None
+    last_observed_at: datetime | None
+    last_observed_etag: str | None
+    last_observed_last_modified: str | None
 
 
 class SourceUrlCreate(BaseModel):

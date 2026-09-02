@@ -67,6 +67,7 @@ async def run(
     project_id = uuid4()
     generation_id = uuid4()
     source_version_id = uuid4()
+    execution_token = uuid4()
     client = MilvusVectorClient(uri, token)
     store = MilvusVectorStore(client, collection_base)
     collection = store.collection_name(dimensions)
@@ -91,6 +92,7 @@ async def run(
                 vectors=[
                     _vector(index, dimensions) for index in range(start, start + current_count)
                 ],
+                execution_token=execution_token,
             )
             inserted += current_count
         indexing_seconds = time.perf_counter() - indexing_started
@@ -103,6 +105,7 @@ async def run(
                 collection=collection,
                 project_id=project_id,
                 generation_id=generation_id,
+                execution_token=execution_token,
                 vector=_vector(0, dimensions),
                 limit=10,
             )
@@ -119,6 +122,7 @@ async def run(
                 collection=collection,
                 project_id=project_id,
                 generation_id=generation_id,
+                execution_token=execution_token,
                 vector=_vector(index % chunk_count, dimensions),
                 limit=10,
             )
@@ -145,6 +149,7 @@ async def run(
                 collection=collection,
                 project_id=project_id,
                 generation_id=generation_id,
+                execution_token=execution_token,
             )
         await client.close()
 

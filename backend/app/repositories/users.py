@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime
 from uuid import UUID
 
@@ -52,8 +54,20 @@ class UserRepository:
         return int(await session.scalar(statement) or 0)
 
     async def list(self, session: AsyncSession) -> list[UserAccount]:
-        result = await session.scalars(select(User).order_by(User.created_at.asc()))
+        result = await session.scalars(select(User).order_by(User.created_at.asc(), User.id.asc()))
         return [_to_domain(model) for model in result]
+
+    async def list_page(
+        self, session: AsyncSession, *, page: int, page_size: int
+    ) -> tuple[list[UserAccount], int]:
+        total = int(await session.scalar(select(func.count()).select_from(User)) or 0)
+        result = await session.scalars(
+            select(User)
+            .order_by(User.created_at.asc(), User.id.asc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        return [_to_domain(model) for model in result], total
 
     async def get(self, session: AsyncSession, user_id: UUID) -> UserAccount | None:
         model = await session.get(User, user_id)

@@ -1,4 +1,5 @@
 import asyncio
+import time
 from datetime import UTC, datetime
 from itertools import pairwise
 from types import SimpleNamespace
@@ -14,6 +15,7 @@ from app.core.exceptions import (
     CompilationError,
     InvalidStateError,
 )
+from app.domain.build_admission import BuildLeaseState
 from app.domain.builds import (
     PIPELINE_STATUSES,
     BuildConfiguration,
@@ -22,7 +24,7 @@ from app.domain.builds import (
     BuildTrigger,
     next_status,
 )
-from app.jobs.build import is_retryable_build_error
+from app.jobs.build import _heartbeat_admission, is_retryable_build_error
 from app.services.analysis import AnalysisService
 from app.services.builds.pipeline import BuildCancellationRequested, BuildPipeline
 
@@ -65,6 +67,38 @@ def test_frozen_build_configuration_rejects_invalid_chunk_overlap() -> None:
             runtime_manifest_max_bytes=10_000,
             artifact_max_bytes=100_000,
         )
+
+
+async def test_heartbeat_outage_stops_worker_at_last_confirmed_lease_deadline() -> None:
+    class _UnavailableAdmission:
+        async def heartbeat(self, build_id: object, token: object) -> None:
+            del build_id, token
+            raise ConnectionError("database unavailable")
+
+    async def owner() -> None:
+        await asyncio.Future()
+
+    owner_task = asyncio.create_task(owner())
+    admission_lost = asyncio.Event()
+    cancellation_requested = asyncio.Event()
+    result = await _heartbeat_admission(
+        cast(Any, _UnavailableAdmission()),
+        uuid4(),
+        uuid4(),
+        asyncio.Event(),
+        admission_lost,
+        cancellation_requested,
+        cast(asyncio.Task[object], owner_task),
+        interval_seconds=0.005,
+        lease_seconds=0.03,
+        confirmed_deadline=time.monotonic() + 0.03,
+    )
+    await asyncio.gather(owner_task, return_exceptions=True)
+
+    assert result is BuildLeaseState.LOST
+    assert admission_lost.is_set()
+    assert owner_task.cancelled()
+    assert not cancellation_requested.is_set()
 
 
 async def test_pipeline_observes_concurrent_cancellation_as_a_clean_terminal_state(
@@ -125,14 +159,15 @@ async def test_pipeline_observes_concurrent_cancellation_as_a_clean_terminal_sta
         dependency,
     )
     monkeypatch.setattr(pipeline, "_get", AsyncMock(side_effect=[queued, cancelled]))
-    monkeypatch.setattr(pipeline, "_cancellation_checkpoint", AsyncMock())
+    monkeypatch.setattr(pipeline, "_execution_checkpoint", AsyncMock())
     monkeypatch.setattr(
         pipeline,
         "_transition",
         AsyncMock(side_effect=InvalidStateError("concurrent transition")),
     )
 
-    assert await pipeline.run(queued.id) == cancelled
+    token = uuid4()
+    assert await pipeline.run(queued.id, token) == cancelled
 
 
 @pytest.mark.parametrize("status", PIPELINE_STATUSES[:-1])
@@ -198,12 +233,13 @@ async def test_pipeline_acknowledges_cancellation_before_every_stage_boundary(
     checkpoint = AsyncMock(side_effect=BuildCancellationRequested)
     acknowledge = AsyncMock(return_value=cancelled)
     monkeypatch.setattr(pipeline, "_get", AsyncMock(return_value=build))
-    monkeypatch.setattr(pipeline, "_cancellation_checkpoint", checkpoint)
+    monkeypatch.setattr(pipeline, "_execution_checkpoint", checkpoint)
     monkeypatch.setattr(pipeline, "_acknowledge_cancellation", acknowledge)
 
-    assert await pipeline.run(build.id) == cancelled
-    checkpoint.assert_awaited_once_with(build.id)
-    acknowledge.assert_awaited_once_with(build.id)
+    token = uuid4()
+    assert await pipeline.run(build.id, token) == cancelled
+    checkpoint.assert_awaited_once_with(build.id, token)
+    acknowledge.assert_awaited_once_with(build.id, token)
 
 
 async def test_analysis_cancellation_stops_all_concurrent_operation_workers(
@@ -243,6 +279,7 @@ async def test_analysis_cancellation_stops_all_concurrent_operation_workers(
             max_context_chars=20_000,
             max_concurrency=4,
             retrieval_top_k=5,
+            admission_token=uuid4(),
             cancellation_check=AsyncMock(),
         )
 

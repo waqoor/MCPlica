@@ -8,6 +8,7 @@ from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
 
 from .manifest import MCPManifest, ParameterTarget
+from .path_template import path_parameter_names
 
 _CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f]")
 _ENCODED_SEPARATOR = re.compile(r"%(?:2f|5c)", re.IGNORECASE)
@@ -218,7 +219,7 @@ def validate_manifest_contract(manifest: MCPManifest, *, runtime_version: str) -
             if parameter.target != ParameterTarget.QUERY and parameter.allow_reserved:
                 raise ValueError("allow_reserved is valid only for query parameters")
 
-        unresolved = re.findall(r"\{([^{}]+)\}", mapping.path)
+        unresolved = path_parameter_names(mapping.path)
         declared_path = {
             parameter.source_name
             for parameter in mapping.parameters

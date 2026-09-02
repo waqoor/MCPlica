@@ -18,6 +18,25 @@ Check `GET /api/v1/health`, then `GET /api/v1/ready`, Compose/container health, 
 | Authentication failures   | clock, cookie flags/origin, CSRF, user status, MCP token expiry/OIDC claims               | Rotate/re-authenticate through normal flow; never reveal stored secret values                  |
 | Suspected secret exposure | scope, logs/artifacts, access audit                                                       | Isolate, revoke/rotate, preserve evidence, privately notify maintainer                         |
 
+## Fenced worker and access recovery
+
+For a cancelled Build, inspect `cancellation_requested_at`,
+`cancellation_acknowledged_at`, the admission token/lease, and cleanup targets together. A live
+owner should acknowledge at its next checkpoint; after lease expiry the dispatcher must take the
+cancellation-recovery claim and must not run another pipeline stage. Never clear the request,
+change the Build status manually, or reuse an old token to unblock the partial unique index.
+
+For a redispatched runtime command, compare its current `execution_token`, database lease,
+transition sequence, predecessor status, deployment ID, and recorded container ID. A stale-worker
+log is expected to end with an ownership-discard event. Do not retry Docker commands by container
+name or mark an outbox command effective manually; let the current token owner reconcile the exact
+effect while holding the project lock.
+
+Revoking the final valid static token intentionally produces STOP without a replacement. Treat the
+revocation as requested while that durable command is pending, effective only after shutdown is
+observed, and failed if the command reaches terminal failure. Recover the deployment worker/queue
+and replay the same outbox command; never restore the revoked token to make preflight pass.
+
 ## Incident priorities
 
 For active compromise, first prevent further access without destroying evidence: remove public routing or isolate the host, stop both workers and runtime mutations, preserve logs/metadata, and rotate exposed external credentials from a trusted system. Do not delete affected containers, volumes, audit rows, or logs until evidence and recovery copies exist.

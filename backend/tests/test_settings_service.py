@@ -5,6 +5,7 @@ from typing import cast
 from uuid import uuid4
 
 import pytest
+from pydantic import ValidationError as PydanticValidationError
 
 from app.clients.database import DatabaseClient
 from app.core.config import Settings
@@ -12,7 +13,8 @@ from app.core.crypto import AesGcmSecretCipher
 from app.core.exceptions import ValidationError
 from app.providers.ai.base import AIModelInfo, AIProvider
 from app.repositories.audit import AuditRepository
-from app.repositories.settings import EncryptedSystemSecret, SettingsRepository
+from app.repositories.settings import EncryptedSystemSecret, SettingsRepository, SystemSettingRecord
+from app.schemas.setting import SystemSettingsUpdate
 from app.services.settings import SettingsService
 
 
@@ -97,6 +99,7 @@ class _CatalogProvider:
 
 def _service(
     repository: _SettingsRepository | None = None,
+    defaults: Settings | None = None,
 ) -> tuple[SettingsService, AesGcmSecretCipher, _SettingsRepository]:
     active_repository = repository or _SettingsRepository()
     cipher = AesGcmSecretCipher({"v1": b"k" * 32}, "v1")
@@ -106,7 +109,7 @@ def _service(
             cast(SettingsRepository, active_repository),
             cast(AuditRepository, _Audit()),
             cipher,
-            Settings(env="test"),
+            defaults or Settings(env="test"),
         ),
         cipher,
         active_repository,
@@ -153,3 +156,56 @@ async def test_model_catalog_ignores_boolean_and_non_finite_context_lengths() ->
     assert by_id["valid"].context_length == 128_000
     assert by_id["boolean"].context_length is None
     assert by_id["invalid"].context_length is None
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "builders_can_deploy",
+        "mcp_base_domain",
+        "build_concurrency",
+        "max_upload_bytes",
+        "max_operations_per_project",
+        "max_document_chunks_per_project",
+        "environment",
+    ],
+)
+def test_required_operational_patch_fields_reject_explicit_null(field: str) -> None:
+    with pytest.raises(PydanticValidationError):
+        SystemSettingsUpdate.model_validate({field: None})
+    assert SystemSettingsUpdate.model_validate({}).model_dump(exclude_unset=True) == {}
+
+
+def test_explicitly_cleared_models_do_not_reappear_from_environment_defaults() -> None:
+    defaults = Settings(
+        env="test",
+        openrouter_analysis_model="environment-analysis",
+        openrouter_validation_model="environment-validation",
+        openrouter_embedding_model="environment-embedding",
+    )
+    service, _cipher, _repository = _service(defaults=defaults)
+
+    inherited = service._models_from_records(  # pyright: ignore[reportPrivateUsage]
+        None,
+        openrouter_secret_exists=False,
+    )
+    assert inherited.analysis_model == "environment-analysis"
+    assert inherited.validation_model == "environment-validation"
+    assert inherited.embedding_model == "environment-embedding"
+
+    cleared = service._models_from_records(  # pyright: ignore[reportPrivateUsage]
+        SystemSettingRecord(
+            key="model_policy",
+            value={
+                "analysis_model": None,
+                "validation_model": "",
+                "embedding_model": None,
+                "include_documentation_in_analysis": False,
+            },
+            updated_at=datetime.now(UTC),
+        ),
+        openrouter_secret_exists=False,
+    )
+    assert cleared.analysis_model is None
+    assert cleared.validation_model is None
+    assert cleared.embedding_model is None

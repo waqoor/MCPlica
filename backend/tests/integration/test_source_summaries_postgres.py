@@ -1,4 +1,5 @@
 import os
+from datetime import UTC, datetime
 from uuid import UUID
 
 import pytest
@@ -78,23 +79,29 @@ async def _seed(database: DatabaseClient) -> None:
         await session.flush()
         # One source intentionally has no version. It must be reported as missing
         # without hiding the other 99 healthy summary rows.
-        session.add_all(
-            [
-                SourceVersion(
-                    id=UUID(int=812_000 + index),
-                    source_id=source.id,
-                    content_sha256=f"{index + 1:064x}",
-                    media_type="text/plain",
-                    storage_key=f"test/source-summary/{index}",
-                    byte_size=index + 1,
-                    detected_format="text",
-                    source_etag=f'"etag-{index}"',
-                    source_last_modified=None,
-                    created_by=USER_ID,
-                )
-                for index, source in enumerate(sources[1:])
-            ]
-        )
+        versions = [
+            SourceVersion(
+                id=UUID(int=812_000 + index),
+                source_id=source.id,
+                content_sha256=f"{index + 1:064x}",
+                media_type="text/plain",
+                storage_key=f"test/source-summary/{index}",
+                byte_size=index + 1,
+                detected_format="text",
+                source_etag=f'"etag-{index}"',
+                source_last_modified=None,
+                created_by=USER_ID,
+            )
+            for index, source in enumerate(sources[1:])
+        ]
+        session.add_all(versions)
+        await session.flush()
+        observed_at = datetime.now(UTC)
+        for source, version in zip(sources[1:], versions, strict=True):
+            source.current_version_id = version.id
+            source.current_version_selected_at = observed_at
+            source.last_observed_at = observed_at
+            source.last_observed_etag = version.source_etag
 
 
 @pytest.mark.asyncio(loop_scope="function")

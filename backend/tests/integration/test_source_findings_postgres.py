@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 from uuid import UUID
@@ -36,6 +37,7 @@ pytestmark = pytest.mark.postgres_integration
 USER_ID = UUID(int=701)
 PROJECT_ID = UUID(int=702)
 BUILD_ID = UUID(int=703)
+ADMISSION_TOKEN = UUID(int=706)
 ROOT_SOURCE_ID = UUID(int=704)
 EXTERNAL_SOURCE_ID = UUID(int=705)
 
@@ -202,12 +204,31 @@ async def _seed(
             source_last_modified=None,
             created_by=USER_ID,
         )
+        await sources.select_current_version(
+            session,
+            source_id=root_source.id,
+            version_id=root_version.id,
+            source_etag=None,
+            source_last_modified=None,
+        )
+        await sources.select_current_version(
+            session,
+            source_id=external_source.id,
+            version_id=external_version.id,
+            source_etag=None,
+            source_last_modified=None,
+        )
+        bindings = await sources.list_bound_versions(
+            session,
+            PROJECT_ID,
+            [root_version.id, external_version.id],
+        )
         await builds.create(
             session,
             build_id=BUILD_ID,
             project_id=PROJECT_ID,
             trigger=BuildTrigger.INITIAL,
-            source_version_ids=[root_version.id, external_version.id],
+            source_bindings=bindings,
             requested_by=USER_ID,
             compiler_version="test",
             runtime_compatibility="test",
@@ -216,6 +237,18 @@ async def _seed(
             embedding_model=None,
             prompt_bundle_version="test",
             build_config=cast(dict[str, object], _config().model_dump(mode="json")),
+        )
+        now = datetime.now(UTC)
+        await session.execute(
+            update(Build)
+            .where(Build.id == BUILD_ID)
+            .values(
+                admission_token=ADMISSION_TOKEN,
+                admission_acquired_at=now,
+                admission_heartbeat_at=now,
+                admission_lease_expires_at=now + timedelta(minutes=5),
+                admission_attempt_count=1,
+            )
         )
     return root_version.id, external_version.id
 
@@ -287,14 +320,14 @@ async def test_two_source_parse_failure_is_durable_idempotent_and_exact(
         pipeline = _pipeline(database, storage)
 
         with pytest.raises(SourceParseError) as first_failure:
-            await pipeline.run(BUILD_ID)
+            await pipeline.run(BUILD_ID, ADMISSION_TOKEN)
         assert first_failure.value.details["source_version_id"] == str(external_version_id)
         assert first_failure.value.details["source_pointer"] == "#"
         assert first_failure.value.details["line"] == 2
         assert first_failure.value.details["column"] == 1
 
         with pytest.raises(SourceParseError):
-            await pipeline.run(BUILD_ID)
+            await pipeline.run(BUILD_ID, ADMISSION_TOKEN)
 
         repository = SourceRepository()
         async with database.session_scope() as session:
@@ -317,24 +350,9 @@ async def test_two_source_parse_failure_is_durable_idempotent_and_exact(
         assert (finding.line, finding.column) == (2, 1)
         assert finding.details["source_version_id"] == str(external_version_id)
 
-        await pipeline.fail_from_exception(BUILD_ID, first_failure.value)
-        source_service = _source_service(database, storage)
-        root_metadata = await source_service.metadata(root_version_id)
-        external_metadata = await source_service.metadata(external_version_id)
-        assert root_metadata.parse_status == "pending"
-        assert root_metadata.errors == []
-        assert external_metadata.parse_status == "invalid"
-        assert len(external_metadata.errors) == 1
-        assert external_metadata.errors[0].source_version_id == external_version_id
-        assert external_metadata.errors[0].pointer == "#"
-        assert external_metadata.errors[0].line == 2
-        assert external_metadata.metadata_build_id == BUILD_ID
-
-        async with database.session_scope() as session:
-            failed_build = await BuildRepository().get(session, BUILD_ID)
-        assert failed_build is not None
+        active_build = await pipeline._get(BUILD_ID)
         await pipeline._record_source_finding(
-            failed_build,
+            active_build,
             SourceParseError(
                 "Injected safe parser evidence",
                 details={
@@ -344,6 +362,7 @@ async def test_two_source_parse_failure_is_durable_idempotent_and_exact(
                 },
             ),
             stage="parsing",
+            admission_token=ADMISSION_TOKEN,
         )
         async with database.session_scope() as session:
             redacted_findings = await repository.list_findings_for_version(
@@ -354,6 +373,24 @@ async def test_two_source_parse_failure_is_durable_idempotent_and_exact(
         redacted = next(item for item in redacted_findings if item.pointer == "#/credentials")
         assert redacted.details["api_key"] == "[REDACTED]"
         assert "must-not-persist" not in str(redacted.model_dump(mode="json"))
+
+        await pipeline.fail_from_exception(
+            BUILD_ID,
+            first_failure.value,
+            admission_token=ADMISSION_TOKEN,
+        )
+        source_service = _source_service(database, storage)
+        root_metadata = await source_service.metadata(root_version_id)
+        external_metadata = await source_service.metadata(external_version_id)
+        assert root_metadata.parse_status == "pending"
+        assert root_metadata.errors == []
+        assert external_metadata.parse_status == "invalid"
+        assert len(external_metadata.errors) == 2
+        assert external_metadata.errors[0].source_version_id == external_version_id
+        assert external_metadata.errors[0].pointer == "#"
+        assert external_metadata.errors[0].line == 2
+        assert external_metadata.metadata_build_id == BUILD_ID
+
     finally:
         await _cleanup(database)
         await database.close()

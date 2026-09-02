@@ -79,6 +79,13 @@ class CleanupTarget(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         UniqueConstraint("job_id", "target_key", name="uq_cleanup_targets_job_target_key"),
         CheckConstraint("attempt_count >= 0", name="ck_cleanup_targets_attempt_count"),
         CheckConstraint(
+            "(status = 'running'::cleanup_target_status AND execution_token IS NOT NULL "
+            "AND lease_expires_at IS NOT NULL) OR "
+            "(status <> 'running'::cleanup_target_status AND execution_token IS NULL "
+            "AND lease_expires_at IS NULL)",
+            name="ck_cleanup_targets_execution_owner_shape",
+        ),
+        CheckConstraint(
             "(target_type = 'object'::cleanup_target_type AND storage_key IS NOT NULL "
             "AND collection_name IS NULL AND vector_project_id IS NULL "
             "AND generation_id IS NULL) OR "
@@ -127,5 +134,6 @@ class CleanupTarget(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     lease_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    execution_token: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
     last_error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
     last_error_summary: Mapped[str | None] = mapped_column(Text(), nullable=True)

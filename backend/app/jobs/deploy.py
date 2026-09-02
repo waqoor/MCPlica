@@ -50,6 +50,10 @@ async def _runner(
     cipher = configured_secret_cipher(
         settings.secret_encryption_key.get_secret_value(),
         settings.secret_encryption_key_version,
+        previous_encoded_keys={
+            version: key.get_secret_value()
+            for version, key in settings.secret_encryption_previous_keys.items()
+        },
     )
     database = DatabaseClient(
         settings.database_url,
@@ -84,6 +88,8 @@ async def _runner(
             settings.deployment_queue_name,
             job_timeout_seconds=settings.deployment_job_timeout_seconds,
             max_attempts=settings.deployment_job_max_attempts,
+            socket_connect_timeout_seconds=settings.redis_socket_connect_timeout_seconds,
+            socket_timeout_seconds=settings.redis_socket_timeout_seconds,
         )
         dispatcher = RuntimeCommandDispatcher(
             database,
@@ -134,6 +140,7 @@ async def _runner(
             deployments,
             runner,
             lease_seconds=settings.runtime_command_execution_lease_seconds,
+            heartbeat_seconds=settings.runtime_command_execution_heartbeat_seconds,
         )
         return executor, database, storage, runtime_files, docker, queue
     except Exception:
@@ -152,13 +159,13 @@ async def _close_resources(*resources: _AsyncClosable | None) -> None:
         logger.warning("deployment_job_resource_cleanup_failed")
 
 
-async def _run(command_id: UUID) -> None:
+async def _run(command_id: UUID, execution_token: UUID) -> None:
     executor, database, storage, runtime_files, docker, queue = await _runner(get_settings())
     try:
-        await executor.run(command_id)
+        await executor.run(command_id, execution_token)
     finally:
         await _close_resources(docker, queue, runtime_files, storage, database)
 
 
-def run_runtime_command_job(command_id: str) -> None:
-    asyncio.run(_run(UUID(command_id)))
+def run_runtime_command_job(command_id: str, execution_token: str) -> None:
+    asyncio.run(_run(UUID(command_id), UUID(execution_token)))

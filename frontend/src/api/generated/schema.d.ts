@@ -1548,6 +1548,11 @@ export type components = {
        */
       readonly build_id: string;
     };
+    /**
+     * DeploymentIntent
+     * @enum {string}
+     */
+    readonly DeploymentIntent: "normal" | "security_refresh" | "rollback";
     /** DeploymentPageRead */
     readonly DeploymentPageRead: {
       /** Has Active */
@@ -1608,6 +1613,7 @@ export type components = {
       readonly image_digest: string | null;
       /** Image Ref */
       readonly image_ref: string;
+      readonly intent: components["schemas"]["DeploymentIntent"];
       /** Manifest Sha256 */
       readonly manifest_sha256: string;
       /** Network Name */
@@ -1761,8 +1767,14 @@ export type components = {
     /** MCPAccessRead */
     readonly MCPAccessRead: {
       readonly auth_config: components["schemas"]["MCPAuthConfigRead"] | null;
+      /** Page */
+      readonly page: number;
+      /** Page Size */
+      readonly page_size: number;
       /** Tokens */
       readonly tokens: readonly components["schemas"]["MCPAccessTokenRead"][];
+      /** Total */
+      readonly total: number;
     };
     /** MCPAccessStatusRead */
     readonly MCPAccessStatusRead: {
@@ -2199,6 +2211,50 @@ export type components = {
       /** Selection Required */
       readonly selection_required: boolean;
     };
+    /** Page[BuildAIRunRead] */
+    readonly Page_BuildAIRunRead_: {
+      /** Items */
+      readonly items: readonly components["schemas"]["BuildAIRunRead"][];
+      /** Page */
+      readonly page: number;
+      /** Page Size */
+      readonly page_size: number;
+      /** Total */
+      readonly total: number;
+    };
+    /** Page[CredentialRead] */
+    readonly Page_CredentialRead_: {
+      /** Items */
+      readonly items: readonly components["schemas"]["CredentialRead"][];
+      /** Page */
+      readonly page: number;
+      /** Page Size */
+      readonly page_size: number;
+      /** Total */
+      readonly total: number;
+    };
+    /** Page[ProjectRead] */
+    readonly Page_ProjectRead_: {
+      /** Items */
+      readonly items: readonly components["schemas"]["ProjectRead"][];
+      /** Page */
+      readonly page: number;
+      /** Page Size */
+      readonly page_size: number;
+      /** Total */
+      readonly total: number;
+    };
+    /** Page[UserRead] */
+    readonly Page_UserRead_: {
+      /** Items */
+      readonly items: readonly components["schemas"]["UserRead"][];
+      /** Page */
+      readonly page: number;
+      /** Page Size */
+      readonly page_size: number;
+      /** Total */
+      readonly total: number;
+    };
     /** ParameterMapping */
     readonly ParameterMapping: {
       /**
@@ -2632,6 +2688,10 @@ export type components = {
        * Format: date-time
        */
       readonly created_at: string;
+      /** Current Version Id */
+      readonly current_version_id: string | null;
+      /** Current Version Selected At */
+      readonly current_version_selected_at: string | null;
       /**
        * Id
        * Format: uuid
@@ -2640,6 +2700,12 @@ export type components = {
       /** Is Primary */
       readonly is_primary: boolean;
       readonly kind: components["schemas"]["SourceKind"];
+      /** Last Observed At */
+      readonly last_observed_at: string | null;
+      /** Last Observed Etag */
+      readonly last_observed_etag: string | null;
+      /** Last Observed Last Modified */
+      readonly last_observed_last_modified: string | null;
       /** Name */
       readonly name: string;
       readonly origin_type: components["schemas"]["SourceOrigin"];
@@ -2658,6 +2724,10 @@ export type components = {
        * Format: date-time
        */
       readonly created_at: string;
+      /** Current Version Id */
+      readonly current_version_id: string | null;
+      /** Current Version Selected At */
+      readonly current_version_selected_at: string | null;
       /**
        * Health
        * @enum {string}
@@ -2671,6 +2741,12 @@ export type components = {
       /** Is Primary */
       readonly is_primary: boolean;
       readonly kind: components["schemas"]["SourceKind"];
+      /** Last Observed At */
+      readonly last_observed_at: string | null;
+      /** Last Observed Etag */
+      readonly last_observed_etag: string | null;
+      /** Last Observed Last Modified */
+      readonly last_observed_last_modified: string | null;
       readonly latest_version:
         components["schemas"]["SourceVersionSummaryRead"] | null;
       /** Name */
@@ -2909,21 +2985,24 @@ export type components = {
     /** SystemSettingsUpdate */
     readonly SystemSettingsUpdate: {
       /** Build Concurrency */
-      readonly build_concurrency?: number | null;
+      readonly build_concurrency?: number;
       /** Build Retention Count */
       readonly build_retention_count?: number | null;
       /** Builders Can Deploy */
-      readonly builders_can_deploy?: boolean | null;
-      /** Environment */
-      readonly environment?: ("development" | "production" | "test") | null;
+      readonly builders_can_deploy?: boolean;
+      /**
+       * Environment
+       * @enum {string}
+       */
+      readonly environment?: "development" | "production" | "test";
       /** Max Document Chunks Per Project */
-      readonly max_document_chunks_per_project?: number | null;
+      readonly max_document_chunks_per_project?: number;
       /** Max Operations Per Project */
-      readonly max_operations_per_project?: number | null;
+      readonly max_operations_per_project?: number;
       /** Max Upload Bytes */
-      readonly max_upload_bytes?: number | null;
+      readonly max_upload_bytes?: number;
       /** Mcp Base Domain */
-      readonly mcp_base_domain?: string | null;
+      readonly mcp_base_domain?: string;
       /** Source Retention Days */
       readonly source_retention_days?: number | null;
     };
@@ -3295,7 +3374,10 @@ export interface operations {
   };
   readonly get_build_ai_runs_api_v1_builds__build_id__ai_runs_get: {
     readonly parameters: {
-      readonly query?: never;
+      readonly query?: {
+        readonly page?: number;
+        readonly page_size?: number;
+      };
       readonly header?: never;
       readonly path: {
         readonly build_id: string;
@@ -3310,7 +3392,7 @@ export interface operations {
           readonly [name: string]: unknown;
         };
         content: {
-          readonly "application/json": readonly components["schemas"]["BuildAIRunRead"][];
+          readonly "application/json": components["schemas"]["Page_BuildAIRunRead_"];
         };
       };
       /** @description Validation Error */
@@ -3823,7 +3905,10 @@ export interface operations {
   };
   readonly list_projects_api_v1_projects_get: {
     readonly parameters: {
-      readonly query?: never;
+      readonly query?: {
+        readonly page?: number;
+        readonly page_size?: number;
+      };
       readonly header?: never;
       readonly path?: never;
       readonly cookie?: never;
@@ -3836,7 +3921,16 @@ export interface operations {
           readonly [name: string]: unknown;
         };
         content: {
-          readonly "application/json": readonly components["schemas"]["ProjectRead"][];
+          readonly "application/json": components["schemas"]["Page_ProjectRead_"];
+        };
+      };
+      /** @description Validation Error */
+      readonly 422: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly "application/json": components["schemas"]["HTTPValidationError"];
         };
       };
     };
@@ -4042,7 +4136,10 @@ export interface operations {
   };
   readonly list_credentials_api_v1_projects__project_id__credentials_get: {
     readonly parameters: {
-      readonly query?: never;
+      readonly query?: {
+        readonly page?: number;
+        readonly page_size?: number;
+      };
       readonly header?: never;
       readonly path: {
         readonly project_id: string;
@@ -4057,7 +4154,7 @@ export interface operations {
           readonly [name: string]: unknown;
         };
         content: {
-          readonly "application/json": readonly components["schemas"]["CredentialRead"][];
+          readonly "application/json": components["schemas"]["Page_CredentialRead_"];
         };
       };
       /** @description Validation Error */
@@ -4278,7 +4375,10 @@ export interface operations {
   };
   readonly get_mcp_access_api_v1_projects__project_id__mcp_access_get: {
     readonly parameters: {
-      readonly query?: never;
+      readonly query?: {
+        readonly page?: number;
+        readonly page_size?: number;
+      };
       readonly header?: never;
       readonly path: {
         readonly project_id: string;
@@ -5242,7 +5342,10 @@ export interface operations {
   };
   readonly list_users_api_v1_users_get: {
     readonly parameters: {
-      readonly query?: never;
+      readonly query?: {
+        readonly page?: number;
+        readonly page_size?: number;
+      };
       readonly header?: never;
       readonly path?: never;
       readonly cookie?: never;
@@ -5255,7 +5358,16 @@ export interface operations {
           readonly [name: string]: unknown;
         };
         content: {
-          readonly "application/json": readonly components["schemas"]["UserRead"][];
+          readonly "application/json": components["schemas"]["Page_UserRead_"];
+        };
+      };
+      /** @description Validation Error */
+      readonly 422: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly "application/json": components["schemas"]["HTTPValidationError"];
         };
       };
     };

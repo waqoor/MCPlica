@@ -1,8 +1,11 @@
+import asyncio
+
 import httpx
 import pytest
 
 from app.clients.http import HttpClient
 from app.core.exceptions import (
+    ClientTimeoutError,
     ClientUnavailableError,
     PayloadTooLargeError,
     SecurityPolicyError,
@@ -138,5 +141,24 @@ async def test_bounded_fetch_stops_after_configured_attempts() -> None:
                 max_attempts=2,
             )
         assert attempts == 2
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_bounded_fetch_total_deadline_includes_dns_resolution() -> None:
+    async def stalled_resolver(_hostname: str, _port: int) -> list[str]:
+        await asyncio.Event().wait()
+        return []
+
+    client = HttpClient(timeout_seconds=0.02)
+    try:
+        with pytest.raises(ClientTimeoutError, match="total deadline"):
+            await client.fetch_bounded(
+                "https://stalled.example/spec",
+                policy=UrlPolicy(resolver=stalled_resolver),
+                max_bytes=10,
+                max_redirects=0,
+            )
     finally:
         await client.close()

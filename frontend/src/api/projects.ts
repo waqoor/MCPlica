@@ -1,4 +1,4 @@
-import { api, jsonBody, queryString } from "./client";
+import { api, apiAllPages, jsonBody, queryString } from "./client";
 import type { CleanupJob, Project, ProjectJourney } from "./contracts";
 import { endpointResponses } from "./generated/zod";
 
@@ -20,12 +20,10 @@ export type UpdateProject = Partial<
 
 export const projectApi = {
   list: (signal?: AbortSignal) =>
-    api<Project[]>(
+    apiAllPages<Project>(
       "/api/v1/projects",
       endpointResponses["get /api/v1/projects"],
-      {
-        signal,
-      },
+      signal,
     ),
   get: (projectId: string, signal?: AbortSignal) =>
     api<Project>(

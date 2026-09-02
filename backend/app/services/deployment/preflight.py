@@ -60,6 +60,13 @@ class DeploymentPreflight:
         runtime_version: str,
         require_current_configuration: bool = True,
     ) -> DeploymentPreflightResult:
+        if not build.source_binding_metadata_trustworthy:
+            self._reject(
+                "BUILD_SOURCE_BINDING_IDENTITY_MISSING",
+                "Build predates immutable source binding metadata",
+                field="build_id",
+                remediation="Create a new build from the currently selected source versions.",
+            )
         if build.executable_configuration_sha256 is None:
             self._reject(
                 "BUILD_CONFIGURATION_IDENTITY_MISSING",

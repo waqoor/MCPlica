@@ -26,6 +26,12 @@ class InvalidStateError(MCPlicaError):
     status_code = 409
 
 
+class ExecutionOwnershipError(InvalidStateError):
+    """A durable worker lease no longer belongs to the current execution."""
+
+    code = "EXECUTION_OWNERSHIP_LOST"
+
+
 class DeployabilityError(InvalidStateError):
     code = "DEPLOYABILITY_PREFLIGHT_FAILED"
 

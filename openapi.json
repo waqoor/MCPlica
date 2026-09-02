@@ -1555,6 +1555,15 @@
         "title": "DeploymentCreate",
         "type": "object"
       },
+      "DeploymentIntent": {
+        "enum": [
+          "normal",
+          "security_refresh",
+          "rollback"
+        ],
+        "title": "DeploymentIntent",
+        "type": "string"
+      },
       "DeploymentPageRead": {
         "additionalProperties": false,
         "properties": {
@@ -1753,6 +1762,9 @@
             "title": "Image Ref",
             "type": "string"
           },
+          "intent": {
+            "$ref": "#/components/schemas/DeploymentIntent"
+          },
           "manifest_sha256": {
             "title": "Manifest Sha256",
             "type": "string"
@@ -1806,6 +1818,7 @@
           "id",
           "project_id",
           "build_id",
+          "intent",
           "status",
           "hostname",
           "endpoint_url",
@@ -2112,17 +2125,36 @@
               }
             ]
           },
+          "page": {
+            "minimum": 1.0,
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Page Size",
+            "type": "integer"
+          },
           "tokens": {
             "items": {
               "$ref": "#/components/schemas/MCPAccessTokenRead"
             },
             "title": "Tokens",
             "type": "array"
+          },
+          "total": {
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
           }
         },
         "required": [
           "auth_config",
-          "tokens"
+          "tokens",
+          "total",
+          "page",
+          "page_size"
         ],
         "title": "MCPAccessRead",
         "type": "object"
@@ -3491,6 +3523,150 @@
         "title": "OperationServerRoutingRead",
         "type": "object"
       },
+      "Page_BuildAIRunRead_": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BuildAIRunRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "minimum": 1.0,
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "Page[BuildAIRunRead]",
+        "type": "object"
+      },
+      "Page_CredentialRead_": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CredentialRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "minimum": 1.0,
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "Page[CredentialRead]",
+        "type": "object"
+      },
+      "Page_ProjectRead_": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ProjectRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "minimum": 1.0,
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "Page[ProjectRead]",
+        "type": "object"
+      },
+      "Page_UserRead_": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UserRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "minimum": 1.0,
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "Page[UserRead]",
+        "type": "object"
+      },
       "ParameterMapping": {
         "additionalProperties": false,
         "properties": {
@@ -4832,6 +5008,30 @@
             "title": "Created At",
             "type": "string"
           },
+          "current_version_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Version Id"
+          },
+          "current_version_selected_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Version Selected At"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -4843,6 +5043,40 @@
           },
           "kind": {
             "$ref": "#/components/schemas/SourceKind"
+          },
+          "last_observed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Observed At"
+          },
+          "last_observed_etag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Observed Etag"
+          },
+          "last_observed_last_modified": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Observed Last Modified"
           },
           "name": {
             "title": "Name",
@@ -4876,7 +5110,12 @@
           "origin_type",
           "source_url",
           "is_primary",
-          "created_at"
+          "created_at",
+          "current_version_id",
+          "current_version_selected_at",
+          "last_observed_at",
+          "last_observed_etag",
+          "last_observed_last_modified"
         ],
         "title": "SourceRead",
         "type": "object"
@@ -4888,6 +5127,30 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "current_version_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Version Id"
+          },
+          "current_version_selected_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Version Selected At"
           },
           "health": {
             "enum": [
@@ -4910,6 +5173,40 @@
           },
           "kind": {
             "$ref": "#/components/schemas/SourceKind"
+          },
+          "last_observed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Observed At"
+          },
+          "last_observed_etag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Observed Etag"
+          },
+          "last_observed_last_modified": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Observed Last Modified"
           },
           "latest_version": {
             "anyOf": [
@@ -4959,6 +5256,11 @@
           "source_url",
           "is_primary",
           "created_at",
+          "current_version_id",
+          "current_version_selected_at",
+          "last_observed_at",
+          "last_observed_etag",
+          "last_observed_last_modified",
           "latest_version",
           "version_count",
           "health"
@@ -5585,17 +5887,10 @@
         "additionalProperties": false,
         "properties": {
           "build_concurrency": {
-            "anyOf": [
-              {
-                "maximum": 32.0,
-                "minimum": 1.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Build Concurrency"
+            "maximum": 32.0,
+            "minimum": 1.0,
+            "title": "Build Concurrency",
+            "type": "integer"
           },
           "build_retention_count": {
             "anyOf": [
@@ -5611,83 +5906,41 @@
             "title": "Build Retention Count"
           },
           "builders_can_deploy": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Builders Can Deploy"
+            "title": "Builders Can Deploy",
+            "type": "boolean"
           },
           "environment": {
-            "anyOf": [
-              {
-                "enum": [
-                  "development",
-                  "production",
-                  "test"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+            "enum": [
+              "development",
+              "production",
+              "test"
             ],
-            "title": "Environment"
+            "title": "Environment",
+            "type": "string"
           },
           "max_document_chunks_per_project": {
-            "anyOf": [
-              {
-                "maximum": 100000.0,
-                "minimum": 1.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Max Document Chunks Per Project"
+            "maximum": 100000.0,
+            "minimum": 1.0,
+            "title": "Max Document Chunks Per Project",
+            "type": "integer"
           },
           "max_operations_per_project": {
-            "anyOf": [
-              {
-                "maximum": 100000.0,
-                "minimum": 1.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Max Operations Per Project"
+            "maximum": 100000.0,
+            "minimum": 1.0,
+            "title": "Max Operations Per Project",
+            "type": "integer"
           },
           "max_upload_bytes": {
-            "anyOf": [
-              {
-                "maximum": 500000000.0,
-                "minimum": 1024.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Max Upload Bytes"
+            "maximum": 100000000.0,
+            "minimum": 1024.0,
+            "title": "Max Upload Bytes",
+            "type": "integer"
           },
           "mcp_base_domain": {
-            "anyOf": [
-              {
-                "maxLength": 253,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mcp Base Domain"
+            "maxLength": 253,
+            "minLength": 1,
+            "title": "Mcp Base Domain",
+            "type": "string"
           },
           "source_retention_days": {
             "anyOf": [
@@ -6530,6 +6783,29 @@
               "title": "Build Id",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -6537,11 +6813,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/BuildAIRunRead"
-                  },
-                  "title": "Response Get Build Ai Runs Api V1 Builds  Build Id  Ai Runs Get",
-                  "type": "array"
+                  "$ref": "#/components/schemas/Page_BuildAIRunRead_"
                 }
               }
             },
@@ -7288,20 +7560,51 @@
     "/api/v1/projects": {
       "get": {
         "operationId": "list_projects_api_v1_projects_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ProjectRead"
-                  },
-                  "title": "Response List Projects Api V1 Projects Get",
-                  "type": "array"
+                  "$ref": "#/components/schemas/Page_ProjectRead_"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "List Projects",
@@ -7614,6 +7917,29 @@
               "title": "Project Id",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -7621,11 +7947,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/CredentialRead"
-                  },
-                  "title": "Response List Credentials Api V1 Projects  Project Id  Credentials Get",
-                  "type": "array"
+                  "$ref": "#/components/schemas/Page_CredentialRead_"
                 }
               }
             },
@@ -8004,6 +8326,29 @@
               "format": "uuid",
               "title": "Project Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
             }
           }
         ],
@@ -9427,20 +9772,51 @@
     "/api/v1/users": {
       "get": {
         "operationId": "list_users_api_v1_users_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/UserRead"
-                  },
-                  "title": "Response List Users Api V1 Users Get",
-                  "type": "array"
+                  "$ref": "#/components/schemas/Page_UserRead_"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "List Users",

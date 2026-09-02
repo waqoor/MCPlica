@@ -3,10 +3,11 @@ from typing import cast
 from uuid import UUID
 
 from mcp_contracts.json_types import JsonObject
-from sqlalchemy import delete, exists, func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import InvalidStateError
 from app.domain.builds import BuildStatus
 from app.domain.sources import (
     BoundSourceVersionRecord,
@@ -17,9 +18,11 @@ from app.domain.sources import (
     SourceOrigin,
     SourceSummaryRecord,
     SourceVersionRecord,
+    source_dependency_aliases,
 )
 from app.models.build import Build, BuildSourceVersion
 from app.models.source import ProjectSource, SourceFinding, SourceVersion
+from app.repositories.build_execution import require_build_execution_owner
 
 
 def _source_to_domain(model: ProjectSource) -> ProjectSourceRecord:
@@ -32,6 +35,11 @@ def _source_to_domain(model: ProjectSource) -> ProjectSourceRecord:
         source_url=model.source_url,
         is_primary=model.is_primary,
         created_at=model.created_at,
+        current_version_id=model.current_version_id,
+        current_version_selected_at=model.current_version_selected_at,
+        last_observed_at=model.last_observed_at,
+        last_observed_etag=model.last_observed_etag,
+        last_observed_last_modified=model.last_observed_last_modified,
     )
 
 
@@ -48,6 +56,19 @@ def _version_to_domain(model: SourceVersion) -> SourceVersionRecord:
         source_last_modified=model.source_last_modified,
         created_by=model.created_by,
         created_at=model.created_at,
+    )
+
+
+def _bound_to_domain(
+    source: ProjectSource,
+    version: SourceVersion,
+) -> BoundSourceVersionRecord:
+    source_record = _source_to_domain(source)
+    return BoundSourceVersionRecord(
+        source=source_record,
+        version=_version_to_domain(version),
+        dependency_aliases=source_dependency_aliases(source_record),
+        binding_metadata_trustworthy=True,
     )
 
 
@@ -95,7 +116,13 @@ class SourceRepository:
         line: int | None,
         column: int | None,
         details: JsonObject,
+        admission_token: UUID,
     ) -> SourceFindingRecord:
+        await require_build_execution_owner(
+            session,
+            build_id=build_id,
+            admission_token=admission_token,
+        )
         finding_key = _finding_key(
             stage=stage,
             code=code,
@@ -167,40 +194,20 @@ class SourceRepository:
                 SourceVersion.id.in_(version_ids),
             )
         )
-        return [
-            BoundSourceVersionRecord(
-                source=_source_to_domain(source),
-                version=_version_to_domain(version),
-            )
-            for source, version in rows.tuples()
-        ]
+        return [_bound_to_domain(source, version) for source, version in rows.tuples()]
 
     async def latest_bound_versions(
         self,
         session: AsyncSession,
         project_id: UUID,
     ) -> list[BoundSourceVersionRecord]:
-        latest = (
-            select(SourceVersion.id)
-            .where(SourceVersion.source_id == ProjectSource.id)
-            .order_by(SourceVersion.created_at.desc(), SourceVersion.id.desc())
-            .limit(1)
-            .correlate(ProjectSource)
-            .scalar_subquery()
-        )
         rows = await session.execute(
             select(ProjectSource, SourceVersion)
-            .join(SourceVersion, SourceVersion.id == latest)
+            .join(SourceVersion, SourceVersion.id == ProjectSource.current_version_id)
             .where(ProjectSource.project_id == project_id)
             .order_by(ProjectSource.created_at.asc())
         )
-        return [
-            BoundSourceVersionRecord(
-                source=_source_to_domain(source),
-                version=_version_to_domain(version),
-            )
-            for source, version in rows.tuples()
-        ]
+        return [_bound_to_domain(source, version) for source, version in rows.tuples()]
 
     async def list_sources(
         self, session: AsyncSession, project_id: UUID
@@ -249,29 +256,10 @@ class SourceRepository:
                 )
             ).tuples()
         }
-        ranked_versions = (
-            select(
-                SourceVersion.id.label("version_id"),
-                SourceVersion.source_id.label("source_id"),
-                func.row_number()
-                .over(
-                    partition_by=SourceVersion.source_id,
-                    order_by=(SourceVersion.created_at.desc(), SourceVersion.id.desc()),
-                )
-                .label("position"),
-            )
-            .where(SourceVersion.source_id.in_(source_ids))
-            .subquery()
-        )
         latest_ids = {
-            source_id: version_id
-            for version_id, source_id in (
-                await session.execute(
-                    select(ranked_versions.c.version_id, ranked_versions.c.source_id).where(
-                        ranked_versions.c.position == 1
-                    )
-                )
-            ).tuples()
+            source.id: source.current_version_id
+            for source in source_models
+            if source.current_version_id is not None
         }
         version_models = {
             model.id: model
@@ -398,7 +386,7 @@ class SourceRepository:
                 ProjectSource.project_id == project_id,
                 ProjectSource.kind.in_([SourceKind.OPENAPI, SourceKind.API_INVENTORY]),
                 ProjectSource.is_primary.is_(True),
-                exists(select(SourceVersion.id).where(SourceVersion.source_id == ProjectSource.id)),
+                ProjectSource.current_version_id.is_not(None),
             )
         )
         return _source_to_domain(model) if model else None
@@ -458,7 +446,7 @@ class SourceRepository:
             target is None
             or target.project_id != project_id
             or target.kind not in {SourceKind.OPENAPI, SourceKind.API_INVENTORY}
-            or await self.latest_version(session, source_id) is None
+            or target.current_version_id is None
         ):
             return None
         await session.execute(
@@ -488,6 +476,18 @@ class SourceRepository:
         return reference is not None
 
     async def delete_source(self, session: AsyncSession, source_id: UUID) -> bool:
+        await session.execute(
+            update(ProjectSource)
+            .where(ProjectSource.id == source_id)
+            .values(
+                current_version_id=None,
+                current_version_selected_at=None,
+                last_observed_at=None,
+                last_observed_etag=None,
+                last_observed_last_modified=None,
+            )
+        )
+        await session.flush()
         deleted_id = await session.scalar(
             delete(ProjectSource).where(ProjectSource.id == source_id).returning(ProjectSource.id)
         )
@@ -505,7 +505,7 @@ class SourceRepository:
             .where(
                 ProjectSource.project_id == project_id,
                 ProjectSource.kind.in_([SourceKind.OPENAPI, SourceKind.API_INVENTORY]),
-                exists(select(SourceVersion.id).where(SourceVersion.source_id == ProjectSource.id)),
+                ProjectSource.current_version_id.is_not(None),
             )
             .order_by(ProjectSource.created_at.asc(), ProjectSource.id.asc())
         )
@@ -546,11 +546,71 @@ class SourceRepository:
     ) -> SourceVersionRecord | None:
         model = await session.scalar(
             select(SourceVersion)
-            .where(SourceVersion.source_id == source_id)
-            .order_by(SourceVersion.created_at.desc())
-            .limit(1)
+            .join(ProjectSource, ProjectSource.current_version_id == SourceVersion.id)
+            .where(ProjectSource.id == source_id)
         )
         return _version_to_domain(model) if model else None
+
+    async def select_current_version(
+        self,
+        session: AsyncSession,
+        *,
+        source_id: UUID,
+        version_id: UUID,
+        source_etag: str | None,
+        source_last_modified: str | None,
+    ) -> ProjectSourceRecord:
+        observed_at = await session.scalar(select(func.clock_timestamp()))
+        assert observed_at is not None
+        updated_id = await session.scalar(
+            update(ProjectSource)
+            .where(ProjectSource.id == source_id)
+            .values(
+                current_version_id=version_id,
+                current_version_selected_at=observed_at,
+                last_observed_at=observed_at,
+                last_observed_etag=source_etag,
+                last_observed_last_modified=source_last_modified,
+            )
+            .returning(ProjectSource.id)
+        )
+        if updated_id is None:
+            raise InvalidStateError("Source is unavailable for version selection")
+        source = await self.get_source(session, source_id)
+        assert source is not None
+        return source
+
+    async def observe_not_modified(
+        self,
+        session: AsyncSession,
+        *,
+        source_id: UUID,
+        expected_version_id: UUID,
+        source_etag: str | None,
+        source_last_modified: str | None,
+    ) -> SourceVersionRecord:
+        source = await self.lock_source(session, source_id)
+        if source is None or source.current_version_id is None:
+            raise InvalidStateError("Remote source has no selected version")
+        if source.current_version_id == expected_version_id:
+            observed_at = await session.scalar(select(func.clock_timestamp()))
+            assert observed_at is not None
+            await session.execute(
+                update(ProjectSource)
+                .where(
+                    ProjectSource.id == source_id,
+                    ProjectSource.current_version_id == expected_version_id,
+                )
+                .values(
+                    last_observed_at=observed_at,
+                    last_observed_etag=source_etag,
+                    last_observed_last_modified=source_last_modified,
+                )
+            )
+        current = await self.latest_version(session, source_id)
+        if current is None:
+            raise InvalidStateError("Remote source has no selected version")
+        return current
 
     async def get_version(
         self, session: AsyncSession, version_id: UUID

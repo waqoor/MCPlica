@@ -21,7 +21,7 @@ test("accepts nullable retention and exact operational bounds", () => {
       build_concurrency: 32,
       source_retention_days: 3_650,
       build_retention_count: 10_000,
-      max_upload_bytes: 500_000_000,
+      max_upload_bytes: 100_000_000,
       max_operations_per_project: 100_000,
       max_document_chunks_per_project: 100_000,
     }).success,
@@ -34,6 +34,7 @@ test.each([
   ["source_retention_days", 3_651],
   ["build_retention_count", 10_001],
   ["max_upload_bytes", 1_023],
+  ["max_upload_bytes", 100_000_001],
   ["max_operations_per_project", 100_001],
   ["max_document_chunks_per_project", 100_001],
 ])("rejects %s outside the backend-owned bound", (field, value) => {

@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 
 from app.api.deps import (
     AdminPrincipal,
@@ -12,6 +12,7 @@ from app.api.deps import (
 )
 from app.schemas.cleanup import CleanupJobRead
 from app.schemas.journey import ProjectJourneyRead
+from app.schemas.pagination import Page
 from app.schemas.project import ProjectCreate, ProjectRead, ProjectUpdate
 from app.services.journey import JourneyService
 from app.services.projects import ProjectService
@@ -19,12 +20,20 @@ from app.services.projects import ProjectService
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 
-@router.get("", response_model=list[ProjectRead])
+@router.get("", response_model=Page[ProjectRead])
 async def list_projects(
     _principal: BuilderPrincipal,
     service: Annotated[ProjectService, Depends(project_service)],
-) -> list[ProjectRead]:
-    return [ProjectRead.model_validate(project) for project in await service.list()]
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> Page[ProjectRead]:
+    projects, total = await service.list(page=page, page_size=page_size)
+    return Page(
+        items=[ProjectRead.model_validate(project) for project in projects],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.post("", response_model=ProjectRead, status_code=status.HTTP_201_CREATED)
