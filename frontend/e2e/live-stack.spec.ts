@@ -117,7 +117,16 @@ test("authenticates against Compose and exposes the active rollback runtime", as
     page.getByRole("heading", { level: 1, name: "Providers" }),
   ).toBeVisible();
   await expect(page.getByText("https://openrouter.ai/api/v1")).toBeVisible();
+  const providerResponsePromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.url().endsWith("/api/v1/settings/openrouter/test"),
+  );
   await page.getByRole("button", { name: "Test connection" }).click();
+  const providerResponse = await providerResponsePromise;
+  expect(providerResponse.ok()).toBe(true);
+  const providerResult = (await providerResponse.json()) as { ok?: unknown };
+  expect(providerResult.ok).toBe(true);
   await expect(
     page.getByText(/OpenRouter connected; \d+ models are visible/),
   ).toBeVisible({
