@@ -22,7 +22,7 @@ dev = [
   "pytest>=8.4,<9",
   "pytest-asyncio>=1.1,<2",
   "pyright>=1.1.400,<2",
-  "ruff>=0.12,<1",
+  "ruff>=0.16.5,<1",
 ]
 
 [tool.uv.sources]
