@@ -303,7 +303,7 @@ caebcf8230db4c9546398a9a126c628d54b4909573848f4a3dbf87db1fa22c1a  ./backend/test
 a48b6196d1e31b61eca379328ed0e95bb5b1e5541dd3fa4d62faf29a1993c44d  ./backend/tests/test_operation_paging.py
 f63f4182525674737de4109cd5dd583011ad4d1e49cf4fea9dffe2b413e2ed49  ./backend/tests/test_queue_clients.py
 948f962fed59757de95ae817ea1e46216f54128d61d7a3678d90ba9ebf6dc64c  ./backend/tests/test_read_schema_boundaries.py
-40c6a2c9ea7b42bdc08e7cb633cd755049fba2b3ab77d3b3d867f76a0817512f  ./backend/tests/test_repository_policy.py
+7b8541c4a362a8338c09fd86ebb8cce8b828d3e5556b278fe5bfd96088ccd715  ./backend/tests/test_repository_policy.py
 1bdaff037e02dd103046386f67c66ba69d3e72dcfe593c0e07e22f8fed1673dd  ./backend/tests/test_request_limits.py
 648f6f340fc2d0a358ce69d7a06ee8853999dec9d20995c3c20b6a9944cca83e  ./backend/tests/test_runtime_command_lifecycle.py
 9f608932a140370b5f1c6b3b18b61f1ff0306df03a6490208f38d5eb948d4d9c  ./backend/tests/test_runtime_deployment.py
@@ -337,7 +337,7 @@ dffd0e736e7c8be4aa7f00eafbe109b4745e643e1dcc87777f1ca8402940e52e  ./docs/evidenc
 fd237430a787e5058ba7533b8faef0071cabad1ba09d3bef9489b10c4b6ca55c  ./docs/evidence/post-merge-2026-09-01/validation-summary.json
 6dd33af3d14233bf43bf238a5be11b816d3c5c94d65e821c8db717a681fe8cce  ./docs/evidence/post-merge-2026-09-01/workflow.json
 62a789990a5e3cbed71d205e2b922af1ded6ed4465bb99f7462d22836fc1598e  ./docs/evidence/post-merge-validation-2026-09-01.md
-410737556a57d3e121d8345b8ed136a42ae855290aadd70902505c55e37725f4  ./docs/evidence/v1.0.0-release-candidate.md
+d47733d7425c4afd40889cc1be6da0149065ed19e7c3cb8eff7b4768da3eb601  ./docs/evidence/v1.0.0-release-candidate.md
 7c875393177732dfb11f916a57e3ac798939bf847298cd27d8233e4ae9407e9a  ./docs/implementation_plan.md
 0236e379a4907759cb325e43e8c56318dd1ff0e6362a04f9660aa93757428b5d  ./docs/mcp-client-connection.md
 cc4a31395f46dc181699a163a2ac397bb042b42b5c88b01ea75d2a6c30be216a  ./docs/open_source_and_sponsorship_model.md
@@ -617,7 +617,7 @@ dd3e4fd96f329fb127400474ba261ba176132f607f23161e46af85c529a180b4  ./scripts/gene
 515951fe1bef5feb1c2f6f756e188da63c69014c6ad91abaa62edf92ef9fed8a  ./scripts/github_labels.py
 1568eec0fef130ef5464bd8e30e869914d46afb27017b8667d08fd5fa9a4e929  ./scripts/init_env.py
 460c09da6d9aa91a1694a895b5e5bef6b04918fef79f793c4ff836949e6dfda5  ./scripts/release_version.py
-63fa1987e8df2c74ed223f554574628f4a7d4090c7073af77edbc3249a576a29  ./scripts/validate_docs.py
+c4085a4e8a1297fbe4e93d9fbaa14d2819b4266a98d3eaed2fdd57f60ff43801  ./scripts/validate_docs.py
 c8ddb2ad70f9e6dd213bee331043c5ba602f73cb2bca9408dd5a5306b40a9f76  ./scripts/validate_starter.py
 f90689fa40997c18d90724282719318506f28a39398346f8ba16b1d04db4cc3f  ./tests/fixtures/canonical/pipeline-matrix-3.1-json.json
 9e944443bdf1196ec34a176bfbd58684797ab3b870ed838f2e7c4735bd226d6c  ./tests/fixtures/canonical/pipeline-matrix-3.1-yaml.json

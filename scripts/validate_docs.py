@@ -211,13 +211,19 @@ def validate_tracked_files() -> list[str]:
     return errors
 
 
-def main() -> int:
-    markdown_files = sorted(
-        path
-        for path in ROOT.rglob("*.md")
-        if not any(part in {".git", ".venv", "node_modules", "output"} for part in path.parts)
+def tracked_markdown_files() -> list[Path]:
+    result = subprocess.run(
+        ["git", "ls-files", "-z", "--", "*.md"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
     )
+    return sorted(ROOT / path for path in result.stdout.decode("utf-8").split("\0") if path)
+
+
+def main() -> int:
     try:
+        markdown_files = tracked_markdown_files()
         errors = [
             *validate_links(markdown_files),
             *validate_environment(markdown_files),

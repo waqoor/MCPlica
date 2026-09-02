@@ -43,6 +43,29 @@ def test_source_snapshot_checksum_manifest_uses_canonical_git_blob_bytes() -> No
     assert expected in (root / "MANIFEST.sha256").read_text(encoding="utf-8").splitlines()
 
 
+def test_documentation_validator_only_reads_tracked_markdown() -> None:
+    root = Path(__file__).resolve().parents[2]
+    tracked = (
+        subprocess.run(
+            ["git", "ls-files", "-z", "--", "*.md"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+        )
+        .stdout.decode("utf-8")
+        .split("\0")
+    )
+    result = subprocess.run(
+        [sys.executable, "scripts/validate_docs.py"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert f"({len([path for path in tracked if path])} Markdown files;" in result.stdout
+
+
 def test_authoritative_documentation_is_not_ignored() -> None:
     root = Path(__file__).resolve().parents[2]
     result = subprocess.run(
