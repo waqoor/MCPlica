@@ -314,7 +314,9 @@ async def test_cancellation_is_request_then_effective_acknowledgement(
             cast(ArtifactStorage, failing_storage),
             cast(VectorStore, object()),
             cast(OperationalSettingsProvider, object()),
-            interval_seconds=0.1,
+            # A zero retry delay makes the target immediately due again. The worker must
+            # still attempt a given target at most once in a single dispatch cycle.
+            interval_seconds=0,
             lease_seconds=5,
             max_attempts=3,
             retention_interval_seconds=3_600,
