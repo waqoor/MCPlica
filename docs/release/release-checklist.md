@@ -13,6 +13,9 @@ Every checked item needs a link or stored evidence record. Unchecked means not r
 
 - [ ] All authoritative acceptance scenarios map to live routes/UI behavior with no production mock/stub/TODO or parallel implementation.
 - [ ] OpenAPI, typed clients, domain contracts, migrations, compiler/runtime schemas, and generated artifacts agree.
+- [ ] The `issues_002.md` closure invariants remain green: current-source/frozen-Build identity,
+      exact execution fencing, bounded I/O/lifecycle, pagination, key rotation, safe logging, and
+      structured-AI accounting.
 - [ ] Source provenance, explicit exclusions, deterministic executable mapping, 100% coverage, no blocking findings, and runtime compatibility are proven.
 - [ ] Auth/CSRF/roles, one-time secret handling, SSRF/redirect/DNS policy, manifest digest, runtime isolation, and failed replacement/rollback behavior pass negative tests.
 
@@ -21,6 +24,8 @@ Every checked item needs a link or stored evidence record. Unchecked means not r
 - [ ] Formatting, lint, type checks, backend/runtime/contracts tests, frontend unit/build, Chromium/Firefox/WebKit/mobile E2E, and Compose/image smoke tests pass from frozen locks.
 - [ ] Secret, dependency, repository misconfiguration, and all three image scans have no unaccepted HIGH/CRITICAL blocker.
 - [ ] SBOMs, release evidence, checksums, image digests, and Cosign signatures verify for the exact tagged SHA.
+- [ ] `python scripts/checksum_manifest.py --check` succeeds for the exact tracked source tree and
+      the configured external CLA status/check succeeds for the release commit where applicable.
 
 ## Operations
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
+from typing import Protocol
 from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,13 +14,16 @@ from app.core.exceptions import (
     ClientConnectionError,
     ClientTimeoutError,
     ClientUnavailableError,
+    DeployabilityError,
     DockerOperationError,
+    ExecutionOwnershipError,
     InvalidStateError,
     MCPlicaError,
     NotFoundError,
     RuntimeHealthError,
 )
 from app.domain.deployments import (
+    DeploymentIntent,
     DeploymentRecord,
     DeploymentStatus,
     MCPAuthConfigRecord,
@@ -36,6 +40,14 @@ from app.services.deployment.runtime_manager import RuntimeManager
 from app.services.deployment.secret_materializer import DeploymentSecretMaterializer
 
 logger = logging.getLogger("mcplica.deployment")
+
+
+class ExecutionCheckpoint(Protocol):
+    async def __call__(self, session: AsyncSession | None = None) -> None: ...
+
+
+async def _unfenced_execution_checkpoint(session: AsyncSession | None = None) -> None:
+    del session
 
 
 def is_retryable_deployment_error(error: Exception) -> bool:
@@ -149,6 +161,8 @@ class DeploymentService:
                 subject_type=subject_type,
                 subject_id=subject_id,
                 transition_id=uuid4(),
+                intent=DeploymentIntent.NORMAL,
+                transition_stopping_ids=set(),
             )
         self._dispatcher.wake()
         return deployment
@@ -186,6 +200,8 @@ class DeploymentService:
         subject_type: str | None = None,
         subject_id: UUID | None = None,
         transition_id: UUID | None = None,
+        intent: DeploymentIntent = DeploymentIntent.NORMAL,
+        fallback_to_stop: bool = False,
     ) -> DeploymentRecord | None:
         """Persist a replacement and its runtime commands in the caller's transaction."""
 
@@ -194,13 +210,23 @@ class DeploymentService:
         if project is None:
             raise NotFoundError("Project was not found")
         stoppable = await self._deployments.list_stoppable_for_project(session, project_id)
+        target_build_id = project.active_build_id
+        if project.active_deployment_id is not None:
+            active = await self._deployments.get(session, project.active_deployment_id)
+            if active is not None:
+                target_build_id = active.build_id
+        elif stoppable:
+            # Security maintenance racing initial activation refreshes that exact
+            # candidate instead of silently selecting a different project build.
+            target_build_id = stoppable[0].build_id
+        transition_stopping_ids: set[UUID] = set()
         for deployment in stoppable:
             if stop_old_first or deployment.status in {
                 DeploymentStatus.PENDING,
                 DeploymentStatus.DEPLOYING,
                 DeploymentStatus.HEALTHCHECK,
             }:
-                await self._schedule_stop_in_session(
+                stopped = await self._schedule_stop_in_session(
                     session,
                     deployment,
                     actor_user_id=actor_user_id,
@@ -210,20 +236,49 @@ class DeploymentService:
                     subject_id=subject_id,
                     transition_id=transition_id,
                 )
-        if project.active_build_id is None or not project.is_enabled:
+                transition_stopping_ids.add(stopped.id)
+        if target_build_id is None or not project.is_enabled:
+            if fallback_to_stop:
+                await self.schedule_stop_project(
+                    session,
+                    project_id=project_id,
+                    actor_user_id=actor_user_id,
+                    request_id=request_id,
+                    reason=event_type,
+                    subject_type=subject_type,
+                    subject_id=subject_id,
+                    transition_id=transition_id,
+                )
             return None
-        return await self._request_in_session(
-            session,
-            project=project,
-            build_id=project.active_build_id,
-            actor_user_id=actor_user_id,
-            request_id=request_id,
-            stop_old_first=stop_old_first,
-            event_type=event_type,
-            subject_type=subject_type,
-            subject_id=subject_id,
-            transition_id=transition_id,
-        )
+        try:
+            return await self._request_in_session(
+                session,
+                project=project,
+                build_id=target_build_id,
+                actor_user_id=actor_user_id,
+                request_id=request_id,
+                stop_old_first=stop_old_first,
+                event_type=event_type,
+                subject_type=subject_type,
+                subject_id=subject_id,
+                transition_id=transition_id,
+                intent=intent,
+                transition_stopping_ids=transition_stopping_ids,
+            )
+        except (InvalidStateError, NotFoundError, DeployabilityError):
+            if not fallback_to_stop:
+                raise
+            await self.schedule_stop_project(
+                session,
+                project_id=project_id,
+                actor_user_id=actor_user_id,
+                request_id=request_id,
+                reason=event_type,
+                subject_type=subject_type,
+                subject_id=subject_id,
+                transition_id=transition_id,
+            )
+            return None
 
     async def restart(
         self,
@@ -274,7 +329,8 @@ class DeploymentService:
                 subject_type="deployment",
                 subject_id=target.id,
                 transition_id=uuid4(),
-                require_current_configuration=False,
+                intent=DeploymentIntent.ROLLBACK,
+                transition_stopping_ids=set(),
             )
         self._dispatcher.wake()
         return deployment
@@ -386,11 +442,16 @@ class DeploymentService:
         subject_type: str | None,
         subject_id: UUID | None,
         transition_id: UUID,
-        require_current_configuration: bool = True,
+        intent: DeploymentIntent,
+        transition_stopping_ids: set[UUID],
     ) -> DeploymentRecord:
         if not project.is_enabled:
             raise InvalidStateError("Disabled projects cannot be deployed")
-        if await self._deployments.has_in_progress(session, project.id):
+        if await self._deployments.has_in_progress(
+            session,
+            project.id,
+            transition_stopping_ids=transition_stopping_ids,
+        ):
             raise InvalidStateError("A deployment is already in progress for this project")
         build = await self._deployments.get_build(session, build_id)
         if build is None or build.project_id != project.id:
@@ -409,7 +470,7 @@ class DeploymentService:
             hostname=project.hostname,
             build=build,
             runtime_version=self._settings.mcp_runtime_version,
-            require_current_configuration=require_current_configuration,
+            require_current_configuration=intent is DeploymentIntent.NORMAL,
         )
         deployment_id = uuid4()
         route_priority = await self._deployments.next_route_priority(session, project.id)
@@ -420,6 +481,7 @@ class DeploymentService:
             deployment_id=deployment_id,
             project_id=project.id,
             build_id=build_id,
+            intent=intent,
             previous_active_deployment_id=project.active_deployment_id,
             hostname=project.hostname,
             container_name=f"mcp-{project.id.hex}-{deployment_id.hex}",
@@ -458,6 +520,7 @@ class DeploymentService:
                 "build_id": str(build_id),
                 "stop_old_first": stop_old_first,
                 "runtime_command_id": str(command.id),
+                "intent": intent.value,
             },
         )
         return deployment
@@ -554,7 +617,9 @@ class DeploymentRunner:
         *,
         final_attempt: bool = True,
         rollback_target_id: UUID | None = None,
+        execution_checkpoint: ExecutionCheckpoint | None = None,
     ) -> None:
+        checkpoint = execution_checkpoint or _unfenced_execution_checkpoint
         deployment: DeploymentRecord | None = None
         activated = False
         terminal_running: DeploymentRecord | None = None
@@ -566,6 +631,7 @@ class DeploymentRunner:
         active: DeploymentRecord | None = None
         try:
             async with self._database.session_scope() as session:
+                await checkpoint(session)
                 deployment = await self._deployments.get_for_update(session, deployment_id)
                 if deployment is None:
                     raise NotFoundError("Deployment was not found")
@@ -599,8 +665,12 @@ class DeploymentRunner:
                             or build.manifest_sha256 != deployment.manifest_sha256
                         ):
                             raise InvalidStateError("Deployment build is no longer deployable")
-                        require_current_configuration = True
-                        if rollback_target_id is not None:
+                        require_current_configuration = deployment.intent is DeploymentIntent.NORMAL
+                        if deployment.intent is DeploymentIntent.ROLLBACK:
+                            if rollback_target_id is None:
+                                raise InvalidStateError(
+                                    "Rollback deployment is missing its immutable target"
+                                )
                             rollback_target = await self._deployments.get(
                                 session, rollback_target_id
                             )
@@ -616,7 +686,10 @@ class DeploymentRunner:
                                 raise InvalidStateError(
                                     "Rollback target is no longer eligible for activation"
                                 )
-                            require_current_configuration = False
+                        elif rollback_target_id is not None:
+                            raise InvalidStateError(
+                                "Only rollback deployments may carry a rollback target"
+                            )
                         deployment = await self._deployments.transition(
                             session,
                             deployment.id,
@@ -646,8 +719,11 @@ class DeploymentRunner:
                         )
             if terminal_running is not None:
                 try:
+                    await checkpoint()
                     proof = await self._runtime.revalidate_activation_candidate(terminal_running)
+                    await checkpoint()
                     async with self._database.session_scope() as session:
+                        await checkpoint(session)
                         refreshed = await self._deployments.refresh_activation_proof(
                             session,
                             terminal_running.id,
@@ -658,18 +734,30 @@ class DeploymentRunner:
                                 "Running deployment activation proof could not be refreshed"
                             )
                 except Exception as exc:
-                    await self._fail_activation_and_restore(terminal_running, exc)
+                    if isinstance(exc, ExecutionOwnershipError):
+                        raise
+                    await self._fail_activation_and_restore(
+                        terminal_running,
+                        exc,
+                        checkpoint=checkpoint,
+                    )
                     activation_failure_recorded = True
                     raise
                 activated = True
-                await self._cleanup_activation_predecessor(terminal_running)
-                await self._cleanup_superseded(terminal_running)
+                await self._cleanup_activation_predecessor(
+                    terminal_running,
+                    checkpoint=checkpoint,
+                )
+                await self._cleanup_superseded(terminal_running, checkpoint=checkpoint)
                 return
             if activation_pending is not None:
                 deployment = activation_pending
                 try:
+                    await checkpoint()
                     proof = await self._runtime.revalidate_activation_candidate(activation_pending)
+                    await checkpoint()
                     async with self._database.session_scope() as session:
+                        await checkpoint(session)
                         refreshed = await self._deployments.refresh_activation_proof(
                             session,
                             activation_pending.id,
@@ -680,16 +768,23 @@ class DeploymentRunner:
                                 "Activation proof could not be persisted before cleanup"
                             )
                 except Exception as exc:
-                    await self._fail_activation_and_restore(activation_pending, exc)
+                    if isinstance(exc, ExecutionOwnershipError):
+                        raise
+                    await self._fail_activation_and_restore(
+                        activation_pending,
+                        exc,
+                        checkpoint=checkpoint,
+                    )
                     activation_failure_recorded = True
                     raise
                 activated = True
-                await self._finish_activation(activation_pending)
+                await self._finish_activation(activation_pending, checkpoint=checkpoint)
                 return
             if preflight_result is None:
                 raise InvalidStateError("Deployment preflight result is unavailable")
             manifest_bytes = preflight_result.manifest_bytes
             manifest = preflight_result.manifest
+            await checkpoint()
             bundle = await self._secrets.build_bundle(
                 project_id=deployment.project_id,
                 hostname=deployment.hostname,
@@ -697,18 +792,22 @@ class DeploymentRunner:
                 auth_config=auth_config,
                 token_verifiers=token_verifiers,
             )
+            await checkpoint()
             mounts = await self._runtime_files.materialize(
                 deployment.id,
                 manifest_bytes=manifest_bytes,
                 manifest_sha256=deployment.manifest_sha256,
                 secret_bundle=bundle,
             )
+            await checkpoint()
             if deployment.stop_old_first and active is not None:
                 await self._stop_existing(
                     active,
                     event_type="deployment.replacement_stopped",
+                    checkpoint=checkpoint,
                 )
             async with self._database.session_scope() as session:
+                await checkpoint(session)
                 deployment = await self._deployments.transition(
                     session,
                     deployment.id,
@@ -721,8 +820,11 @@ class DeploymentRunner:
                 )
                 if deployment is None:
                     raise InvalidStateError("Deployment was cancelled before startup")
+            await checkpoint()
             provisioned = await self._runtime.provision(deployment, mounts)
+            await checkpoint()
             async with self._database.session_scope() as session:
+                await checkpoint(session)
                 deployment = await self._deployments.transition(
                     session,
                     deployment.id,
@@ -744,8 +846,10 @@ class DeploymentRunner:
                 if not activated:
                     raise InvalidStateError("Deployment was cancelled before activation")
             activated = True
-            await self._finish_activation(deployment)
+            await self._finish_activation(deployment, checkpoint=checkpoint)
         except Exception as exc:
+            if isinstance(exc, ExecutionOwnershipError):
+                raise
             if deployment is None:
                 raise
             if activated:
@@ -754,10 +858,11 @@ class DeploymentRunner:
                     extra={"deployment_id": str(deployment.id)},
                 )
                 raise
-            await self._cleanup_failed_without_masking(deployment)
+            await self._cleanup_failed_without_masking(deployment, checkpoint=checkpoint)
             code, summary, unhealthy = self._safe_failure(exc)
             if not final_attempt and is_retryable_deployment_error(exc):
                 async with self._database.session_scope() as session:
+                    await checkpoint(session)
                     pending = await self._deployments.reset_for_retry(
                         session,
                         deployment.id,
@@ -776,6 +881,7 @@ class DeploymentRunner:
                     raise
                 return
             async with self._database.session_scope() as session:
+                await checkpoint(session)
                 failed = await self._deployments.mark_failed(
                     session,
                     deployment.id,
@@ -798,13 +904,24 @@ class DeploymentRunner:
             ):
                 raise
 
-    async def stop(self, deployment_id: UUID) -> None:
+    async def stop(
+        self,
+        deployment_id: UUID,
+        *,
+        execution_checkpoint: ExecutionCheckpoint | None = None,
+    ) -> None:
+        checkpoint = execution_checkpoint or _unfenced_execution_checkpoint
+        await checkpoint()
         deployment = await self._get_required(deployment_id)
         if deployment.status in {DeploymentStatus.STOPPED, DeploymentStatus.FAILED}:
             return
+        await checkpoint()
         await self._runtime.stop(deployment, remove=True)
+        await checkpoint()
         await self._runtime_files.remove(deployment.id)
+        await checkpoint()
         async with self._database.session_scope() as session:
+            await checkpoint(session)
             await self._deployments.clear_active(session, deployment.project_id, deployment.id)
             await self._deployments.mark_stopped(session, deployment.id)
             await self._audit.append(
@@ -815,17 +932,24 @@ class DeploymentRunner:
                 entity_id=deployment.id,
                 project_id=deployment.project_id,
             )
+        await checkpoint()
         await self._runtime.cleanup_network_if_unused(deployment)
+        await checkpoint()
 
     async def _stop_existing(
         self,
         deployment: DeploymentRecord,
         *,
         event_type: str = "deployment.superseded",
+        checkpoint: ExecutionCheckpoint = _unfenced_execution_checkpoint,
     ) -> None:
+        await checkpoint()
         await self._runtime.stop(deployment, remove=True)
+        await checkpoint()
         await self._runtime_files.remove(deployment.id)
+        await checkpoint()
         async with self._database.session_scope() as session:
+            await checkpoint(session)
             await self._deployments.clear_active(session, deployment.project_id, deployment.id)
             await self._deployments.mark_stopped(session, deployment.id)
             await self._audit.append(
@@ -837,38 +961,73 @@ class DeploymentRunner:
                 project_id=deployment.project_id,
             )
 
-    async def _cleanup_superseded(self, running: DeploymentRecord) -> None:
+    async def _cleanup_superseded(
+        self,
+        running: DeploymentRecord,
+        *,
+        checkpoint: ExecutionCheckpoint = _unfenced_execution_checkpoint,
+    ) -> None:
+        await checkpoint()
         async with self._database.session_scope() as session:
             superseded = await self._deployments.find_superseded_running(session, running)
         for deployment in superseded:
-            await self._stop_existing(deployment, event_type="deployment.superseded")
+            await self._stop_existing(
+                deployment,
+                event_type="deployment.superseded",
+                checkpoint=checkpoint,
+            )
 
-    async def _remove_retired_runtime(self, deployment: DeploymentRecord) -> None:
+    async def _remove_retired_runtime(
+        self,
+        deployment: DeploymentRecord,
+        *,
+        checkpoint: ExecutionCheckpoint = _unfenced_execution_checkpoint,
+    ) -> None:
         """Remove a predecessor only after its control-plane retirement is committed."""
 
+        await checkpoint()
         await self._runtime.stop(deployment, remove=True)
+        await checkpoint()
         await self._runtime_files.remove(deployment.id)
+        await checkpoint()
         await self._runtime.cleanup_network_if_unused(deployment)
+        await checkpoint()
 
-    async def _cleanup_activation_predecessor(self, running: DeploymentRecord) -> None:
+    async def _cleanup_activation_predecessor(
+        self,
+        running: DeploymentRecord,
+        *,
+        checkpoint: ExecutionCheckpoint = _unfenced_execution_checkpoint,
+    ) -> None:
         previous_id = running.previous_active_deployment_id
         if previous_id is None:
             return
+        await checkpoint()
         async with self._database.session_scope() as session:
             previous = await self._deployments.get(session, previous_id)
         if previous is None:
             return
         if previous.status == DeploymentStatus.STOPPED:
-            await self._remove_retired_runtime(previous)
+            await self._remove_retired_runtime(previous, checkpoint=checkpoint)
         elif previous.status in {DeploymentStatus.RUNNING, DeploymentStatus.STOPPING}:
             # Compatibility repair for an activation committed by an older worker.
-            await self._stop_existing(previous, event_type="deployment.superseded")
+            await self._stop_existing(
+                previous,
+                event_type="deployment.superseded",
+                checkpoint=checkpoint,
+            )
 
-    async def _finish_activation(self, deployment: DeploymentRecord) -> None:
+    async def _finish_activation(
+        self,
+        deployment: DeploymentRecord,
+        *,
+        checkpoint: ExecutionCheckpoint = _unfenced_execution_checkpoint,
+    ) -> None:
         candidate = deployment
         predecessor: DeploymentRecord | None = None
         try:
             async with self._database.session_scope() as session:
+                await checkpoint(session)
                 retiring = await self._deployments.mark_retiring_previous(session, deployment.id)
                 if not retiring:
                     raise InvalidStateError("Deployment activation proof is unavailable")
@@ -891,10 +1050,15 @@ class DeploymentRunner:
             # Keep the predecessor container recoverable until the replacement has been
             # re-proved without it and both control-plane states commit atomically.
             if predecessor is not None and predecessor.status == DeploymentStatus.STOPPING:
+                await checkpoint()
                 await self._runtime.stop(predecessor, remove=False)
+                await checkpoint()
+            await checkpoint()
             proof = await self._runtime.revalidate_activation_candidate(candidate)
+            await checkpoint()
 
             async with self._database.session_scope() as session:
+                await checkpoint(session)
                 refreshed = await self._deployments.refresh_activation_proof(
                     session,
                     candidate.id,
@@ -930,23 +1094,32 @@ class DeploymentRunner:
                     },
                 )
         except Exception as exc:
-            await self._fail_activation_and_restore(candidate, exc)
+            if isinstance(exc, ExecutionOwnershipError):
+                raise
+            await self._fail_activation_and_restore(
+                candidate,
+                exc,
+                checkpoint=checkpoint,
+            )
             raise
 
         # The predecessor is already STOPPED before RUNNING is observable. Container and
         # secret deletion are idempotent, so a command retry can finish interrupted cleanup.
         if predecessor is not None:
-            await self._remove_retired_runtime(predecessor)
-        await self._cleanup_superseded(running)
+            await self._remove_retired_runtime(predecessor, checkpoint=checkpoint)
+        await self._cleanup_superseded(running, checkpoint=checkpoint)
 
     async def _fail_activation_and_restore(
         self,
         candidate: DeploymentRecord,
         error: Exception,
+        *,
+        checkpoint: ExecutionCheckpoint = _unfenced_execution_checkpoint,
     ) -> None:
         code, summary, _ = self._safe_failure(error)
         previous: DeploymentRecord | None = None
         if candidate.previous_active_deployment_id is not None:
+            await checkpoint()
             async with self._database.session_scope() as session:
                 previous = await self._deployments.get(
                     session,
@@ -956,10 +1129,15 @@ class DeploymentRunner:
         previous_runtime_ready = False
         try:
             # Remove the invalid candidate from edge selection before probing its predecessor.
+            await checkpoint()
             await self._runtime.stop(candidate, remove=False)
+            await checkpoint()
             if previous is not None:
                 await self._runtime.restore_activation_predecessor(previous)
+                await checkpoint()
                 previous_runtime_ready = True
+        except ExecutionOwnershipError:
+            raise
         except MCPlicaError:
             logger.exception(
                 "deployment_predecessor_restore_failed",
@@ -967,6 +1145,7 @@ class DeploymentRunner:
             )
 
         async with self._database.session_scope() as session:
+            await checkpoint(session)
             await self._deployments.restore_previous_after_failed_activation(
                 session,
                 candidate.id,
@@ -994,23 +1173,40 @@ class DeploymentRunner:
                 raise NotFoundError("Deployment was not found")
             return deployment
 
-    async def _cleanup_failed_without_masking(self, deployment: DeploymentRecord) -> None:
+    async def _cleanup_failed_without_masking(
+        self,
+        deployment: DeploymentRecord,
+        *,
+        checkpoint: ExecutionCheckpoint = _unfenced_execution_checkpoint,
+    ) -> None:
         try:
+            await checkpoint()
             await self._runtime.cleanup_failed(deployment)
+            await checkpoint()
+        except ExecutionOwnershipError:
+            raise
         except MCPlicaError:
             logger.warning(
                 "failed_runtime_cleanup_failed",
                 extra={"deployment_id": str(deployment.id)},
             )
         try:
+            await checkpoint()
             await self._runtime_files.remove(deployment.id)
+            await checkpoint()
+        except ExecutionOwnershipError:
+            raise
         except MCPlicaError:
             logger.warning(
                 "failed_runtime_secret_cleanup_failed",
                 extra={"deployment_id": str(deployment.id)},
             )
         try:
+            await checkpoint()
             await self._runtime.cleanup_network_if_unused(deployment)
+            await checkpoint()
+        except ExecutionOwnershipError:
+            raise
         except MCPlicaError:
             logger.warning(
                 "failed_runtime_network_cleanup_failed",

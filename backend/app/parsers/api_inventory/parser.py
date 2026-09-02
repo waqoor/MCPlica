@@ -1,7 +1,8 @@
 import hashlib
 from collections.abc import Mapping
 from copy import deepcopy
-from urllib.parse import urldefrag
+from typing import cast
+from urllib.parse import unquote, urldefrag
 from uuid import UUID
 
 from jsonschema import Draft202012Validator, SchemaError
@@ -51,19 +52,65 @@ def _validate_schema(schema: Mapping[str, object], pointer: str) -> None:
         ) from exc
 
 
-def _pointer(document: JsonObject, pointer: str) -> JsonValue:
+def _pointer_tokens(pointer: str) -> tuple[str, ...]:
     if pointer in {"", "#"}:
-        return document
+        return ()
     normalized = pointer[1:] if pointer.startswith("#") else pointer
     if not normalized.startswith("/"):
         raise ReferenceResolutionError(f"Unsupported API Inventory JSON pointer: {pointer}")
-    node: JsonValue = document
-    for token in normalized[1:].split("/"):
-        token = token.replace("~1", "/").replace("~0", "~")
-        if not isinstance(node, dict) or token not in node:
-            raise ReferenceResolutionError(f"Unresolved API Inventory $ref: {pointer}")
-        node = node[token]
+    return tuple(
+        unquote(raw_token).replace("~1", "/").replace("~0", "~")
+        for raw_token in normalized[1:].split("/")
+    )
+
+
+def _traverse_pointer(document: JsonValue, tokens: tuple[str, ...], pointer: str) -> JsonValue:
+    node: object = document
+    for token in tokens:
+        if isinstance(node, dict):
+            mapping = cast(dict[str, JsonValue], node)
+            if token in mapping:
+                node = mapping[token]
+                continue
+        if (
+            isinstance(node, list)
+            and token.isdigit()
+            and (token == "0" or not token.startswith("0"))
+        ):
+            sequence = cast(list[JsonValue], node)
+            index = int(token)
+            if index < len(sequence):
+                node = sequence[index]
+                continue
+        raise ReferenceResolutionError(f"Unresolved API Inventory $ref: {pointer}")
     return node
+
+
+def _pointer(document: JsonObject, pointer: str) -> JsonValue:
+    return _traverse_pointer(document, _pointer_tokens(pointer), pointer)
+
+
+_SINGLE_SCHEMA_KEYWORDS = {
+    "additionalProperties",
+    "contains",
+    "contentSchema",
+    "else",
+    "if",
+    "items",
+    "not",
+    "propertyNames",
+    "then",
+    "unevaluatedItems",
+    "unevaluatedProperties",
+}
+_SCHEMA_ARRAY_KEYWORDS = {"allOf", "anyOf", "oneOf", "prefixItems"}
+_SCHEMA_MAP_KEYWORDS = {
+    "$defs",
+    "definitions",
+    "dependentSchemas",
+    "patternProperties",
+    "properties",
+}
 
 
 def _materialize_schema(
@@ -82,10 +129,6 @@ def _materialize_schema(
         resource_root: JsonObject,
         resource_id: str,
     ) -> JsonValue:
-        if isinstance(node, list):
-            return [
-                visit(item, resource_root=resource_root, resource_id=resource_id) for item in node
-            ]
         if not isinstance(node, dict):
             return node
         output: JsonObject = {}
@@ -99,9 +142,9 @@ def _materialize_schema(
                     "API Inventory external schema refs require an immutable linked source"
                 )
             target_pointer = f"#{fragment}" if fragment else "#"
-            if target_pointer.startswith("#/schemas/"):
-                encoded_name = target_pointer.removeprefix("#/schemas/").split("/", 1)[0]
-                schema_name = encoded_name.replace("~1", "/").replace("~0", "~")
+            target_tokens = _pointer_tokens(target_pointer)
+            if len(target_tokens) >= 2 and target_tokens[0] == "schemas":
+                schema_name = target_tokens[1]
                 target = inventory_schemas.get(schema_name)
                 if target is None:
                     raise ReferenceResolutionError(
@@ -109,14 +152,19 @@ def _materialize_schema(
                     )
                 target_root = target
                 target_resource_id = f"#/schemas/{pointer_token(schema_name)}"
-                remainder = target_pointer.removeprefix(f"#/schemas/{pointer_token(schema_name)}")
-                nested_pointer = f"#{remainder}" if remainder else "#"
-                target_node = _pointer(target_root, nested_pointer)
+                nested_tokens = target_tokens[2:]
+                nested_pointer = (
+                    "#/" + "/".join(pointer_token(token) for token in nested_tokens)
+                    if nested_tokens
+                    else "#"
+                )
+                target_node = _traverse_pointer(target_root, nested_tokens, target_pointer)
             else:
                 target_root = resource_root
                 target_resource_id = resource_id
+                nested_pointer = target_pointer
                 target_node = _pointer(resource_root, target_pointer)
-            identity = (target_resource_id, target_pointer)
+            identity = (target_resource_id, nested_pointer)
             definition_key = (
                 "mcplica_ref_"
                 + hashlib.sha256(
@@ -142,13 +190,28 @@ def _materialize_schema(
                     building.remove(identity)
             output["$ref"] = f"#/$defs/{definition_key}"
         for key, item in node.items():
-            if key in {"$ref", "$defs"}:
+            if key == "$ref":
                 continue
-            output[key] = visit(
-                item,
-                resource_root=resource_root,
-                resource_id=resource_id,
-            )
+            if key in _SINGLE_SCHEMA_KEYWORDS:
+                output[key] = visit(
+                    item,
+                    resource_root=resource_root,
+                    resource_id=resource_id,
+                )
+            elif key in _SCHEMA_ARRAY_KEYWORDS and isinstance(item, list):
+                output[key] = [
+                    visit(value, resource_root=resource_root, resource_id=resource_id)
+                    for value in item
+                ]
+            elif key in _SCHEMA_MAP_KEYWORDS and isinstance(item, dict):
+                output[key] = {
+                    name: visit(value, resource_root=resource_root, resource_id=resource_id)
+                    for name, value in item.items()
+                }
+            else:
+                # Annotation and instance-valued keywords (default, examples,
+                # const, enum, and extensions) are data, not nested schemas.
+                output[key] = deepcopy(item)
         return output
 
     materialized = visit(
@@ -158,7 +221,13 @@ def _materialize_schema(
     )
     assert isinstance(materialized, dict)
     if definitions:
-        materialized["$defs"] = definitions
+        existing = materialized.get("$defs")
+        merged = dict(existing) if isinstance(existing, dict) else {}
+        collision = set(merged) & set(definitions)
+        if collision:
+            raise ReferenceResolutionError("Generated API Inventory definition key collided")
+        merged.update(definitions)
+        materialized["$defs"] = merged
     return materialized
 
 

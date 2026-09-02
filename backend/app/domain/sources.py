@@ -2,7 +2,9 @@ import hashlib
 import json
 from datetime import datetime
 from enum import StrEnum
+from pathlib import PurePosixPath
 from typing import Literal
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from mcp_contracts.json_types import JsonObject
@@ -33,6 +35,11 @@ class ProjectSourceRecord(BaseModel):
     source_url: str | None
     is_primary: bool
     created_at: datetime
+    current_version_id: UUID | None = None
+    current_version_selected_at: datetime | None = None
+    last_observed_at: datetime | None = None
+    last_observed_etag: str | None = None
+    last_observed_last_modified: str | None = None
 
 
 class SourceVersionRecord(BaseModel):
@@ -56,6 +63,12 @@ class BoundSourceVersionRecord(BaseModel):
 
     source: ProjectSourceRecord
     version: SourceVersionRecord
+    dependency_aliases: list[str] = Field(default_factory=list)
+    binding_metadata_trustworthy: bool = True
+
+    @property
+    def effective_dependency_aliases(self) -> list[str]:
+        return self.dependency_aliases or source_dependency_aliases(self.source)
 
 
 class SourceSummaryRecord(BaseModel):
@@ -192,14 +205,25 @@ class SourceConfigurationDiscoveryRecord(BaseModel):
 
 def source_configuration_fingerprint(
     *,
-    source_version_ids: list[UUID],
+    bindings: list[BoundSourceVersionRecord],
     default_base_url: str | None,
     active_server_ref: str | None,
     server_mappings: dict[str, str],
 ) -> str:
     value = json.dumps(
         {
-            "source_version_ids": sorted(str(value) for value in source_version_ids),
+            "source_bindings": [
+                {
+                    "source_id": str(binding.source.id),
+                    "source_version_id": str(binding.version.id),
+                    "kind": binding.source.kind.value,
+                    "name": binding.source.name,
+                    "source_url": binding.source.source_url,
+                    "is_primary": binding.source.is_primary,
+                    "dependency_aliases": sorted(binding.effective_dependency_aliases),
+                }
+                for binding in sorted(bindings, key=lambda item: str(item.version.id))
+            ],
             "default_base_url": default_base_url,
             "active_server_ref": active_server_ref,
             "server_mappings": dict(sorted(server_mappings.items())),
@@ -209,3 +233,15 @@ def source_configuration_fingerprint(
         sort_keys=True,
     ).encode("utf-8")
     return hashlib.sha256(value).hexdigest()
+
+
+def source_dependency_aliases(source: ProjectSourceRecord) -> list[str]:
+    """Return the exact normalized reference aliases frozen into a Build binding."""
+
+    aliases = {source.name}
+    if source.source_url:
+        aliases.add(source.source_url)
+        path_name = PurePosixPath(urlsplit(source.source_url).path).name
+        if path_name:
+            aliases.add(path_name)
+    return sorted(aliases)

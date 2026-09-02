@@ -12,6 +12,7 @@ from app.clients.database import DatabaseClient
 from app.core.config import Settings
 from app.core.exceptions import InvalidStateError, MCPlicaError, NotFoundError, ValidationError
 from app.domain.deployments import (
+    DeploymentIntent,
     IssuedMCPAccessToken,
     MCPAccessSnapshot,
     MCPAccessStatusRecord,
@@ -61,6 +62,33 @@ class MCPAccessService:
                     else None
                 ),
                 tokens=[await self._token_with_runtime_state(session, token) for token in tokens],
+            )
+
+    async def get_page(
+        self, project_id: UUID, *, page: int, page_size: int
+    ) -> tuple[MCPAccessSnapshot, int]:
+        async with self._database.session_scope() as session:
+            if await self._deployments.get_project(session, project_id) is None:
+                raise NotFoundError("Project was not found")
+            auth_config = await self._access.get_config(session, project_id)
+            tokens, total = await self._access.list_tokens_page(
+                session,
+                project_id,
+                page=page,
+                page_size=page_size,
+            )
+            return (
+                MCPAccessSnapshot(
+                    auth_config=(
+                        await self._config_with_runtime_state(session, auth_config)
+                        if auth_config is not None
+                        else None
+                    ),
+                    tokens=[
+                        await self._token_with_runtime_state(session, token) for token in tokens
+                    ],
+                ),
+                total,
             )
 
     async def get_status(self, project_id: UUID) -> MCPAccessStatusRecord:
@@ -178,14 +206,11 @@ class MCPAccessService:
                 request_id=request_id,
                 metadata={"mode": mode.value},
             )
-            await self._deployment_service.schedule_redeploy_active(
+            await self._schedule_security_effect(
                 session,
                 project_id=project_id,
                 actor_user_id=actor_user_id,
                 request_id=request_id,
-                # The current runtime remains authoritative until the separately
-                # hashed auth overlay is healthy at the edge. Runtime effect state
-                # makes this bounded transition explicit to the caller.
                 stop_old_first=False,
                 event_type="deployment.mcp_auth_change_requested",
                 subject_type="mcp_auth_config",
@@ -228,7 +253,7 @@ class MCPAccessService:
                 request_id=request_id,
                 metadata={"name": issued.token.name},
             )
-            await self._deployment_service.schedule_redeploy_active(
+            await self._schedule_security_effect(
                 session,
                 project_id=project_id,
                 actor_user_id=actor_user_id,
@@ -295,7 +320,7 @@ class MCPAccessService:
                     "overlap_seconds": overlap_seconds,
                 },
             )
-            await self._deployment_service.schedule_redeploy_active(
+            await self._schedule_security_effect(
                 session,
                 project_id=project_id,
                 actor_user_id=actor_user_id,
@@ -319,35 +344,95 @@ class MCPAccessService:
         request_id: str | None,
     ) -> MCPAccessTokenRecord:
         now = datetime.now(UTC)
+        changed = False
         async with self._database.session_scope() as session:
             if await self._deployments.lock_project(session, project_id) is None:
                 raise NotFoundError("Project was not found")
             current = await self._access.get_token(session, token_id)
             if current is None or current.project_id != project_id:
                 raise NotFoundError("MCP access token was not found")
-            revoked = await self._access.revoke(session, token_id, now)
-            assert revoked is not None
-            await self._audit.append(
-                session,
-                actor_user_id=actor_user_id,
-                event_type="mcp_access.token_revoked",
-                entity_type="mcp_access_token",
-                entity_id=token_id,
-                project_id=project_id,
-                request_id=request_id,
-            )
+            if current.revoked_at is not None:
+                revoked = current
+            else:
+                revoked = await self._access.revoke(session, token_id, now)
+                assert revoked is not None
+                changed = True
+                await self._audit.append(
+                    session,
+                    actor_user_id=actor_user_id,
+                    event_type="mcp_access.token_revoked",
+                    entity_type="mcp_access_token",
+                    entity_id=token_id,
+                    project_id=project_id,
+                    request_id=request_id,
+                )
+                await self._schedule_security_effect(
+                    session,
+                    project_id=project_id,
+                    actor_user_id=actor_user_id,
+                    request_id=request_id,
+                    stop_old_first=False,
+                    event_type="deployment.mcp_token_revocation_requested",
+                    subject_type="mcp_access_token",
+                    subject_id=token_id,
+                )
+        if changed:
+            self._deployment_service.notify_runtime_commands()
+        return await self._load_token_runtime_state(revoked)
+
+    async def _schedule_security_effect(
+        self,
+        session: AsyncSession,
+        *,
+        project_id: UUID,
+        actor_user_id: UUID,
+        request_id: str | None,
+        stop_old_first: bool,
+        event_type: str,
+        subject_type: str,
+        subject_id: UUID,
+    ) -> None:
+        """Refresh the exact active artifact, or durably stop if auth is unsafe."""
+
+        project = await self._deployments.get_project(session, project_id)
+        config = await self._access.get_config(session, project_id)
+        verifiers = await self._access.active_verifiers(session, project_id)
+        safely_servable = False
+        if project is not None and config is not None:
+            try:
+                materialize_inbound_auth(
+                    hostname=project.hostname,
+                    config=config,
+                    verifiers=verifiers,
+                    settings=self._settings,
+                )
+            except (PydanticValidationError, MCPlicaError, ValueError):
+                pass
+            else:
+                safely_servable = True
+        if safely_servable:
             await self._deployment_service.schedule_redeploy_active(
                 session,
                 project_id=project_id,
                 actor_user_id=actor_user_id,
                 request_id=request_id,
-                stop_old_first=False,
-                event_type="deployment.mcp_token_revocation_requested",
-                subject_type="mcp_access_token",
-                subject_id=token_id,
+                stop_old_first=stop_old_first,
+                event_type=event_type,
+                subject_type=subject_type,
+                subject_id=subject_id,
+                intent=DeploymentIntent.SECURITY_REFRESH,
+                fallback_to_stop=True,
             )
-        self._deployment_service.notify_runtime_commands()
-        return await self._load_token_runtime_state(revoked)
+            return
+        await self._deployment_service.schedule_stop_project(
+            session,
+            project_id=project_id,
+            actor_user_id=actor_user_id,
+            request_id=request_id,
+            reason=event_type,
+            subject_type=subject_type,
+            subject_id=subject_id,
+        )
 
     async def _load_config_runtime_state(self, config: MCPAuthConfigRecord) -> MCPAuthConfigRecord:
         async with self._database.session_scope() as session:

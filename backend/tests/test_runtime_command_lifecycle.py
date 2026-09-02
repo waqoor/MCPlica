@@ -1,3 +1,5 @@
+import asyncio
+import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from copy import deepcopy
@@ -20,6 +22,8 @@ from app.domain.deployments import (
     DeploymentRecord,
     DeploymentStatus,
     RuntimeCommandAction,
+    RuntimeCommandLeaseRenewal,
+    RuntimeCommandLeaseState,
     RuntimeCommandRecord,
     RuntimeCommandStatus,
 )
@@ -29,7 +33,10 @@ from app.repositories.deployments import DeploymentRepository
 from app.repositories.projects import ProjectRepository
 from app.repositories.runtime_commands import RuntimeCommandRepository
 from app.services.deployment.command_dispatcher import RuntimeCommandDispatcher
-from app.services.deployment.command_executor import RuntimeCommandExecutor
+from app.services.deployment.command_executor import (
+    RuntimeCommandExecutor,
+    _heartbeat_runtime_command,
+)
 from app.services.deployment.service import DeploymentRunner
 from app.services.projects import ProjectDeploymentLifecycle, ProjectService
 from app.services.settings import OperationalSettingsProvider, OperationalSettingsView
@@ -39,6 +46,11 @@ class _Database:
     @asynccontextmanager
     async def session_scope(self) -> AsyncGenerator[AsyncSession]:
         yield cast(AsyncSession, object())
+
+    @asynccontextmanager
+    async def project_advisory_lock(self, project_id: UUID) -> AsyncGenerator[None]:
+        del project_id
+        yield
 
 
 def _command(
@@ -69,7 +81,16 @@ def _command(
         started_at=now if status == RuntimeCommandStatus.RUNNING else None,
         effective_at=None,
         failed_at=None,
-        lease_expires_at=now - timedelta(seconds=1),
+        lease_expires_at=(
+            now + timedelta(seconds=60)
+            if status in {RuntimeCommandStatus.DISPATCHED, RuntimeCommandStatus.RUNNING}
+            else None
+        ),
+        execution_token=(
+            UUID(int=9)
+            if status in {RuntimeCommandStatus.DISPATCHED, RuntimeCommandStatus.RUNNING}
+            else None
+        ),
         last_error_code=None,
         last_error_summary=None,
         created_at=now,
@@ -90,29 +111,41 @@ class _DispatchCommands:
         self.claims += 1
         if self.command.status == RuntimeCommandStatus.EFFECTIVE:
             return []
-        return [self.command.model_copy(update={"attempt_count": self.claims})]
+        return [
+            self.command.model_copy(
+                update={
+                    "status": RuntimeCommandStatus.DISPATCHED,
+                    "attempt_count": self.claims,
+                    "execution_token": UUID(int=20 + self.claims),
+                    "lease_expires_at": datetime.now(UTC) + timedelta(seconds=5),
+                }
+            )
+        ]
 
-    async def mark_failed(
+    async def mark_dispatch_failed(
         self,
         session: AsyncSession,
         command_id: UUID,
+        execution_token: UUID,
         *,
         error_code: str,
         error_summary: str,
-        retryable: bool,
         retry_delay_seconds: float,
-    ) -> None:
-        del session, command_id, error_summary, retry_delay_seconds
-        self.failures.append((error_code, retryable))
+    ) -> bool:
+        del session, command_id, execution_token, error_summary, retry_delay_seconds
+        self.failures.append((error_code, True))
+        return True
 
 
 class _Queue:
     def __init__(self, *, fail_first: bool) -> None:
         self.fail_first = fail_first
-        self.calls: list[tuple[UUID, int]] = []
+        self.calls: list[tuple[UUID, UUID, int]] = []
 
-    async def enqueue_runtime_command(self, command_id: UUID, attempt: int) -> None:
-        self.calls.append((command_id, attempt))
+    async def enqueue_runtime_command(
+        self, command_id: UUID, execution_token: UUID, attempt: int
+    ) -> None:
+        self.calls.append((command_id, execution_token, attempt))
         if self.fail_first:
             self.fail_first = False
             raise ClientUnavailableError("queue unavailable")
@@ -131,7 +164,7 @@ async def test_enqueue_failure_remains_durable_and_restart_reconciliation_retrie
     await first_process.dispatch_once()
 
     assert commands.failures == [("client_unavailable", True)]
-    assert queue.calls == [(UUID(int=1), 1)]
+    assert queue.calls == [(UUID(int=1), UUID(int=21), 1)]
 
     restarted_process = RuntimeCommandDispatcher(
         cast(DatabaseClient, _Database()),
@@ -142,7 +175,10 @@ async def test_enqueue_failure_remains_durable_and_restart_reconciliation_retrie
     )
     await restarted_process.dispatch_once()
 
-    assert queue.calls == [(UUID(int=1), 1), (UUID(int=1), 2)]
+    assert queue.calls == [
+        (UUID(int=1), UUID(int=21), 1),
+        (UUID(int=1), UUID(int=22), 2),
+    ]
 
 
 async def test_expired_running_lease_is_redispatched_after_worker_crash() -> None:
@@ -157,7 +193,107 @@ async def test_expired_running_lease_is_redispatched_after_worker_crash() -> Non
     )
 
     assert await restarted_process.dispatch_once() == 1
-    assert queue.calls == [(UUID(int=1), 1)]
+    assert queue.calls == [(UUID(int=1), UUID(int=21), 1)]
+
+
+async def test_runtime_heartbeat_database_outage_stops_at_confirmed_deadline() -> None:
+    class _UnavailableCommands:
+        async def renew_execution(self, *args: object, **kwargs: object) -> None:
+            del args, kwargs
+            raise ClientUnavailableError("database unavailable")
+
+    owner = asyncio.create_task(asyncio.sleep(60))
+    stop = asyncio.Event()
+    lost = asyncio.Event()
+    state = await _heartbeat_runtime_command(
+        cast(DatabaseClient, _Database()),
+        cast(RuntimeCommandRepository, _UnavailableCommands()),
+        UUID(int=1),
+        UUID(int=9),
+        stop,
+        lost,
+        owner,
+        interval_seconds=0.005,
+        lease_seconds=0.03,
+        confirmed_deadline=time.monotonic() + 0.03,
+    )
+
+    assert state is RuntimeCommandLeaseState.LOST
+    assert lost.is_set()
+    with pytest.raises(asyncio.CancelledError):
+        await owner
+
+
+async def test_runtime_heartbeat_renews_from_database_time_until_stopped() -> None:
+    stop = asyncio.Event()
+
+    class _RenewingCommands:
+        async def renew_execution(
+            self, *args: object, **kwargs: object
+        ) -> RuntimeCommandLeaseRenewal:
+            del args, kwargs
+            now = datetime.now(UTC)
+            stop.set()
+            return RuntimeCommandLeaseRenewal(
+                state=RuntimeCommandLeaseState.OWNED,
+                database_now=now,
+                lease_expires_at=now + timedelta(seconds=1),
+            )
+
+    owner = asyncio.create_task(asyncio.sleep(60))
+    lost = asyncio.Event()
+    state = await _heartbeat_runtime_command(
+        cast(DatabaseClient, _Database()),
+        cast(RuntimeCommandRepository, _RenewingCommands()),
+        UUID(int=1),
+        UUID(int=9),
+        stop,
+        lost,
+        owner,
+        interval_seconds=0.001,
+        lease_seconds=1,
+        confirmed_deadline=time.monotonic() + 1,
+    )
+
+    assert state is RuntimeCommandLeaseState.OWNED
+    assert lost.is_set() is False
+    owner.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await owner
+
+
+async def test_runtime_heartbeat_cancels_owner_when_database_rejects_token() -> None:
+    class _LostCommands:
+        async def renew_execution(
+            self, *args: object, **kwargs: object
+        ) -> RuntimeCommandLeaseRenewal:
+            del args, kwargs
+            now = datetime.now(UTC)
+            return RuntimeCommandLeaseRenewal(
+                state=RuntimeCommandLeaseState.LOST,
+                database_now=now,
+            )
+
+    owner = asyncio.create_task(asyncio.sleep(60))
+    stop = asyncio.Event()
+    lost = asyncio.Event()
+    state = await _heartbeat_runtime_command(
+        cast(DatabaseClient, _Database()),
+        cast(RuntimeCommandRepository, _LostCommands()),
+        UUID(int=1),
+        UUID(int=9),
+        stop,
+        lost,
+        owner,
+        interval_seconds=0.001,
+        lease_seconds=1,
+        confirmed_deadline=time.monotonic() + 1,
+    )
+
+    assert state is RuntimeCommandLeaseState.LOST
+    assert lost.is_set()
+    with pytest.raises(asyncio.CancelledError):
+        await owner
 
 
 def _deployment(status: DeploymentStatus) -> DeploymentRecord:
@@ -197,7 +333,16 @@ class _ExecutionCommands:
 
     async def claim_for_execution(self, *args: object, **kwargs: object):
         del args, kwargs
-        return None if self.effective else self.command
+        return (
+            None
+            if self.effective
+            else self.command.model_copy(
+                update={
+                    "status": RuntimeCommandStatus.RUNNING,
+                    "lease_expires_at": datetime.now(UTC) + timedelta(seconds=60),
+                }
+            )
+        )
 
     async def get(self, *args: object, **kwargs: object):
         del args, kwargs
@@ -207,17 +352,21 @@ class _ExecutionCommands:
         del args, kwargs
         self.effective = True
 
+    async def require_execution_owner(self, *args: object, **kwargs: object) -> None:
+        del args, kwargs
+
     async def mark_failed(
         self,
         session: AsyncSession,
         command_id: UUID,
+        execution_token: UUID,
         *,
         error_code: str,
         error_summary: str,
         retryable: bool,
         retry_delay_seconds: float,
     ) -> None:
-        del session, command_id, error_summary, retry_delay_seconds
+        del session, command_id, execution_token, error_summary, retry_delay_seconds
         self.failure = (error_code, retryable)
 
 
@@ -243,16 +392,19 @@ class _Runner:
         *,
         final_attempt: bool,
         rollback_target_id: UUID | None = None,
+        execution_checkpoint: object | None = None,
     ) -> None:
-        del deployment_id, final_attempt
+        del deployment_id, final_attempt, execution_checkpoint
         self.calls += 1
         self.rollback_target_ids.append(rollback_target_id)
         if self.error is not None:
             raise self.error
         self.deployments.status = DeploymentStatus.RUNNING
 
-    async def stop(self, deployment_id: UUID) -> None:
-        del deployment_id
+    async def stop(
+        self, deployment_id: UUID, *, execution_checkpoint: object | None = None
+    ) -> None:
+        del deployment_id, execution_checkpoint
         self.calls += 1
         self.deployments.status = DeploymentStatus.STOPPED
 
@@ -267,14 +419,36 @@ async def test_command_replay_is_idempotent_after_exact_effect_acknowledgement()
         cast(DeploymentRepository, deployments),
         cast(DeploymentRunner, runner),
         lease_seconds=60,
+        heartbeat_seconds=10,
     )
 
-    await executor.run(UUID(int=1))
-    await executor.run(UUID(int=1))
+    await executor.run(UUID(int=1), UUID(int=9))
+    await executor.run(UUID(int=1), UUID(int=9))
 
     assert commands.effective is True
     assert runner.calls == 1
     assert runner.rollback_target_ids == [None]
+
+
+async def test_stop_command_is_effective_only_after_runtime_is_stopped() -> None:
+    commands = _ExecutionCommands()
+    commands.command = commands.command.model_copy(update={"action": RuntimeCommandAction.STOP})
+    deployments = _ExecutionDeployments()
+    runner = _Runner(deployments)
+    executor = RuntimeCommandExecutor(
+        cast(DatabaseClient, _Database()),
+        cast(RuntimeCommandRepository, commands),
+        cast(DeploymentRepository, deployments),
+        cast(DeploymentRunner, runner),
+        lease_seconds=60,
+        heartbeat_seconds=10,
+    )
+
+    await executor.run(UUID(int=1), UUID(int=9))
+
+    assert commands.effective is True
+    assert deployments.status is DeploymentStatus.STOPPED
+    assert runner.calls == 1
 
 
 async def test_rollback_command_passes_its_durable_target_to_worker_preflight() -> None:
@@ -295,9 +469,10 @@ async def test_rollback_command_passes_its_durable_target_to_worker_preflight() 
         cast(DeploymentRepository, deployments),
         cast(DeploymentRunner, runner),
         lease_seconds=60,
+        heartbeat_seconds=10,
     )
 
-    await executor.run(UUID(int=1))
+    await executor.run(UUID(int=1), UUID(int=9))
 
     assert commands.effective is True
     assert runner.rollback_target_ids == [rollback_target_id]
@@ -313,10 +488,11 @@ async def test_asynchronous_replacement_failure_is_retryable_and_never_effective
         cast(DeploymentRepository, deployments),
         cast(DeploymentRunner, runner),
         lease_seconds=60,
+        heartbeat_seconds=10,
     )
 
     with pytest.raises(RuntimeHealthError):
-        await executor.run(UUID(int=1))
+        await executor.run(UUID(int=1), UUID(int=9))
 
     assert commands.effective is False
     assert commands.failure == ("runtime_health_error", True)

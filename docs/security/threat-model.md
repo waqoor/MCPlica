@@ -36,6 +36,8 @@ High-value assets are user sessions, upstream credentials, MCP inbound tokens/OI
 | Arbitrary code execution through generated output                          | Generic runtime only, declarative schemas/mappings, no user code/templates, bounded parsers                                                                            | Contract-schema rejection tests; container read-only/non-root inspection                       |
 | Runtime escape or resource exhaustion                                      | Non-root UID/GID, read-only root, dropped capabilities, no-new-privileges, PID/memory/CPU/tmpfs limits, no Docker socket, request/connection bounds                    | Docker inspect policy test; load/oversize tests; image scan                                    |
 | Unsafe deployment replaces healthy service                                 | READY-only gate, inbound auth gate, health-before-switch, recorded image/manifest digest, retry bounds, rollback creates new record                                    | Deployment state-machine tests; failed health E2E; deployment event/audit trail                |
+| Stale Build/runtime worker publishes or performs effects after lease loss   | Database-time leases, exact execution-token conditional writes, last-confirmed monotonic deadlines, per-project PostgreSQL advisory lock, exact container identity    | PostgreSQL reclaim races; heartbeat-outage tests; stale result/finalization and exact-stop tests |
+| Final access revocation is rolled back or silently remains effective        | Valid-verifier count under project lock, revocation plus durable STOP in one transaction, no invalid replacement, observed pending/effective/failed state              | Final/subset/duplicate token revocation tests; queue restart and STOP-effect evidence            |
 | Supply-chain compromise                                                    | Frozen locks, reviewed dependency updates, least-privilege CI, secret/dependency/source/image scans, SBOM/checksums, keyless digest signing                            | Required workflow results; verified release assets/signature; provenance review                |
 | Destructive operator/error or ransomware                                   | Least privilege, immutable evidence, external encrypted backups, key escrow, restore drills, explicit migrations                                                       | Quarterly recovery evidence; access review; upgrade rehearsal                                  |
 | Audit suppression or sensitive audit content                               | Server-created append-only events with actor/request/entity IDs; metadata allowlist/redaction; restricted access                                                       | Mutation-to-audit tests; redaction inspection; database access policy                          |
@@ -47,6 +49,12 @@ High-value assets are user sessions, upstream credentials, MCP inbound tokens/OI
 - A READY build without configured inbound MCP authentication cannot deploy. Development-only disabled auth is forbidden in production.
 - A caller-supplied URL, header name not declared by the manifest, oversized payload, undeclared parameter, invalid JWT claim, missing secret, or manifest digest mismatch fails before upstream execution.
 - If a replacement runtime fails health, the recorded prior healthy deployment remains the rollback target and routing must not silently switch.
+- A lease-expired worker is untrusted even if its provider or Docker call later succeeds; only the
+  current database execution token may publish state, and destructive runtime effects are
+  serialized against replacement attempts.
+- Security refresh may ignore pending source drift only while remaining bound to the exact active
+  immutable Build. It must still reject invalid artifacts, wrong-project records, incompatible
+  runtime state, or unusable current secrets; when no valid inbound verifier remains it must stop.
 
 ## Residual risk and operator obligations
 

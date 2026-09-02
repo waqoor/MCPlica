@@ -1,6 +1,8 @@
+import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -27,6 +29,22 @@ def test_runtime_mount_destination_matches_process_configuration() -> None:
         "RUNTIME_GID",
         "RUNTIME_WORKER_ROOT",
     }
+
+
+def test_shipped_compose_fails_closed_on_runtime_identity_drift() -> None:
+    services = yaml.safe_load((ROOT / "infra/compose.yaml").read_text())["services"]
+    runtime_init = services["runtime-init"]
+    command = runtime_init["command"][0]
+    assert "${RUNTIME_UID:-10001}" in runtime_init["environment"]["RUNTIME_UID"]
+    assert "${RUNTIME_GID:-10001}" in runtime_init["environment"]["RUNTIME_GID"]
+    assert '"10001:10001"' in command
+    assert "exit 64" in command
+
+    runtime_dockerfile = (ROOT / "infra/docker/runtime.Dockerfile").read_text()
+    backend_dockerfile = (ROOT / "infra/docker/backend.Dockerfile").read_text()
+    assert "--uid 10001" in backend_dockerfile
+    assert "--uid 10001" in runtime_dockerfile
+    assert "--gid 10001" in runtime_dockerfile
 
 
 def test_workers_consume_the_same_queues_as_the_control_plane() -> None:
@@ -60,8 +78,11 @@ def test_edge_routing_uses_the_configured_network() -> None:
 
 
 def test_make_commands_use_the_same_absolute_python_environments() -> None:
+    make = shutil.which("make")
+    if make is None:
+        pytest.skip("GNU make is not installed on this platform")
     result = subprocess.run(
-        ["make", "--no-print-directory", "-n", "install-python", "test"],
+        [make, "--no-print-directory", "-n", "install-python", "test"],
         cwd=ROOT,
         capture_output=True,
         text=True,

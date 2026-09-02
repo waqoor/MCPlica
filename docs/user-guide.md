@@ -34,7 +34,10 @@ manifest identity has durable successful-activation evidence. The active runtime
 failed or stopped before activation are never rollback targets. Rollback creates a new deployment;
 it does not mutate the historical row or build.
 
-- Uploading identical source bytes may deduplicate a version; it does not erase history.
+- Uploading identical source bytes may deduplicate a version; it does not erase history. If those
+  bytes belong to an older version, that immutable version becomes the explicitly selected current
+  version again. The source card, the next Build, refresh validators, and retention protection all
+  follow this accepted selection rather than whichever version was created most recently.
 - Source cards expose bounded immutable version history and parser/index evidence without an N+1 request fan-out.
 - Changing sources/settings creates a new build and diff. Deployed build artifacts remain immutable.
 - Administrators can configure Build-count and source-version-age retention in Settings. The newest/active/deployed evidence remains protected; only source versions strictly older than the configured day cutoff are eligible. Project/source deletion returns an asynchronous cleanup record, and administrators can inspect durable progress or retry errors through the cleanup-jobs API/activity audit.
@@ -46,7 +49,7 @@ it does not mutate the historical row or build.
   byte count and the Build remains failed; reduce published documentation content or have an
   administrator review the installation-wide runtime manifest limit before rebuilding.
 - Stop/restart operate on the recorded deployment. Rollback selects a prior deployment and creates a new deployment record from that target; it does not mutate history.
-- Credential rotation and MCP token rotation/revocation are server-side audited actions. Existing values are never redisplayed. Upstream credential binding fields are read-only during rotation; a mapping change requires a replacement credential and new Build.
+- Credential rotation and MCP token rotation/revocation are server-side audited actions. Existing values are never redisplayed. Upstream credential binding fields are read-only during rotation; a mapping change requires a replacement credential and new Build. Authentication-only maintenance always targets the exact active Build even when a newer source is pending; it never activates that source implicitly. Revoking the final valid verifier commits the revocation and schedules runtime shutdown instead of preserving access or creating an unauthenticated replacement. Treat the change as pending until shutdown is observed, and follow the runbook if the worker reports a retryable or failed effect.
 - Project/build/deployment/search filters and meaningful pagination live in URL parameters, so links and browser back/forward restore the same view. Dirty settings and wizard forms warn before navigation; dialog forms submit with Enter.
 - Activity filters use actor, project, event type, and validated inclusive date ranges. Stable error codes and request IDs remain visible with retry/remediation guidance so operators can correlate sanitized logs.
 - Installation settings expose deploy policy, hostname, bounded upload/operation/chunk/build limits, and retention independently from model-provider recovery. User management supports display-name/password updates, safe disable/demotion confirmation, last-admin protection, and session revocation.

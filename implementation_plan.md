@@ -4,12 +4,16 @@
 **Target branch:** `master`  
 **Planning baseline:** `aac31ef30edf178587cab7234f173cec322a14a9`  
 **Date:** 2026-09-01  
-**Status:** Proposed execution plan. No feature, correction, migration, or test execution is represented as completed by this document.  
+**Status:** The 55 `issues_002.md` correction items were completed and verified on 2026-09-02. Feature proposals remain governed by their own roadmap status.
 **Coverage:** All 55 findings in `issues_002.md` and all 32 proposals in `todo_features.md`, plus the first-business-workflow, operating-evidence, and adoption work discussed subsequently.
 
 ### Navigation
 
 [Scope and rules](#1-purpose-source-ownership-and-limits) · [First outcome](#2-first-business-outcome-and-open-inputs) · [Phases](#3-execution-sequence-and-milestones) · [Baseline](#4-ip-0--establish-the-execution-baseline) · [All 55 corrections](#5-foundation-correction-packages--all-55-findings) · [Migrations](#6-cross-cutting-data-contract-and-migration-design) · [First integration](#7-ip-3--deliver-the-first-complete-business-integration) · [All 32 features](#8-feature-implementation-specifications--all-32-proposals) · [Dependencies](#9-implementation-ordering-and-integration-dependencies) · [End-to-end scenarios](#10-required-end-to-end-and-adversarial-scenarios) · [Testing](#11-test-strategy-commands-and-per-item-definition-of-done) · [Business evidence](#12-ip-9--operating-evidence-adoption-and-commercial-readiness) · [Traceability](#13-execution-tracking-and-evidence-protocol) · [Handover](#14-completion-and-handover) · [References](#15-references-and-verified-planning-inputs)
+
+### 2026-09-02 execution record
+
+All 55 correction items were rechecked against checkout `708401dc47a7684c8c95ab0e4061d595657c57dc`. Twelve were already correctly implemented and were retained with explicit regression coverage; the other 43 were applicable and were fixed in the existing architecture. The schema advances linearly from `0020` through `0025`. Per-finding evidence and final validation are in [`docs/evidence/issues-002-closure.md`](docs/evidence/issues-002-closure.md). This closes the issue register in repository scope; it does not change the status of feature proposals or claim promotion to an external production host.
 
 ## 1. Purpose, source ownership, and limits
 

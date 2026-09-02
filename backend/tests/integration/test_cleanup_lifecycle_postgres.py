@@ -1,3 +1,4 @@
+import asyncio
 import os
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -572,6 +573,161 @@ async def test_upload_persistence_failure_is_durably_compensated(tmp_path: Path)
             )
             assert job is not None
             assert job.status is CleanupJobStatus.COMPLETED
+    finally:
+        await _cleanup(database)
+        await database.close()
+
+
+async def test_concurrent_target_completion_serializes_parent_aggregate() -> None:
+    database = DatabaseClient(_database_url(), pool_size=4, max_overflow=0)
+    repository = CleanupRepository()
+    try:
+        await _cleanup(database)
+        async with database.session_scope() as session:
+            job = await repository.create_job(
+                session,
+                kind=CleanupJobKind.ORPHAN_GUARD,
+                idempotency_key="cleanup-concurrent-aggregate",
+                project_id=None,
+                requested_by=None,
+                request_id="aggregate",
+            )
+            await repository.add_object_target(session, job.id, "aggregate/one")
+            await repository.add_object_target(session, job.id, "aggregate/two")
+        async with database.session_scope() as session:
+            claims = await repository.claim_due_targets(
+                session,
+                limit=2,
+                lease_seconds=60,
+            )
+        assert len(claims) == 2
+        assert all(claim.execution_token is not None for claim in claims)
+
+        async def finish(index: int) -> bool:
+            claim = claims[index]
+            assert claim.execution_token is not None
+            async with database.session_scope() as session:
+                return await repository.mark_completed(
+                    session,
+                    claim.id,
+                    execution_token=claim.execution_token,
+                    attempt_count=claim.attempt_count,
+                    skipped_referenced=index == 1,
+                )
+
+        assert await asyncio.gather(finish(0), finish(1)) == [True, True]
+        async with database.session_scope() as session:
+            completed = await repository.get_job(session, job.id)
+        assert completed is not None
+        assert completed.status is CleanupJobStatus.COMPLETED
+        assert completed.completed_targets == 1
+        assert completed.skipped_targets == 1
+        assert completed.failed_targets == 0
+        assert completed.completed_at is not None
+    finally:
+        await _cleanup(database)
+        await database.close()
+
+
+async def test_reclaimed_cleanup_target_rejects_stale_attempt_completion() -> None:
+    database = DatabaseClient(_database_url(), pool_size=3, max_overflow=0)
+    repository = CleanupRepository()
+    try:
+        await _cleanup(database)
+        async with database.session_scope() as session:
+            job = await repository.create_job(
+                session,
+                kind=CleanupJobKind.ORPHAN_GUARD,
+                idempotency_key="cleanup-stale-owner",
+                project_id=None,
+                requested_by=None,
+                request_id="stale-owner",
+            )
+            await repository.add_object_target(session, job.id, "stale/target")
+        async with database.session_scope() as session:
+            first = (
+                await repository.claim_due_targets(
+                    session,
+                    limit=1,
+                    lease_seconds=60,
+                )
+            )[0]
+        assert first.execution_token is not None
+        past = datetime.now(UTC) - timedelta(seconds=1)
+        async with database.session_scope() as session:
+            await session.execute(
+                update(CleanupTarget)
+                .where(CleanupTarget.id == first.id)
+                .values(lease_expires_at=past, next_attempt_at=past)
+            )
+        async with database.session_scope() as session:
+            second = (
+                await repository.claim_due_targets(
+                    session,
+                    limit=1,
+                    lease_seconds=60,
+                )
+            )[0]
+        assert second.execution_token is not None
+        assert second.execution_token != first.execution_token
+        assert second.attempt_count == first.attempt_count + 1
+
+        async with database.session_scope() as session:
+            assert not await repository.mark_completed(
+                session,
+                first.id,
+                execution_token=first.execution_token,
+                attempt_count=first.attempt_count,
+            )
+        async with database.session_scope() as session:
+            assert await repository.mark_completed(
+                session,
+                second.id,
+                execution_token=second.execution_token,
+                attempt_count=second.attempt_count,
+            )
+    finally:
+        await _cleanup(database)
+        await database.close()
+
+
+async def test_retention_failure_does_not_block_due_cleanup(tmp_path: Path) -> None:
+    class _OneProjectRetentionFailure(CleanupRepository):
+        async def prepare_retention_job(self, session, *, project_id, **kwargs):  # type: ignore[no-untyped-def]
+            if project_id == PROJECT_ID:
+                raise OSError("injected retention failure")
+            return await super().prepare_retention_job(
+                session,
+                project_id=project_id,
+                **kwargs,
+            )
+
+    database = DatabaseClient(_database_url(), pool_size=4, max_overflow=0)
+    storage = FilesystemArtifactStorage(FilesystemStorageClient(str(tmp_path)))
+    repository = _OneProjectRetentionFailure()
+    vector = _VectorStore()
+    due_key = "retention-failure/unrelated"
+    try:
+        await _cleanup(database)
+        await _seed(database, storage)
+        await storage.put_exact(due_key, b"due")
+        async with database.session_scope() as session:
+            job = await repository.create_job(
+                session,
+                kind=CleanupJobKind.ORPHAN_GUARD,
+                idempotency_key="retention-failure-unrelated-cleanup",
+                project_id=None,
+                requested_by=None,
+                request_id="retention-failure",
+            )
+            await repository.add_object_target(session, job.id, due_key)
+
+        worker = _worker(database, repository, storage, vector)
+        assert await worker.dispatch_once() >= 1
+        with pytest.raises(NotFoundError):
+            await storage.get(due_key)
+        assert worker._retention_failure_streak == 1
+        assert worker._next_retention_at > datetime.now(UTC)
     finally:
         await _cleanup(database)
         await database.close()

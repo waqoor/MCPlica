@@ -35,8 +35,18 @@ class OpenRouterClient(AsyncClient):
         app_name: str = "MCPlica",
         max_attempts: int = 3,
         timeout_seconds: float = 60.0,
+        catalog_max_response_bytes: int = 20_000_000,
+        completion_max_response_bytes: int = 20_000_000,
+        embedding_max_response_bytes: int = 100_000_000,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
+        response_limits = {
+            "models": catalog_max_response_bytes,
+            "chat_completions": completion_max_response_bytes,
+            "embeddings": embedding_max_response_bytes,
+        }
+        if any(value <= 0 or value > 500_000_000 for value in response_limits.values()):
+            raise ValueError("OpenRouter response limits must be between 1 and 500,000,000 bytes")
         self._http = http
         self._api_key_resolver = api_key_resolver
         self._base_url = base_url.rstrip("/")
@@ -44,6 +54,7 @@ class OpenRouterClient(AsyncClient):
         self._app_name = app_name
         self._max_attempts = max_attempts
         self._timeout_seconds = timeout_seconds
+        self._response_limits = response_limits
         self._sleep = sleep
 
     async def _headers(self) -> dict[str, str]:
@@ -65,6 +76,7 @@ class OpenRouterClient(AsyncClient):
         path: str,
         *,
         payload: dict[str, Any] | None = None,
+        query: dict[str, str] | None = None,
     ) -> JsonObject:
         operation = {
             "/models": "models",
@@ -79,6 +91,7 @@ class OpenRouterClient(AsyncClient):
                 path,
                 operation=operation,
                 payload=payload,
+                query=query,
             )
             outcome = "succeeded"
             return result
@@ -104,16 +117,19 @@ class OpenRouterClient(AsyncClient):
         *,
         operation: str,
         payload: dict[str, Any] | None = None,
+        query: dict[str, str] | None = None,
     ) -> JsonObject:
         headers = await self._headers()
         last_error: Exception | None = None
         for attempt in range(1, self._max_attempts + 1):
             try:
-                response = await self._http.request(
+                response = await self._http.request_bounded(
                     method,
                     f"{self._base_url}{path}",
+                    max_response_bytes=self._response_limits[operation],
                     headers=headers,
                     json=payload,
+                    params=query,
                     timeout=self._timeout_seconds,
                 )
             except (ClientConnectionError, ClientTimeoutError) as exc:
@@ -162,7 +178,13 @@ class OpenRouterClient(AsyncClient):
             return False
 
     async def models(self) -> list[JsonObject]:
-        payload = await self._request_json("GET", "/models")
+        # OpenRouter defaults this endpoint to text-output models. MCPlica also
+        # needs embedding-only models in the same canonical capability catalog.
+        payload = await self._request_json(
+            "GET",
+            "/models",
+            query={"output_modalities": "all"},
+        )
         raw_models = payload.get("data", [])
         if not isinstance(raw_models, list):
             raise ClientResponseError("OpenRouter model catalog is malformed")

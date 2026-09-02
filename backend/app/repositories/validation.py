@@ -11,6 +11,7 @@ from app.domain.validation import (
     ValidationStatus,
 )
 from app.models.validation import OperationExclusion, ValidationReport
+from app.repositories.build_execution import require_build_execution_owner
 
 
 def _report_to_domain(model: ValidationReport) -> ValidationReportRecord:
@@ -65,7 +66,13 @@ class ValidationRepository:
         blocking_error_count: int,
         warning_count: int,
         findings: list[ValidationFinding],
+        admission_token: UUID,
     ) -> ValidationReportRecord:
+        await require_build_execution_owner(
+            session,
+            build_id=build_id,
+            admission_token=admission_token,
+        )
         model = ValidationReport(
             build_id=build_id,
             overall_status=overall_status,

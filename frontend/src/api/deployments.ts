@@ -58,6 +58,34 @@ function normalizeIssued(response: McpTokenIssuedWire): McpAccessToken {
   return { ...response.token, token: response.plaintext };
 }
 
+async function loadAccess(
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<McpAccessWire> {
+  let page = 1;
+  let first: McpAccessWire | null = null;
+  const tokens: Array<McpAccessWire["tokens"][number]> = [];
+  while (true) {
+    const response = await api<McpAccessWire>(
+      `/api/v1/projects/${projectId}/mcp-access${queryString({ page, page_size: 200 })}`,
+      endpointResponses["get /api/v1/projects/:project_id/mcp-access"],
+      { signal },
+    );
+    if (response.page !== page || response.page_size !== 200) {
+      throw new Error(
+        "The server returned inconsistent access-token pagination metadata.",
+      );
+    }
+    first ??= response;
+    tokens.push(...response.tokens);
+    if (tokens.length >= response.total) return { ...first, tokens };
+    if (response.tokens.length === 0) {
+      throw new Error("The server returned an incomplete access-token page.");
+    }
+    page += 1;
+  }
+}
+
 export const deploymentApi = {
   listPage: (
     projectId: string,
@@ -108,14 +136,7 @@ export const deploymentApi = {
       },
     ),
   access: async (projectId: string, signal?: AbortSignal) =>
-    normalizeAccess(
-      projectId,
-      await api<McpAccessWire>(
-        `/api/v1/projects/${projectId}/mcp-access`,
-        endpointResponses["get /api/v1/projects/:project_id/mcp-access"],
-        { signal },
-      ),
-    ),
+    normalizeAccess(projectId, await loadAccess(projectId, signal)),
   accessStatus: async (
     projectId: string,
     signal?: AbortSignal,

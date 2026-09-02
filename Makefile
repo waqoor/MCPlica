@@ -4,7 +4,7 @@ BACKEND_ENV := $(CURDIR)/backend/.venv
 RUNTIME_ENV := $(CURDIR)/mcp_runtime/.venv
 COMPOSE := MCPLICA_ENV_FILE="$(abspath $(ENV_FILE))" docker compose --env-file "$(ENV_FILE)" -f infra/compose.yaml
 
-.PHONY: install-python install-frontend lock backend-dev frontend-dev migrate test critical-coverage lint typecheck format api-contract api-contract-check compose-up compose-down compose-logs runtime-build validate
+.PHONY: install-python install-frontend lock backend-dev frontend-dev migrate test critical-coverage lint typecheck format api-contract api-contract-check compose-up compose-down compose-logs runtime-build validate manifest manifest-check
 
 install-python:
 	UV_PROJECT_ENVIRONMENT="$(BACKEND_ENV)" uv sync --project backend --frozen --extra dev
@@ -73,6 +73,12 @@ runtime-build:
 
 validate:
 	python scripts/validate_starter.py
+
+manifest:
+	python scripts/checksum_manifest.py --write
+
+manifest-check:
+	python scripts/checksum_manifest.py --check
 
 .PHONY: init-env compose-check compose-test
 init-env:

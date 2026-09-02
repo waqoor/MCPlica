@@ -17,7 +17,11 @@ ROOT = Path(__file__).resolve().parents[2]
 def main() -> None:
     result = subprocess.run(
         [
-            "docker", "network", "inspect", "bridge", "--format",
+            "docker",
+            "network",
+            "inspect",
+            "bridge",
+            "--format",
             "{{(index .IPAM.Config 0).Gateway}}",
         ],
         capture_output=True,

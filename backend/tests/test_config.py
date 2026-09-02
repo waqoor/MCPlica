@@ -97,7 +97,11 @@ def test_compose_api_tmpfs_can_spool_the_default_upload_limit(
     units = {"k": 1024, "m": 1024**2, "g": 1024**3}
     tmpfs_capacity = int(match.group(1)) * units[match.group(2).lower()]
 
-    assert tmpfs_capacity > upload_limit
+    assert settings.multipart_spool_capacity_bytes >= 2 * (upload_limit + 1_048_576)
+    assert tmpfs_capacity > settings.multipart_spool_capacity_bytes
+
+    nginx = (compose_path.parent / "docker" / "nginx.conf").read_text(encoding="utf-8")
+    assert "client_max_body_size 101m;" in nginx
 
 
 def test_compose_application_services_wait_for_schema_migrations() -> None:
@@ -135,6 +139,21 @@ def test_blank_optional_retention_disables_retention(field: str) -> None:
     assert getattr(settings, field) is None
     with pytest.raises(ValidationError):
         Settings.model_validate({field: 0})
+
+
+def test_redis_socket_timeouts_must_fit_inside_readiness_deadline() -> None:
+    settings = Settings(
+        readiness_timeout_seconds=5,
+        redis_socket_connect_timeout_seconds=2,
+        redis_socket_timeout_seconds=4,
+    )
+    assert settings.redis_socket_timeout_seconds == 4
+
+    with pytest.raises(ValidationError, match="cannot exceed the readiness timeout"):
+        Settings(
+            readiness_timeout_seconds=1,
+            redis_socket_connect_timeout_seconds=2,
+        )
 
 
 def test_example_environment_has_unique_keys_and_loads() -> None:

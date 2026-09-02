@@ -1,4 +1,4 @@
-import { api, jsonBody } from "./client";
+import { api, apiAllPages, jsonBody } from "./client";
 import type {
   ModelCatalogItem,
   ModelSettings,
@@ -88,9 +88,11 @@ export const settingsApi = {
 
 export const userApi = {
   list: (signal?: AbortSignal) =>
-    api<User[]>("/api/v1/users", endpointResponses["get /api/v1/users"], {
+    apiAllPages<User>(
+      "/api/v1/users",
+      endpointResponses["get /api/v1/users"],
       signal,
-    }),
+    ),
   create: (payload: {
     email: string;
     display_name: string;

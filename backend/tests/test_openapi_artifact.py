@@ -19,8 +19,12 @@ def test_manifest_and_ai_evidence_have_authoritative_response_contracts() -> Non
     ai_schema = ai_runs["responses"]["200"]["content"]["application/json"]["schema"]
 
     assert manifest_schema == {"$ref": "#/components/schemas/MCPManifest"}
-    assert ai_schema["type"] == "array"
-    assert ai_schema["items"] == {"$ref": "#/components/schemas/BuildAIRunRead"}
+    assert ai_schema == {"$ref": "#/components/schemas/Page_BuildAIRunRead_"}
+    page_schema = document["components"]["schemas"]["Page_BuildAIRunRead_"]
+    assert page_schema["properties"]["items"]["items"] == {
+        "$ref": "#/components/schemas/BuildAIRunRead"
+    }
+    assert {"items", "total", "page", "page_size"} == set(page_schema["required"])
 
 
 def test_source_findings_expose_exact_structured_attribution() -> None:

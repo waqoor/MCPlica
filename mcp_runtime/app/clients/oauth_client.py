@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import json
+import math
 from dataclasses import dataclass
 from typing import cast
 from urllib.parse import quote_plus
@@ -122,6 +123,8 @@ class OAuthTokenClient:
             or not isinstance(token_type, str)
             or token_type.lower() != "bearer"
             or not isinstance(expires_in, int | float)
+            or isinstance(expires_in, bool)
+            or not math.isfinite(float(expires_in))
             or expires_in <= 0
         ):
             raise UpstreamAuthenticationError()

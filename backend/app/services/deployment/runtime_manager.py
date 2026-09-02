@@ -300,12 +300,17 @@ class RuntimeManager:
         )
 
     async def stop(self, deployment: DeploymentRecord, *, remove: bool) -> None:
+        info = await self._docker.inspect_container(deployment.container_name)
+        if info is None:
+            return
+        if deployment.container_id is not None and info.id != deployment.container_id:
+            raise RuntimeHealthError("Runtime container identity changed before stop")
         await self._docker.stop_container(
-            deployment.container_name,
+            info.id,
             timeout_seconds=self._settings.runtime_stop_timeout_seconds,
         )
         if remove:
-            await self._docker.remove_container(deployment.container_name)
+            await self._docker.remove_container(info.id)
 
     async def cleanup_failed(self, deployment: DeploymentRecord) -> None:
         await self._docker.remove_container(deployment.container_name, force=True)

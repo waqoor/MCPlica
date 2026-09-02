@@ -37,6 +37,9 @@ These six documents define scope and implementation authority. Later explicit de
 - `evidence/compose-validation-2026-09-01.md` — current Compose corrections, commit-bound CI results, and remaining verification boundaries.
 - `evidence/final-integrated-validation.md` — historical traceability and local execution proof for its stated snapshots.
 - `evidence/issues-001-closure.md` — authoritative second-round status (22 verified, 26 fixed, zero blocked), previous-fix review, additional changes, implementation evidence, and fresh test/runtime proof for all 48 `issues_001.md` findings.
+- `evidence/issues-002-closure.md` — verified disposition and implementation/runtime evidence for all 55 `issues_002.md` findings, including migrations `0021`–`0025`, PostgreSQL concurrency, Docker/Compose, contracts, frontend, and security boundaries.
+- `evidence/issues-002-foundation-closure.md` — focused reproduction, implementation, migration,
+  concurrency, runtime, and operational proof for `ISS-002-002` through `ISS-002-009`.
 - `evidence/agent3-requirement-traceability.md`
 
 Root-level legal/community policy remains authoritative for contributors: `LICENSE`, `CLA.md`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `GOVERNANCE.md`, `MAINTAINERS.md`, `SECURITY.md`, `SPONSORSHIP.md`, `TRADEMARKS.md`, and `GENERATED_OUTPUTS.md`.

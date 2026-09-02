@@ -1,12 +1,10 @@
-import re
 from typing import Annotated, Literal
 
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, model_validator
 
 from .canonical import HttpMethod, ParameterLocation, SecuritySchemeType
 from .json_types import JsonObject
-
-_PATH_PARAMETER = re.compile(r"\{([^{}]+)\}")
+from .path_template import path_parameter_names
 
 
 class InventoryServer(BaseModel):
@@ -100,7 +98,7 @@ class InventoryOperation(BaseModel):
 
     @model_validator(mode="after")
     def validate_path_parameters(self) -> "InventoryOperation":
-        placeholders = set(_PATH_PARAMETER.findall(self.path))
+        placeholders = set(path_parameter_names(self.path))
         parameters = {
             parameter.name
             for parameter in self.parameters

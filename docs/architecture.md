@@ -244,7 +244,12 @@ Supported authoritative executable source types:
 
 Supported supplemental documentation sources are defined in `design_document.md`.
 
-Every source version is immutable after ingestion. Replacing a source creates a new source version.
+Every source version is immutable after ingestion. A source owns an explicit `current_version_id`
+selection plus latest accepted observation time and HTTP validators. New bytes create and select a
+new immutable version; accepting bytes already present in history reselects that existing version
+without changing its creation timestamp. Source/project row locking serializes observations, and
+summaries, discovery, Build binding, conditional refresh, and retention all follow the selection
+rather than creation order.
 
 ### 7.5 OpenAPI / API Inventory parser and normalizer
 
@@ -273,6 +278,10 @@ when their index/count, resolved model, dimensions, and vector lengths match the
 PostgreSQL caches verified vectors by `(project_id, requested model identity, normalized content
 SHA-256)`; a Build still creates its own immutable generation and Milvus rows, while changed
 content/model identity and cross-project access always miss the cache.
+Each generation that belongs to a fenced Build attempt records the accepted admission token.
+Milvus uses an attempt-scoped physical row key while preserving the deterministic canonical chunk
+ID as metadata. Retrieval filters to the generation's accepted token and failed-attempt cleanup
+deletes only that attempt, so a late worker cannot replace or remove the reclaimed owner's rows.
 
 Documentation may improve:
 
@@ -394,8 +403,10 @@ Builds are processed asynchronously by workers and are versioned.
 
 Each build records:
 
-- exact source versions;
-- deterministic executable-configuration SHA-256 over the bound source versions, project base URL, active server selection, and per-operation server routing;
+- exact source versions plus frozen source ID, kind, name, origin, URL, creation time, primary role,
+  dependency aliases, and routing identity;
+- deterministic executable-configuration SHA-256 over those frozen bindings, project base URL,
+  active server selection, and per-operation server routing;
 - canonical snapshot hash;
 - documentation index generation ID;
 - compiler version;
@@ -409,7 +420,7 @@ Each build records:
 
 An explicit review/rebuild creates a new Build; it does not mutate a prior successful build.
 
-Deployment preflight recomputes the same fingerprint from authoritative project/source rows. A mismatch is `BUILD_INPUTS_STALE`: the historical build and any already-running deployment remain immutable, but new activation fails closed until a new build captures and validates the current configuration. Migration `0011` backfills this identity for existing build configuration snapshots.
+Deployment preflight recomputes the same fingerprint from authoritative project/source rows. A mismatch is `BUILD_INPUTS_STALE`: the historical build and any already-running deployment remain immutable, but normal new activation fails closed until a new build captures and validates the current configuration. Migration `0011` originally backfilled configuration snapshots; migration `0021` freezes all executable source metadata. Pre-`0021` bindings are explicitly untrustworthy for new activation because missing historical aliases/roles cannot be reconstructed safely.
 
 Build status and `pipeline_stage` are separate contracts. New requests are `QUEUED`; workers
 advance the persisted stage only when entering that authoritative phase, terminal success records
@@ -417,6 +428,11 @@ advance the persisted stage only when entering that authoritative phase, termina
 request/acknowledgement handshake checked around provider, parser, embedding, vector-write, and
 artifact boundaries. Queued work is removed when possible; running work stops at the next
 checkpoint and is not mislabeled cancelled until the worker acknowledges it.
+Admission claims use PostgreSQL time and an execution token. A requested cancellation keeps its
+live owner long enough to acknowledge through the canonical cleanup transaction; after owner
+expiry the dispatcher claims cancellation recovery without executing another Build stage. Every
+stage/result/AI/validation/artifact/index write checks the exact live token, and heartbeats stop
+work at the monotonic deadline derived from the last database-confirmed lease.
 
 ### 7.12 Diff/Rebuild subsystem
 
@@ -458,6 +474,18 @@ domain row, audit event, and idempotent runtime command commit together; callers
 dispatcher executes commands after commit, retries transient failures with bounded backoff, and
 reclaims expired leases after restart. MCP inbound auth is a separately hashed runtime overlay,
 so token/OIDC rotation does not mutate or invalidate an immutable READY Build manifest.
+
+Each dispatch mints an execution token that is carried through the queue, database-time claim and
+renewal, Docker checkpoints, and terminal write. The executor holds a PostgreSQL session advisory
+lock for the project while issuing effects, rechecks STOP→DEPLOY predecessors, and targets the
+deployment's exact recorded container identity. An expired worker can neither finalize a newer
+attempt nor stop a replacement container.
+
+Deployment rows distinguish `normal`, `security_refresh`, and `rollback` intent. A security refresh
+is bound to the exact active immutable Build and may ignore only unrelated pending source identity;
+artifact, ownership, compatibility, and current-secret checks remain fail-closed. Stop-first
+transitions ignore only their own newly scheduled STOPPING rows. Removing the final valid inbound
+verifier commits revocation with a durable STOP and no invalid replacement.
 
 ### 7.14 Export Service
 
@@ -517,14 +545,14 @@ Stores durable platform/domain state:
 
 - users/auth metadata;
 - projects;
-- source metadata, immutable versions, and build-scoped findings attributed to the exact
-  `source_version_id`;
+- source metadata, explicit current-version/observation state, immutable versions, and build-scoped
+  findings attributed to the exact `source_version_id`;
 - canonical snapshot metadata/serialized structures where appropriate;
 - builds;
-- build-admission leases and cancellation request/acknowledgement state;
+- token-fenced build-admission leases and cancellation request/acknowledgement state;
 - validation reports;
 - deployments;
-- durable runtime commands and their effect/error state;
+- durable, token-fenced runtime commands and their effect/error state;
 - encrypted credential records;
 - MCP access-token metadata;
 - verified project-scoped embedding-vector cache records;
@@ -554,7 +582,7 @@ operator evidence and are never used to infer which source in a multi-source bui
 
 Stores vectors and searchable metadata derived from project documentation/source descriptions.
 
-Milvus data must be rebuildable from source versions and embedding configuration. PostgreSQL records the index generation and embedding model/dimension required to interpret it.
+Milvus data must be rebuildable from source versions and embedding configuration. PostgreSQL records the index generation, accepted Build execution token when applicable, and embedding model/dimension required to interpret it.
 
 ### Artifact storage — local filesystem in V1
 
@@ -843,6 +871,9 @@ Only the deployment worker/runtime-manager process receives the minimal Docker A
 - Runtime-affecting authorization/lifecycle changes are never acknowledged as effective until
   their committed outbox command succeeds; a queue notification is only a wake-up hint.
 - PostgreSQL admission leases enforce the configured global Build concurrency across processes.
+- Lease ownership is a fencing contract, not only a scheduler hint: database-time renewal and exact
+  execution tokens guard all accepted Build/runtime/cleanup state, while last-confirmed monotonic
+  deadlines prevent work from continuing indefinitely through a database outage.
 - Workers may retry transient OpenRouter, Redis, Milvus, filesystem, or Docker failures using bounded exponential backoff.
 - Deterministic validation failures are not retried automatically.
 - A crashed worker may resume/retry an interrupted build from durable stage boundaries, but must never mutate a completed build.

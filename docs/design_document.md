@@ -260,7 +260,7 @@ A provider may call one or more dedicated clients; services depend on provider i
 
 `backend/app/main.py` shall create the FastAPI application through an application factory.
 
-The lifespan initializes shared clients once per process:
+The lifespan acquires shared clients once per process through one transactional async exit stack:
 
 - database engine/pool;
 - Redis pool;
@@ -272,7 +272,11 @@ The lifespan initializes shared clients once per process:
 
 The web API process shall **not** initialize `DockerClient` unless it is executing in a dedicated deployment-worker profile. Normal web processes cannot possess Docker Engine authority.
 
-Clients must expose `close()`/context lifecycle and health methods.
+Every successful acquisition registers its close action immediately. Startup failure closes all
+previously acquired resources; shutdown signals every dispatcher, waits only for the configured
+bounded grace period, cancels overdue tasks, and still attempts every client close. Clients expose
+`close()`/context lifecycle and health methods. Constructing the API's Milvus client is lazy and
+must not make control-plane startup depend on a live Milvus service.
 
 ---
 
@@ -314,6 +318,10 @@ There is no organization/tenant membership model.
 ### 6.2 Authentication
 
 Local authentication uses email/username plus Argon2 password hashing.
+
+Argon2 hashing and verification run in a worker thread rather than on the asynchronous event loop.
+Role/active mutations serialize in PostgreSQL and the last-administrator invariant counts active
+administrators only.
 
 Session design:
 
@@ -392,9 +400,16 @@ Represents logical source slots.
 - `origin_type ENUM(upload,url)`
 - `source_url TEXT NULL`
 - `is_primary BOOLEAN`
+- `current_version_id UUID NULL` referencing a version owned by the same source
+- `current_version_selected_at TIMESTAMPTZ NULL`
+- `last_observed_at TIMESTAMPTZ NULL`
+- `last_observed_etag TEXT NULL`
+- `last_observed_last_modified TEXT NULL`
 - `created_at`
 
 At least one `openapi` or `api_inventory` source must be present for a build.
+Current selection, latest observation metadata, and accepted HTTP validators move transactionally
+together; consumers do not infer current content from version creation order.
 
 ### 7.5 `source_versions`
 
@@ -475,6 +490,12 @@ For large documents, `canonical_json` may move to artifact storage while Postgre
 - `artifact_storage_key TEXT NULL`
 - `error_code TEXT NULL`
 - `error_summary TEXT NULL`
+- `pipeline_stage TEXT NOT NULL`
+- `executable_configuration_sha256 CHAR(64)`
+- `admission_token UUID NULL`
+- `admission_lease_expires_at TIMESTAMPTZ NULL`
+- `cancellation_requested_at TIMESTAMPTZ NULL`
+- `cancellation_acknowledged_at TIMESTAMPTZ NULL`
 - `requested_by UUID`
 - `created_at`
 - `started_at NULL`
@@ -488,7 +509,14 @@ Join table binding a Build to exact source versions.
 
 - `build_id`
 - `source_version_id`
+- frozen `source_id`, kind, name, origin, URL, creation time, and primary role
+- `dependency_aliases JSONB`
+- `binding_metadata_trustworthy BOOLEAN`
 - composite PK
+
+New Builds use only this frozen executable identity. Migration-backfilled historical bindings are
+not marked trustworthy when their original role/aliases cannot be proven and cannot be newly
+activated until rebuilt.
 
 ### 7.10 `build_ai_runs`
 
@@ -513,6 +541,9 @@ Stores build-time AI audit, not chain-of-thought.
 - `created_at`
 
 Store validated structured output or its artifact reference when needed for reproducibility; do not store hidden model reasoning.
+Usage/cost evidence includes every accepted, schema-rejected, and transport-failed structured
+attempt exactly once. A response is validated before a run becomes successful or reusable; an
+invalid historical success is atomically demoted and regenerated.
 
 ### 7.11 `document_index_generations`
 
@@ -526,7 +557,12 @@ Store validated structured output or its artifact reference when needed for repr
 - `chunk_count INTEGER`
 - `source_fingerprint CHAR(64)`
 - `status TEXT`
+- `execution_token UUID NULL`
 - `created_at`
+
+For a fenced Build, the accepted execution token is part of generation ownership and of the
+physical Milvus row identity/filter. The deterministic canonical chunk ID remains metadata and the
+embedding-cache key remains content-based.
 
 ### 7.12 `validation_reports`
 
@@ -562,6 +598,7 @@ No operation may silently disappear.
 - `id UUID PK`
 - `project_id FK`
 - `build_id FK`
+- `intent ENUM(normal,security_refresh,rollback)`
 - `status deployment_status`
 - `hostname TEXT`
 - `container_name TEXT`
@@ -580,6 +617,11 @@ No operation may silently disappear.
 - `error_summary TEXT NULL`
 
 Only one deployment may be active for a project hostname at a time.
+
+Runtime lifecycle commands and cleanup targets each carry a per-attempt execution token plus a
+database-time lease while running. Terminal writes require the exact unexpired token. Runtime
+effects additionally hold the project advisory lock and respect predecessor sequence; cleanup
+targets lock their parent job before aggregate refresh and claim immediately before external work.
 
 
 ### 7.15 `mcp_auth_configs`
@@ -783,6 +825,9 @@ Upload handling:
 7. never overwrite an existing blob.
 
 ZIP archives are not accepted as executable source in V1. Documentation bundles may be added later only with zip-slip/bomb protections.
+The reverse proxy, ASGI multipart guard, application upload limit, and temporary filesystem are one
+capacity contract. The application reserves headroom for at least two concurrent boundary uploads
+and rejects excess requests before Starlette can exhaust its spool filesystem.
 
 ### 10.2 Remote URLs
 
@@ -793,7 +838,8 @@ URL ingestion uses `HttpClient` with SSRF controls:
 - no arbitrary redirects;
 - max redirects 3 after revalidation;
 - allowed content size;
-- connect/read/total timeouts;
+- connect/read timeouts plus one total deadline covering DNS/policy resolution, retries,
+  redirects, and streamed body consumption;
 - DNS/IP blocking rules;
 - ETag/Last-Modified persisted when provided.
 
@@ -918,7 +964,10 @@ Examples:
 - `DocumentationCorrelationResult`
 - `SemanticValidationResult`
 
-Responses must be validated by Pydantic. Invalid structured output is retried within a bounded policy, then fails the affected stage if still invalid.
+Responses must be validated by Pydantic before a successful AI-run/cache record is published.
+Invalid structured output is retained as failed attempt evidence, retried within a bounded policy,
+then fails the affected stage if still invalid. Tokens and provider cost from every attempt are
+aggregated once even when the response is rejected.
 
 ### 13.3 Retrieval
 
@@ -1169,7 +1218,7 @@ If no supplemental docs exist, `INDEXING` records a completed empty/limited gene
 
 ### 17.2 Idempotency
 
-Each stage has a durable stage key based on `build_id`. Re-running a stage after worker failure must either reuse validated immutable output or safely replace incomplete stage output associated only with that build.
+Each stage has a durable stage key based on `build_id`. Re-running a stage after worker failure must either reuse validated immutable output or safely replace incomplete stage output associated only with that build. Every ownership-sensitive transition and result publication also verifies the exact live admission token. The heartbeat tracks the last database-confirmed lease as a monotonic deadline and stops external work after it can no longer prove ownership.
 
 ---
 
@@ -1375,6 +1424,10 @@ Requirements:
 - master key never stored in PostgreSQL;
 - key rotation is supported through `key_version` and a re-encryption operation.
 
+The configured cipher is a versioned key ring: only the active version encrypts, prior configured
+versions decrypt, unknown versions fail closed, and the re-encryption CLI/service locks and rewrites
+records transactionally before an old key is removed.
+
 ### 21.2 Runtime secret materialization
 
 The deployment worker decrypts only the credentials required for the selected build, writes a project-specific secret bundle to a host path/volume with restrictive ownership/permissions, and mounts it read-only into the runtime.
@@ -1412,7 +1465,7 @@ STOPPING -> STOPPED
 FAILED
 ```
 
-A rollback creates a new Deployment row referencing a previous READY Build; historical deployment
+A rollback creates a new Deployment row with `rollback` intent referencing a previous READY Build; historical deployment
 rows are immutable except operational status timestamps. Eligibility requires a non-active target
 whose `activated_at` evidence is complete and whose activation proof recomputes against the exact
 project, build, deployment, container, image, hostname, manifest, runtime version, and verification
@@ -1447,7 +1500,7 @@ probe `/readyz` through the edge again. If that proof fails, the invalid candida
 stopped and marked unhealthy; the predecessor is restored only after its exact runtime
 and edge identity are healthy again.
 
-Never stop the currently healthy container before a replacement passes readiness unless Docker resource constraints make zero-downtime impossible and the user explicitly requested a stop-first deployment.
+Never stop the currently healthy container before a replacement passes readiness unless Docker resource constraints make zero-downtime impossible and the user explicitly requested a stop-first deployment. A stop-first transition excludes only the STOPPING rows created by that same locked transition; unrelated in-progress deployments remain conflicts, and the durable DEPLOY command cannot overtake its STOP predecessor.
 
 Container readiness alone is insufficient for replacement. The edge probe must reach
 the candidate through its project hostname/network and receive `/readyz` evidence for
@@ -1456,6 +1509,11 @@ delay, or an older same-Build runtime, from being mistaken for the replacement.
 An activation proof is operational evidence, not a substitute for the live edge probe;
 every resumed activation or cleanup retry obtains a fresh proof before retiring another
 runtime.
+
+Authentication-only maintenance uses `security_refresh` intent and the exact active immutable
+Build. It may bypass only unrelated pending source/routing drift; artifact integrity, ownership,
+runtime compatibility, and current secret material remain mandatory. Revoking the last valid
+inbound verifier commits the revocation with a durable STOP and creates no invalid replacement.
 
 ---
 
@@ -1500,6 +1558,11 @@ All responses use a stable error envelope on failure:
   }
 }
 ```
+
+Management collections use a common bounded page contract (`items`, `total`, `page`, `page_size`)
+with stable ordering. The browser explicitly fetches every page only for workflows that require a
+complete set; repositories never return all retained users/projects/credentials/tokens/AI runs in
+one unbounded query.
 
 ### 24.1 Auth/users
 
@@ -1780,7 +1843,7 @@ Non-retryable examples:
 - unsupported media type;
 - security policy block.
 
-Use bounded exponential backoff with jitter and explicit attempt counts. Jobs must record attempt/failure category.
+Use bounded exponential backoff with jitter and explicit attempt counts. Jobs must record attempt/failure category. Redis connections and blocking queue operations have explicit socket deadlines. A remote source fetch owns one total deadline across DNS/policy resolution, redirects, retries, and streamed body reads; OpenRouter bodies are streamed through a byte cap before decode.
 
 ---
 
@@ -1792,8 +1855,12 @@ Required locks:
 - one deployment mutation at a time per project;
 - source refresh lock per source;
 - secret rotation lock per credential/token.
+- parent-job then cleanup-target locks for cleanup state;
+- one PostgreSQL advisory project lock around runtime Docker effects.
 
 Use PostgreSQL transaction/advisory locking where correctness is durable; Redis locks may optimize distributed coordination but must not be the sole correctness mechanism for destructive state.
+All reclaimable work uses a new execution token. A stale Build, runtime command, or cleanup worker
+cannot publish terminal state for its successor even if an earlier external call returns late.
 
 ---
 
@@ -1812,6 +1879,11 @@ JSON logs in production. Common fields:
 - build_id
 - deployment_id
 - error_code
+
+The formatter emits only an allowlisted JSON-safe context, including safe cleanup target/job,
+runtime command, admission-attempt, and retry fields. Raw exception text and arbitrary log messages
+are not production fields; exception type chains and query-stripped routes provide bounded
+diagnostics without echoing credentials.
 
 ### 29.2 Metrics
 

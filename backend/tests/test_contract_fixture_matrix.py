@@ -6,13 +6,13 @@ from uuid import UUID
 
 import pytest
 import yaml
-from scripts.generate_contract_matrix import CASES, OPENAPI_ROOT, MatrixCase, compile_case
 
 from app.compilers.mcp.compiler import compile_manifest
 from app.core.exceptions import CompilationError, ReferenceResolutionError
 from app.domain.validation import FindingSeverity
 from app.parsers.openapi.parser import parse_openapi
 from app.validators.build import validate_build
+from scripts.generate_contract_matrix import CASES, OPENAPI_ROOT, MatrixCase, compile_case
 
 ROOT = Path(__file__).resolve().parents[2]
 

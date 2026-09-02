@@ -9,13 +9,17 @@ from pydantic import ValidationError as PydanticValidationError
 
 from app.clients.ai import OpenRouterClient
 from app.core.canonical_json import canonical_json_bytes
-from app.core.exceptions import AIAnalysisError, ClientResponseError
+from app.core.exceptions import ClientResponseError
 from app.observability import observe_openrouter_usage
 from app.providers.ai.base import (
     AIModelInfo,
     AIProvider,
     EmbeddingBatch,
+    StructuredAttempt,
     StructuredGeneration,
+    StructuredGenerationError,
+    structured_cost_evidence,
+    structured_usage_evidence,
 )
 
 
@@ -74,10 +78,31 @@ class OpenRouterProvider(AIProvider):
             },
         }
         last_error: Exception | None = None
-        for _ in range(self._structured_attempts):
+        attempts: list[StructuredAttempt] = []
+        for ordinal in range(1, self._structured_attempts + 1):
             started = time.perf_counter()
-            response = await self._client.chat_completion(payload)
+            try:
+                response = await self._client.chat_completion(payload)
+            except Exception as exc:
+                attempts.append(
+                    StructuredAttempt(
+                        ordinal=ordinal,
+                        outcome="transport_error",
+                        model=model,
+                        usage=None,
+                        cost=None,
+                        latency_ms=round((time.perf_counter() - started) * 1000),
+                    )
+                )
+                raise StructuredGenerationError(
+                    "OpenRouter structured generation failed before accounting was available",
+                    attempts=tuple(attempts),
+                ) from exc
             latency_ms = round((time.perf_counter() - started) * 1000)
+            usage = _usage(response)
+            observe_openrouter_usage(usage)
+            cost = {"cost": usage["cost"]} if usage and "cost" in usage else None
+            resolved_model = str(response.get("model") or model)
             try:
                 value = response_model.model_validate(_structured_content(response))
             except (
@@ -88,21 +113,41 @@ class OpenRouterProvider(AIProvider):
                 PydanticValidationError,
             ) as exc:
                 last_error = exc
+                attempts.append(
+                    StructuredAttempt(
+                        ordinal=ordinal,
+                        outcome="rejected",
+                        model=resolved_model,
+                        usage=usage,
+                        cost=cost,
+                        latency_ms=latency_ms,
+                    )
+                )
                 continue
             serialized = canonical_json_bytes(value)
-            usage = _usage(response)
-            observe_openrouter_usage(usage)
-            cost = {"cost": usage["cost"]} if usage and "cost" in usage else None
+            attempts.append(
+                StructuredAttempt(
+                    ordinal=ordinal,
+                    outcome="accepted",
+                    model=resolved_model,
+                    usage=usage,
+                    cost=cost,
+                    latency_ms=latency_ms,
+                )
+            )
+            packed_attempts = tuple(attempts)
             return StructuredGeneration(
                 value=value,
-                model=str(response.get("model") or model),
+                model=resolved_model,
                 response_sha256=hashlib.sha256(serialized).hexdigest(),
-                usage=usage,
-                cost=cost,
-                latency_ms=latency_ms,
+                usage=structured_usage_evidence(packed_attempts),
+                cost=structured_cost_evidence(packed_attempts),
+                latency_ms=sum(attempt.latency_ms for attempt in packed_attempts),
+                attempts=packed_attempts,
             )
-        raise AIAnalysisError(
-            "OpenRouter returned invalid structured output after bounded retries"
+        raise StructuredGenerationError(
+            "OpenRouter returned invalid structured output after bounded retries",
+            attempts=tuple(attempts),
         ) from last_error
 
     async def embed(self, *, model: str, texts: list[str]) -> EmbeddingBatch:

@@ -132,6 +132,38 @@ def test_docx_paragraphs_headings_and_tables_are_extracted() -> None:
     assert document.metadata["format"] == "docx"
 
 
+def test_docx_preserves_interleaved_table_order_and_heading_context() -> None:
+    output = BytesIO()
+    source = Document()
+    source.add_heading("Widget API", level=1)
+    source.add_paragraph("Before the first table.")
+    first = source.add_table(rows=1, cols=2)
+    first.cell(0, 0).text = "GET"
+    first.cell(0, 1).text = "/widgets"
+    source.add_paragraph("After the first table.")
+    source.add_heading("Administration", level=2)
+    second = source.add_table(rows=1, cols=2)
+    second.cell(0, 0).text = "DELETE"
+    second.cell(0, 1).text = "/widgets/{id}"
+    source.save(output)
+
+    document = parse_document(
+        output.getvalue(),
+        detected_format="docx",
+        source_version_id=UUID(int=29),
+        title=None,
+    )
+
+    assert [section.text for section in document.sections] == [
+        "Before the first table.",
+        "GET\t/widgets",
+        "After the first table.",
+        "DELETE\t/widgets/{id}",
+    ]
+    assert document.sections[1].path == ["Widget API", "Table 1"]
+    assert document.sections[3].path == ["Widget API", "Administration", "Table 2"]
+
+
 def test_pdf_extracts_text_with_page_provenance() -> None:
     source = pymupdf.open()
     page = source.new_page()

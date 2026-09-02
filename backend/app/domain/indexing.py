@@ -28,6 +28,7 @@ class DocumentIndexGenerationRecord(BaseModel):
     source_fingerprint: str = Field(pattern=r"^[a-f0-9]{64}$")
     status: IndexGenerationStatus
     error_summary: str | None
+    execution_token: UUID | None = None
     created_at: datetime
     completed_at: datetime | None
 

@@ -23,6 +23,7 @@ from app.parsers.documentation import DocumentChunk, chunk_document, parse_docum
 from app.providers.ai.base import AIProvider, EmbeddingBatch
 from app.providers.storage import ArtifactStorage
 from app.providers.vector import VectorStore
+from app.repositories.build_execution import require_build_execution_owner
 from app.repositories.cleanup import CleanupRepository
 from app.repositories.indexing import IndexGenerationRepository
 from app.repositories.sources import SourceRepository
@@ -233,19 +234,15 @@ class IndexingService:
         *,
         project_id: UUID,
         build_id: UUID,
-        source_version_ids: list[UUID],
+        source_bindings: list[BoundSourceVersionRecord],
         canonical: CanonicalApi,
         embedding_model: str | None,
         config: BuildConfiguration,
+        admission_token: UUID,
         cancellation_check: Callable[[], Awaitable[None]] | None = None,
     ) -> DocumentIndexGenerationRecord:
-        async with self._database.session_scope() as session:
-            bindings = await self._sources.list_bound_versions(
-                session,
-                project_id,
-                source_version_ids,
-            )
-        if len(bindings) != len(source_version_ids):
+        source_version_ids = [binding.version.id for binding in source_bindings]
+        if any(binding.source.project_id != project_id for binding in source_bindings):
             raise SourceParseError("Index source versions do not belong to the Project")
         if canonical.project_id != project_id or not set(
             canonical.provenance.source_version_ids
@@ -256,7 +253,9 @@ class IndexingService:
         if cancellation_check is not None:
             await cancellation_check()
         documents = [
-            binding for binding in bindings if binding.source.kind is SourceKind.DOCUMENTATION
+            binding
+            for binding in source_bindings
+            if binding.source.kind is SourceKind.DOCUMENTATION
         ]
         source_fingerprint = hashlib.sha256(
             (
@@ -270,6 +269,11 @@ class IndexingService:
             f"{project_id}:{build_id}:{embedding_model or 'none'}:{source_fingerprint}".encode()
         ).hexdigest()
         async with self._database.session_scope() as session:
+            await require_build_execution_owner(
+                session,
+                build_id=build_id,
+                admission_token=admission_token,
+            )
             generation = await self._generations.prepare(
                 session,
                 generation_id=generation_id,
@@ -278,6 +282,7 @@ class IndexingService:
                 embedding_model=embedding_model,
                 generation_key=generation_key,
                 source_fingerprint=source_fingerprint,
+                admission_token=admission_token,
             )
         if generation.status is IndexGenerationStatus.READY:
             return generation
@@ -326,6 +331,8 @@ class IndexingService:
                     chunk_count=0,
                     chunk_manifest_storage_key=stored_chunks.storage_key,
                     chunk_manifest_sha256=stored_chunks.content_sha256,
+                    build_id=build_id,
+                    admission_token=admission_token,
                 )
             if embedding_model is None:
                 raise IndexingError("An embedding model is required when documentation is attached")
@@ -352,6 +359,7 @@ class IndexingService:
                     collection=collection,
                     chunks=chunks[offset : offset + config.embedding_batch_size],
                     vectors=vectors[offset : offset + config.embedding_batch_size],
+                    execution_token=admission_token,
                 )
                 if cancellation_check is not None:
                     await cancellation_check()
@@ -363,6 +371,8 @@ class IndexingService:
                 chunk_count=len(chunks),
                 chunk_manifest_storage_key=stored_chunks.storage_key,
                 chunk_manifest_sha256=stored_chunks.content_sha256,
+                build_id=build_id,
+                admission_token=admission_token,
             )
         except Exception as exc:
             if collection is not None:
@@ -372,6 +382,7 @@ class IndexingService:
                         collection=collection,
                         project_id=project_id,
                         generation_id=generation.id,
+                        execution_token=admission_token,
                     )
                 except Exception as cleanup_exc:
                     cleanup_error = cleanup_exc
@@ -384,6 +395,12 @@ class IndexingService:
                     )
             summary = str(exc) if isinstance(exc, MCPlicaError) else type(exc).__name__
             async with self._database.session_scope() as session:
+                await require_build_execution_owner(
+                    session,
+                    build_id=build_id,
+                    admission_token=admission_token,
+                    allow_cancellation=True,
+                )
                 cleanup_job = await self._cleanup.create_job(
                     session,
                     kind=CleanupJobKind.ORPHAN_GUARD,
@@ -405,7 +422,13 @@ class IndexingService:
                         generation_id=generation.id,
                     )
                 await self._cleanup.finalize_empty_job(session, cleanup_job.id)
-                await self._generations.fail(session, generation.id, summary)
+                await self._generations.fail(
+                    session,
+                    generation.id,
+                    summary,
+                    build_id=build_id,
+                    admission_token=admission_token,
+                )
             raise
 
     async def _parse_and_chunk(
@@ -623,8 +646,15 @@ class IndexingService:
         chunk_count: int,
         chunk_manifest_storage_key: str,
         chunk_manifest_sha256: str,
+        build_id: UUID,
+        admission_token: UUID,
     ) -> DocumentIndexGenerationRecord:
         async with self._database.session_scope() as session:
+            await require_build_execution_owner(
+                session,
+                build_id=build_id,
+                admission_token=admission_token,
+            )
             return await self._generations.complete(
                 session,
                 generation_id,
@@ -634,4 +664,6 @@ class IndexingService:
                 chunk_count=chunk_count,
                 chunk_manifest_storage_key=chunk_manifest_storage_key,
                 chunk_manifest_sha256=chunk_manifest_sha256,
+                build_id=build_id,
+                admission_token=admission_token,
             )

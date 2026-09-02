@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const OPERATIONAL_SETTING_BOUNDS = {
   build_concurrency: { min: 1, max: 32 },
-  max_upload_bytes: { min: 1_024, max: 500_000_000 },
+  max_upload_bytes: { min: 1_024, max: 100_000_000 },
   max_operations_per_project: { min: 1, max: 100_000 },
   max_document_chunks_per_project: { min: 1, max: 100_000 },
   build_retention_count: { min: 1, max: 10_000 },

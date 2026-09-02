@@ -22,7 +22,11 @@ from app.domain.analysis import (
 )
 from app.domain.indexing import DocumentIndexGenerationRecord
 from app.prompts import OPERATION_ENRICHMENT_PROMPT
-from app.providers.ai.base import AIProvider
+from app.providers.ai.base import (
+    AIProvider,
+    StructuredGenerationError,
+    unavailable_structured_evidence,
+)
 from app.repositories.builds import BuildAIRunRepository
 from app.services.analysis.retrieval import RetrievalContext, RetrievalService
 
@@ -52,6 +56,7 @@ class AnalysisService:
         max_concurrency: int,
         retrieval_top_k: int,
         reusable: Mapping[str, OperationEnrichment] | None = None,
+        admission_token: UUID,
         cancellation_check: Callable[[], Awaitable[None]] | None = None,
     ) -> EnrichmentSnapshot:
         async def one(operation: CanonicalOperation) -> OperationEnrichment:
@@ -67,6 +72,7 @@ class AnalysisService:
                 retrieval_top_k=retrieval_top_k,
                 reusable=(reusable or {}).get(operation.key),
                 cancellation_check=cancellation_check,
+                admission_token=admission_token,
             )
 
         operations = sorted(canonical.operations, key=lambda item: item.key)
@@ -85,6 +91,7 @@ class AnalysisService:
         retrieval_top_k: int,
         reusable: OperationEnrichment | None,
         cancellation_check: Callable[[], Awaitable[None]] | None,
+        admission_token: UUID,
     ) -> OperationEnrichment:
         run_key = "operation:" + hashlib.sha256(operation.key.encode()).hexdigest()[:32]
         async with self._database.session_scope() as session:
@@ -129,6 +136,7 @@ class AnalysisService:
                 status="succeeded",
                 error_code=None,
                 stage="analysis_reuse",
+                admission_token=admission_token,
             )
             if cancellation_check is not None:
                 await cancellation_check()
@@ -159,6 +167,16 @@ class AnalysisService:
             )
             self._validate_result(operation, generated.value, set(chunk_ids))
         except Exception as exc:
+            generation_usage = (
+                exc.usage
+                if isinstance(exc, StructuredGenerationError)
+                else unavailable_structured_evidence(field="usage")
+            )
+            generation_cost = (
+                exc.cost
+                if isinstance(exc, StructuredGenerationError)
+                else unavailable_structured_evidence(field="cost")
+            )
             await self._save_run(
                 build_id=build_id,
                 run_key=run_key,
@@ -168,11 +186,12 @@ class AnalysisService:
                 chunk_ids=chunk_ids,
                 response=None,
                 response_sha256=None,
-                usage=_combined_usage(None, retrieval),
-                cost=None,
-                latency_ms=None,
+                usage=_combined_usage(generation_usage, retrieval),
+                cost=generation_cost,
+                latency_ms=(exc.latency_ms if isinstance(exc, StructuredGenerationError) else None),
                 status="failed",
                 error_code=(exc.code if isinstance(exc, MCPlicaError) else type(exc).__name__),
+                admission_token=admission_token,
             )
             raise
         await self._save_run(
@@ -189,6 +208,7 @@ class AnalysisService:
             latency_ms=generated.latency_ms,
             status="succeeded",
             error_code=None,
+            admission_token=admission_token,
         )
         if cancellation_check is not None:
             await cancellation_check()
@@ -216,6 +236,7 @@ class AnalysisService:
         status: str,
         error_code: str | None,
         stage: str = "analysis",
+        admission_token: UUID,
     ) -> None:
         async with self._database.session_scope() as session:
             await self._ai_runs.create(
@@ -237,6 +258,7 @@ class AnalysisService:
                 latency_ms=latency_ms,
                 status=status,
                 error_code=error_code,
+                admission_token=admission_token,
             )
 
     @staticmethod

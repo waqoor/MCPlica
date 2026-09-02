@@ -1,5 +1,7 @@
+import hashlib
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from uuid import UUID
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
@@ -45,6 +47,25 @@ class DatabaseClient(AsyncClient):
             return True
         except Exception:
             return False
+
+    @asynccontextmanager
+    async def project_advisory_lock(self, project_id: UUID) -> AsyncGenerator[None]:
+        """Serialize external runtime effects for one project on one PG session."""
+
+        digest = hashlib.sha256(b"mcplica:runtime-command:project:" + project_id.bytes).digest()
+        key = int.from_bytes(digest[:8], byteorder="big", signed=True)
+        async with self.engine.connect() as connection:
+            await connection.execute(
+                text("SELECT pg_advisory_lock(:key)"),
+                {"key": key},
+            )
+            try:
+                yield
+            finally:
+                await connection.execute(
+                    text("SELECT pg_advisory_unlock(:key)"),
+                    {"key": key},
+                )
 
     async def close(self) -> None:
         await self.engine.dispose()

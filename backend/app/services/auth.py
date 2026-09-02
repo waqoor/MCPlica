@@ -100,7 +100,7 @@ class AuthService:
         async with self._database.session_scope() as session:
             user = await self._users.get_by_email(session, email)
             password_hash = user.password_hash if user else self._dummy_password_hash
-            verified, updated_password_hash = self._passwords.verify_and_update(
+            verified, updated_password_hash = await self._passwords.verify_and_update_async(
                 password,
                 password_hash,
             )

@@ -36,6 +36,13 @@ export type ResponseContract<T> = {
       };
 };
 
+export type PageResponse<T> = {
+  readonly items: T[];
+  readonly total: number;
+  readonly page: number;
+  readonly page_size: number;
+};
+
 export class ResponseContractError extends ApiError {
   constructor(
     path: string,
@@ -227,6 +234,40 @@ export async function api<T>(
     );
   }
   return parsed.data;
+}
+
+export async function apiAllPages<T>(
+  path: string,
+  contract: ResponseContract<PageResponse<T>>,
+  signal?: AbortSignal,
+): Promise<T[]> {
+  const items: T[] = [];
+  const separator = path.includes("?") ? "&" : "?";
+  let page = 1;
+  while (true) {
+    const response = await api<PageResponse<T>>(
+      `${path}${separator}page=${page}&page_size=200`,
+      contract,
+      { signal },
+    );
+    if (response.page !== page || response.page_size !== 200) {
+      throw new ApiError(
+        502,
+        "The server returned inconsistent collection pagination metadata.",
+        "RESPONSE_PAGINATION_INVALID",
+      );
+    }
+    items.push(...response.items);
+    if (items.length >= response.total) return items;
+    if (response.items.length === 0) {
+      throw new ApiError(
+        502,
+        "The server returned an incomplete collection page.",
+        "RESPONSE_PAGINATION_INVALID",
+      );
+    }
+    page += 1;
+  }
 }
 
 export function jsonBody(value: unknown): string {

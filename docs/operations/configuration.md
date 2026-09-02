@@ -19,6 +19,7 @@ projects, sources, builds, credentials, users, settings, audit records, and depl
 | `DEPLOYMENT_QUEUE_NAME`         | Docker-authoritative deployment RQ queue         | Must differ from the build queue                                        |
 | `SECRET_ENCRYPTION_KEY`         | URL-safe base64 encoded 32-byte AES-256-GCM key  | Required, backed up outside the database                                |
 | `SECRET_ENCRYPTION_KEY_VERSION` | Key identifier stored with ciphertext            | Change only through a planned re-encryption migration                   |
+| `SECRET_ENCRYPTION_PREVIOUS_KEYS` | JSON object of prior version to encoded key     | Keep while rows/backups still reference those versions                 |
 | `AUTH_SIGNING_KEY`              | Control-plane access-token signing               | Required and distinct from every other key                              |
 | `REFRESH_TOKEN_PEPPER`          | Refresh-token verifier pepper                    | Required and distinct                                                   |
 | `BOOTSTRAP_SECRET`              | One-time first-admin authorization               | Remove after bootstrap                                                  |
@@ -46,6 +47,9 @@ password. Both `DEFAULT_ADMIN_*` variables are rejected when `ENV=production`.
 | `DATABASE_POOL_SIZE`                   |       10 | 1–100                                                 |
 | `DATABASE_MAX_OVERFLOW`                |       20 | 0–200                                                 |
 | `READINESS_TIMEOUT_SECONDS`            |        5 | >0–30; total bound for concurrent dependency probes  |
+| `SHUTDOWN_TIMEOUT_SECONDS`             |       15 | >0–120 per dispatcher/resource close operation       |
+| `REDIS_SOCKET_CONNECT_TIMEOUT_SECONDS` |        2 | >0–30; cannot exceed the readiness timeout           |
+| `REDIS_SOCKET_TIMEOUT_SECONDS`         |        4 | >0–30; cannot exceed the readiness timeout           |
 | `BUILD_JOB_TIMEOUT_SECONDS`            |     3600 | 60–86400                                              |
 | `BUILD_JOB_MAX_ATTEMPTS`               |        3 | 1–8 total attempts                                    |
 | `BUILD_CONCURRENCY`                    |        2 | 1–32                                                  |
@@ -54,12 +58,17 @@ password. Both `DEFAULT_ADMIN_*` variables are rejected when `ENV=production`.
 | `BUILD_ADMISSION_HEARTBEAT_SECONDS`     |       30 | 1–300 and strictly shorter than the admission lease    |
 | `DEPLOYMENT_JOB_TIMEOUT_SECONDS`       |      900 | 60–7200                                               |
 | `DEPLOYMENT_JOB_MAX_ATTEMPTS`          |        3 | 1–8                                                   |
+| `RUNTIME_COMMAND_DISPATCH_INTERVAL_SECONDS` |        1 | 0.1–60 between durable command scans                  |
+| `RUNTIME_COMMAND_DISPATCH_LEASE_SECONDS` |       30 | 5–300 for queue-dispatch ownership                    |
+| `RUNTIME_COMMAND_EXECUTION_LEASE_SECONDS` |     1200 | 60–7200 for fenced runtime effects                    |
+| `RUNTIME_COMMAND_EXECUTION_HEARTBEAT_SECONDS` |       30 | 1–300; doubled value must be below execution lease   |
 | `CLEANUP_DISPATCH_INTERVAL_SECONDS`     |        5 | 0.1–300; durable cleanup poll interval                |
 | `CLEANUP_LEASE_SECONDS`                 |       60 | 5–3600; expired work is safely reclaimable            |
 | `CLEANUP_MAX_ATTEMPTS`                  |        8 | 1–100 before an operator-visible terminal failure     |
 | `CLEANUP_RETENTION_INTERVAL_SECONDS`    |     3600 | 10–86400 between retention scans                      |
 | `CLEANUP_ORPHAN_GUARD_DELAY_SECONDS`    |      300 | 5–86400 before an unreferenced upload may be reclaimed |
 | `UPLOAD_MAX_BYTES`                     | 100000000 | 1024–500000000                                       |
+| `MULTIPART_SPOOL_CAPACITY_BYTES`       | 220000000 | At least upload limit plus 1 MiB; provision concurrent uploads |
 | `DOCUMENT_MAX_BYTES`                   | 100000000 | 1024–500000000                                       |
 | `FETCH_MAX_BYTES`                      | 25000000 | 1024–500000000                                        |
 | `FETCH_MAX_REDIRECTS`                  |        3 | 0–10, policy checked at every hop                     |
@@ -77,12 +86,17 @@ password. Both `DEFAULT_ADMIN_*` variables are rejected when `ENV=production`.
 | `RUNTIME_MANIFEST_MAX_BYTES`            | 10000000 | 1024–50000000                                         |
 | `RUNTIME_SECRET_BUNDLE_MAX_BYTES`       |  1000000 | 1024–10000000                                         |
 
-Size limits are server-side safeguards. Raising a UI limit without changing the server does not increase capacity; raising a server limit requires memory, timeout, abuse, and storage review.
+Size limits are server-side safeguards. Raising a UI limit without changing the server does not increase capacity; raising a server limit requires memory, timeout, abuse, and storage review. Keep the proxy body limit above the application boundary and provision the API `/tmp` tmpfs above `MULTIPART_SPOOL_CAPACITY_BYTES`; the default topology supports two simultaneous maximum-size multipart requests with headroom.
 
 `BUILD_CONCURRENCY` is enforced by PostgreSQL admission leases, not by a process-local
 counter. A Build remains `QUEUED` until a lease is committed, and a crashed worker's lease
 may be reclaimed only after expiry. Heartbeats, compare-and-set release, FIFO ordering, and
 the `/api/v1/build-admission` view make multi-worker behavior observable and restart-safe.
+The Build admission token fences every accepted pipeline/result write; cancellation recovery uses
+the same lease and never resumes stages. Runtime command dispatch and execution use separate
+leases. Each queue delivery carries its execution token, and the deployment worker must renew that
+token while holding the PostgreSQL project lock around Docker effects. Increase the execution
+lease only for measured slow runtime operations and keep the heartbeat below half the lease.
 
 `RUNTIME_MANIFEST_MAX_BYTES` is frozen into each Build. The Builder measures the exact canonical
 manifest serialization and prevents an oversized Build from becoming `READY`; the deployment
@@ -110,11 +124,11 @@ through Redis; Traefik uses a private ping entrypoint. `migrate` is a one-shot s
 gate for the API and both workers, while `runtime-init` is the one-shot runtime-directory
 gate; both must exit successfully rather than remain running.
 
-`/metrics` exposes bounded-label Prometheus request, Build, stage, generated-operation, OpenRouter usage/cost/rate-limit, and Milvus client metrics. Configure `METRICS_BEARER_TOKEN`; it is mandatory in production. Multi-process API or worker deployments must set `PROMETHEUS_MULTIPROC_DIR` before process start and mount a clean, shared writable metrics directory according to the Prometheus Python client lifecycle. Production logs are structured JSON and include request/job correlation identifiers without secret values.
+`/metrics` exposes bounded-label Prometheus request, Build, stage, generated-operation, OpenRouter usage/cost/rate-limit, and Milvus client metrics. Configure `METRICS_BEARER_TOKEN`; it is mandatory in production. Multi-process API or worker deployments must set `PROMETHEUS_MULTIPROC_DIR` before process start and mount a clean, shared writable metrics directory according to the Prometheus Python client lifecycle. Production logs are structured JSON and include allowlisted request/job/cleanup/runtime correlation identifiers. Raw messages, exception text, query strings, and unknown or sensitive fields are omitted.
 
 ## Deployment and routing
 
-`MCP_DOMAIN` is the base for per-project hostnames. `TRAEFIK_NETWORK`, `..._CONTAINER_NAME`, `..._ENTRYPOINT`, `..._TLS`, and `..._CERT_RESOLVER` must match the active Traefik instance. Runtime limits default to UID/GID 10001, 512 MiB memory, 1 CPU, 256 PIDs, and 64 MiB tmpfs; tune `RUNTIME_*` only after load and abuse testing. The API and builder worker remain Docker-socket-free. Only the deployment worker consumes the deployment queue and receives the socket plus runtime-host mount.
+`MCP_DOMAIN` is the base for per-project hostnames. `TRAEFIK_NETWORK`, `..._CONTAINER_NAME`, `..._ENTRYPOINT`, `..._TLS`, and `..._CERT_RESOLVER` must match the active Traefik instance. The shipped backend/runtime images and Compose permissions use fixed UID/GID 10001; `runtime-init` rejects different values instead of advertising unsupported identity customization. Resource limits default to 512 MiB memory, 1 CPU, 256 PIDs, and 64 MiB tmpfs and may be tuned only after load and abuse testing. The API and builder worker remain Docker-socket-free. Only the deployment worker consumes the deployment queue and receives the socket plus runtime-host mount.
 
 `BUILDERS_CAN_DEPLOY` defaults false. This is a server authorization policy, not a cosmetic UI toggle. `BUILD_RETENTION_COUNT` keeps at least the newest configured number of Builds per Project plus every active, deployed, or nonterminal Build. `SOURCE_RETENTION_DAYS` removes only versions strictly older than the cutoff, never the latest version of a Source, and never a version referenced by a retained Build. Blank source retention disables source-version expiry.
 
@@ -140,7 +154,7 @@ Runtime request, response, manifest, secret-bundle, connection-pool, keepalive, 
 
 ## Secret rotation
 
-Rotate project upstream credentials and MCP access tokens through the API/UI so audit and overlap rules are applied. Upstream secret rotation preserves the credential's source-security binding and can proceed against that stored binding after source drift; changing a scheme/name/location requires a replacement credential and new Build. Rotating the control-plane encryption key requires a tested decrypt/re-encrypt migration and rollback copy; changing it directly makes existing ciphertext unreadable. Rotating signing/pepper keys invalidates existing sessions and must be followed by an API restart. Never log old or new values.
+Rotate project upstream credentials and MCP access tokens through the API/UI so audit and overlap rules are applied. Upstream secret rotation preserves the credential's source-security binding and can proceed against that stored binding after source drift; changing a scheme/name/location requires a replacement credential and new Build. To rotate the control-plane encryption key, retain a rollback copy, put the old version/key in `SECRET_ENCRYPTION_PREVIOUS_KEYS`, configure a new active version/key, restart, run `python -m app.cli.reencrypt_secrets`, verify every row now references the new version, then remove the old key and restart again. Never change the active key under an existing version. Rotating signing/pepper keys invalidates existing sessions and must be followed by an API restart. Never log old or new values.
 
 ## Compose environment resolution
 

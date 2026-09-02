@@ -10,10 +10,11 @@ from app.domain.deployments import (
     DeployableBuildRecord,
     DeploymentActivationPhase,
     DeploymentActivationProof,
+    DeploymentIntent,
     DeploymentRecord,
     DeploymentStatus,
 )
-from app.models.build import Build
+from app.models.build import Build, BuildSourceVersion
 from app.models.deployment import Deployment
 from app.models.project import Project
 
@@ -32,6 +33,7 @@ def _to_domain(model: Deployment) -> DeploymentRecord:
         id=model.id,
         project_id=model.project_id,
         build_id=model.build_id,
+        intent=model.intent,
         previous_active_deployment_id=model.previous_active_deployment_id,
         status=model.status,
         hostname=model.hostname,
@@ -131,29 +133,46 @@ class DeploymentRepository:
         if model is None:
             return None
         config = BuildConfiguration.model_validate(model.build_config_json)
+        bindings_trustworthy = await session.scalar(
+            select(func.bool_and(BuildSourceVersion.binding_metadata_trustworthy)).where(
+                BuildSourceVersion.build_id == build_id
+            )
+        )
         return DeployableBuildRecord(
             id=model.id,
             project_id=model.project_id,
             status=model.status.value,
+            source_binding_metadata_trustworthy=bool(bindings_trustworthy),
             executable_configuration_sha256=(config.executable_configuration_sha256),
             runtime_manifest_max_bytes=config.runtime_manifest_max_bytes,
             manifest_sha256=model.manifest_sha256,
             manifest_storage_key=model.manifest_storage_key,
         )
 
-    async def has_in_progress(self, session: AsyncSession, project_id: UUID) -> bool:
+    async def has_in_progress(
+        self,
+        session: AsyncSession,
+        project_id: UUID,
+        *,
+        transition_stopping_ids: set[UUID] | None = None,
+    ) -> bool:
+        statuses = {
+            DeploymentStatus.PENDING,
+            DeploymentStatus.DEPLOYING,
+            DeploymentStatus.HEALTHCHECK,
+            DeploymentStatus.STOPPING,
+        }
+        predicate = Deployment.status.in_(statuses)
+        if transition_stopping_ids:
+            predicate = predicate & ~(
+                (Deployment.status == DeploymentStatus.STOPPING)
+                & Deployment.id.in_(transition_stopping_ids)
+            )
         deployment_id = await session.scalar(
             select(Deployment.id)
             .where(
                 Deployment.project_id == project_id,
-                Deployment.status.in_(
-                    {
-                        DeploymentStatus.PENDING,
-                        DeploymentStatus.DEPLOYING,
-                        DeploymentStatus.HEALTHCHECK,
-                        DeploymentStatus.STOPPING,
-                    }
-                ),
+                predicate,
             )
             .limit(1)
         )
@@ -195,6 +214,7 @@ class DeploymentRepository:
         deployment_id: UUID,
         project_id: UUID,
         build_id: UUID,
+        intent: DeploymentIntent,
         previous_active_deployment_id: UUID | None,
         hostname: str,
         container_name: str,
@@ -210,6 +230,7 @@ class DeploymentRepository:
             id=deployment_id,
             project_id=project_id,
             build_id=build_id,
+            intent=intent,
             previous_active_deployment_id=previous_active_deployment_id,
             status=DeploymentStatus.PENDING,
             hostname=hostname,
@@ -315,14 +336,22 @@ class DeploymentRepository:
             return None
         if not self._proof_matches(deployment, proof):
             return None
-        phase = (
-            DeploymentActivationPhase.RUNNING
-            if deployment.status == DeploymentStatus.RUNNING
-            else (
-                DeploymentActivationPhase.RETIRING_PREVIOUS
-                if deployment.activation_phase == DeploymentActivationPhase.RETIRING_PREVIOUS
-                else DeploymentActivationPhase.VERIFIED
+        if deployment.status == DeploymentStatus.RUNNING:
+            # The proof which established activation is historical evidence. A later
+            # health observation may confirm the runtime, but must not rewrite that proof.
+            await session.execute(
+                update(Deployment)
+                .where(
+                    Deployment.id == deployment_id,
+                    Deployment.status == DeploymentStatus.RUNNING,
+                )
+                .values(health_status="healthy")
             )
+            return await self.get(session, deployment_id)
+        phase = (
+            DeploymentActivationPhase.RETIRING_PREVIOUS
+            if deployment.activation_phase == DeploymentActivationPhase.RETIRING_PREVIOUS
+            else DeploymentActivationPhase.VERIFIED
         )
         await session.execute(
             update(Deployment)
@@ -331,9 +360,7 @@ class DeploymentRepository:
                 activation_phase=phase,
                 activation_verified_at=proof.verified_at,
                 activation_proof_sha256=proof.proof_sha256,
-                health_status=(
-                    "healthy" if deployment.status == DeploymentStatus.RUNNING else "activating"
-                ),
+                health_status="activating",
             )
         )
         return await self.get(session, deployment_id)

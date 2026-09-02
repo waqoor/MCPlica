@@ -1,4 +1,4 @@
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from uuid import UUID, uuid4
 
 from sqlalchemy import case, func, or_, select, update
@@ -8,6 +8,8 @@ from app.domain.build_admission import (
     BuildAdmissionClaim,
     BuildAdmissionOverview,
     BuildAdmissionState,
+    BuildLeaseRenewal,
+    BuildLeaseState,
     QueuedBuildAdmission,
 )
 from app.domain.builds import TERMINAL_STATUSES, BuildStatus
@@ -30,14 +32,14 @@ class BuildAdmissionRepository:
         lease_seconds: float,
     ) -> list[BuildAdmissionClaim]:
         await self.lock_dispatch(session)
-        now = datetime.now(UTC)
+        now = await session.scalar(select(func.clock_timestamp()))
+        assert now is not None
         await session.execute(
             update(Build)
             .where(
                 Build.admission_token.is_not(None),
                 or_(
                     Build.status.in_(TERMINAL_STATUSES),
-                    Build.cancellation_requested_at.is_not(None),
                     Build.admission_lease_expires_at <= now,
                 ),
             )
@@ -55,7 +57,6 @@ class BuildAdmissionRepository:
                     Build.admission_token.is_not(None),
                     Build.admission_lease_expires_at > now,
                     Build.status.not_in(TERMINAL_STATUSES),
-                    Build.cancellation_requested_at.is_(None),
                 )
             )
             or 0
@@ -68,10 +69,10 @@ class BuildAdmissionRepository:
                 select(Build)
                 .where(
                     Build.status.not_in(TERMINAL_STATUSES),
-                    Build.cancellation_requested_at.is_(None),
                     Build.admission_token.is_(None),
                 )
                 .order_by(
+                    case((Build.cancellation_requested_at.is_not(None), 0), else_=1),
                     case((Build.status == BuildStatus.QUEUED, 1), else_=0),
                     Build.created_at,
                     Build.id,
@@ -100,6 +101,7 @@ class BuildAdmissionRepository:
                     token=token,
                     attempt_count=build.admission_attempt_count,
                     lease_expires_at=lease_expires_at,
+                    cancellation_requested=build.cancellation_requested_at is not None,
                 )
             )
         await session.flush()
@@ -115,7 +117,7 @@ class BuildAdmissionRepository:
         result = await session.execute(
             update(Build)
             .where(Build.id == build_id, Build.admission_token == token)
-            .values(admission_enqueued_at=datetime.now(UTC))
+            .values(admission_enqueued_at=func.clock_timestamp())
         )
         return bool(getattr(result, "rowcount", 0))
 
@@ -127,24 +129,33 @@ class BuildAdmissionRepository:
         token: UUID,
         lease_seconds: float,
         serialize_with_dispatch: bool = False,
-    ) -> bool:
+    ) -> BuildLeaseRenewal:
         if serialize_with_dispatch:
             await self.lock_dispatch(session)
-        now = datetime.now(UTC)
-        result = await session.execute(
-            update(Build)
-            .where(
-                Build.id == build_id,
-                Build.admission_token == token,
-                Build.status.not_in(TERMINAL_STATUSES),
-                Build.cancellation_requested_at.is_(None),
+        now = await session.scalar(select(func.clock_timestamp()))
+        assert now is not None
+        build = await session.scalar(select(Build).where(Build.id == build_id).with_for_update())
+        if (
+            build is None
+            or build.admission_token != token
+            or build.admission_lease_expires_at is None
+            or build.admission_lease_expires_at <= now
+            or build.status in TERMINAL_STATUSES
+        ):
+            return BuildLeaseRenewal(state=BuildLeaseState.LOST)
+        if build.cancellation_requested_at is not None:
+            return BuildLeaseRenewal(
+                state=BuildLeaseState.CANCELLATION_REQUESTED,
+                lease_expires_at=build.admission_lease_expires_at,
             )
-            .values(
-                admission_heartbeat_at=now,
-                admission_lease_expires_at=now + timedelta(seconds=lease_seconds),
-            )
+        lease_expires_at = now + timedelta(seconds=lease_seconds)
+        build.admission_heartbeat_at = now
+        build.admission_lease_expires_at = lease_expires_at
+        await session.flush()
+        return BuildLeaseRenewal(
+            state=BuildLeaseState.OWNED,
+            lease_expires_at=lease_expires_at,
         )
-        return bool(getattr(result, "rowcount", 0))
 
     async def release(
         self,
@@ -153,7 +164,6 @@ class BuildAdmissionRepository:
         build_id: UUID,
         token: UUID,
     ) -> bool:
-        now = datetime.now(UTC)
         result = await session.execute(
             update(Build)
             .where(Build.id == build_id, Build.admission_token == token)
@@ -162,7 +172,7 @@ class BuildAdmissionRepository:
                 admission_enqueued_at=None,
                 admission_heartbeat_at=None,
                 admission_lease_expires_at=None,
-                admission_released_at=now,
+                admission_released_at=func.clock_timestamp(),
             )
         )
         return bool(getattr(result, "rowcount", 0))
@@ -174,7 +184,8 @@ class BuildAdmissionRepository:
         configured_concurrency: int,
         limit: int,
     ) -> BuildAdmissionOverview:
-        now = datetime.now(UTC)
+        now = await session.scalar(select(func.clock_timestamp()))
+        assert now is not None
         active_models = list(
             await session.scalars(
                 select(Build)
@@ -182,7 +193,6 @@ class BuildAdmissionRepository:
                     Build.admission_token.is_not(None),
                     Build.admission_lease_expires_at > now,
                     Build.status.not_in(TERMINAL_STATUSES),
-                    Build.cancellation_requested_at.is_(None),
                 )
                 .order_by(Build.admission_acquired_at, Build.id)
             )
@@ -191,7 +201,6 @@ class BuildAdmissionRepository:
             select(Build)
             .where(
                 Build.status.not_in(TERMINAL_STATUSES),
-                Build.cancellation_requested_at.is_(None),
                 or_(
                     Build.admission_token.is_(None),
                     Build.admission_lease_expires_at <= now,

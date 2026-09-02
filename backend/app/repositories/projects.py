@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from uuid import UUID
 
 from sqlalchemy import func, select, update
@@ -41,8 +43,22 @@ class ProjectRepository:
         )
 
     async def list(self, session: AsyncSession) -> list[ProjectRecord]:
-        result = await session.scalars(select(Project).order_by(Project.created_at.desc()))
+        result = await session.scalars(
+            select(Project).order_by(Project.created_at.desc(), Project.id.desc())
+        )
         return [_to_domain(model) for model in result]
+
+    async def list_page(
+        self, session: AsyncSession, *, page: int, page_size: int
+    ) -> tuple[list[ProjectRecord], int]:
+        total = int(await session.scalar(select(func.count()).select_from(Project)) or 0)
+        result = await session.scalars(
+            select(Project)
+            .order_by(Project.created_at.desc(), Project.id.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        return [_to_domain(model) for model in result], total
 
     async def get(self, session: AsyncSession, project_id: UUID) -> ProjectRecord | None:
         model = await session.get(Project, project_id)

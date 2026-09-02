@@ -14,6 +14,7 @@ from app.core.exceptions import InvalidStateError
 from app.domain.deployments import (
     DeploymentActivationPhase,
     DeploymentActivationProof,
+    DeploymentIntent,
     DeploymentRecord,
     DeploymentStatus,
     has_successful_activation,
@@ -185,6 +186,31 @@ def test_activation_proof_is_bound_to_exact_runtime_identity() -> None:
     )
 
 
+def test_later_exact_runtime_proof_repairs_historical_rollback_eligibility() -> None:
+    activated = _record(DeploymentStatus.STOPPED, successful=True)
+    assert activated.activated_at is not None
+    later = activated.activated_at + timedelta(minutes=5)
+    proof = DeploymentActivationProof.verified(
+        deployment_id=activated.id,
+        project_id=activated.project_id,
+        build_id=activated.build_id,
+        container_id=activated.container_id or "",
+        image_digest=activated.image_digest or "",
+        hostname=activated.hostname,
+        manifest_sha256=activated.manifest_sha256,
+        runtime_version=activated.runtime_version,
+        verified_at=later,
+    )
+    repaired = activated.model_copy(
+        update={
+            "activation_verified_at": proof.verified_at,
+            "activation_proof_sha256": proof.proof_sha256,
+        }
+    )
+
+    assert has_successful_activation(repaired)
+
+
 class _Database:
     @asynccontextmanager
     async def session_scope(self) -> AsyncGenerator[AsyncSession]:
@@ -329,5 +355,5 @@ async def test_rollback_atomically_creates_candidate_from_formerly_active_target
     assert await_args.kwargs["build_id"] == target.build_id
     assert await_args.kwargs["subject_type"] == "deployment"
     assert await_args.kwargs["subject_id"] == target.id
-    assert await_args.kwargs["require_current_configuration"] is False
+    assert await_args.kwargs["intent"] is DeploymentIntent.ROLLBACK
     assert dispatcher.wake_calls == 1

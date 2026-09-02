@@ -1,6 +1,12 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { z } from "zod/v3";
-import { api, download, jsonBody, setSessionRecoveryListener } from "./client";
+import {
+  api,
+  apiAllPages,
+  download,
+  jsonBody,
+  setSessionRecoveryListener,
+} from "./client";
 
 const idContract = z.object({ id: z.string() }).strict();
 const pathContract = z.object({ path: z.string() }).strict();
@@ -127,6 +133,51 @@ test("sends cookie credentials and the CSRF header on mutations", async () => {
   expect(init.credentials).toBe("include");
   expect(headers.get("X-CSRF-Token")).toBe("signed-token");
   expect(headers.get("Content-Type")).toBe("application/json");
+});
+
+test("traverses every bounded collection page in stable order", async () => {
+  const pageContract = z
+    .object({
+      items: z.array(z.object({ id: z.string() }).strict()),
+      total: z.number().int().nonnegative(),
+      page: z.number().int().positive(),
+      page_size: z.number().int().positive(),
+    })
+    .strict();
+  const fetchMock = vi
+    .spyOn(globalThis, "fetch")
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          items: [{ id: "one" }, { id: "two" }],
+          total: 3,
+          page: 1,
+          page_size: 200,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    )
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          items: [{ id: "three" }],
+          total: 3,
+          page: 2,
+          page_size: 200,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+  await expect(apiAllPages("/api/v1/items", pageContract)).resolves.toEqual([
+    { id: "one" },
+    { id: "two" },
+    { id: "three" },
+  ]);
+  expect(fetchMock.mock.calls.map(([input]) => String(input))).toEqual([
+    "/api/v1/items?page=1&page_size=200",
+    "/api/v1/items?page=2&page_size=200",
+  ]);
 });
 
 test("preserves the stable error code and request ID for recovery", async () => {

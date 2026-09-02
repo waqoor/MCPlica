@@ -1,3 +1,7 @@
+import asyncio
+import threading
+import time
+from typing import Any, cast
 from uuid import uuid4
 
 import pytest
@@ -59,3 +63,33 @@ def test_refresh_verifier_is_keyed_and_passwords_use_argon2() -> None:
         True,
         None,
     )
+
+
+@pytest.mark.asyncio
+async def test_async_password_hashing_is_offloaded_and_concurrency_bounded() -> None:
+    class SlowHasher:
+        def __init__(self) -> None:
+            self.active = 0
+            self.max_active = 0
+            self.lock = threading.Lock()
+
+        def hash(self, password: str) -> str:
+            with self.lock:
+                self.active += 1
+                self.max_active = max(self.max_active, self.active)
+            time.sleep(0.08)
+            with self.lock:
+                self.active -= 1
+            return f"hashed:{password}"
+
+    manager = PasswordManager(max_concurrency=2)
+    slow = SlowHasher()
+    manager._hasher = cast(Any, slow)
+
+    tasks = [asyncio.create_task(manager.hash_async(str(index))) for index in range(5)]
+    started = time.monotonic()
+    await asyncio.sleep(0.02)
+
+    assert time.monotonic() - started < 0.07
+    assert await asyncio.gather(*tasks) == [f"hashed:{index}" for index in range(5)]
+    assert slow.max_active == 2

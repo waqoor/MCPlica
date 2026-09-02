@@ -37,6 +37,10 @@ _FORBIDDEN_STATIC_HEADERS = {
 }
 
 
+def credential_secret_aad(project_id: UUID, credential_id: UUID, scheme: CredentialScheme) -> bytes:
+    return (f"project:{project_id}:credential:{credential_id}:scheme:{scheme.value}").encode()
+
+
 def validate_credential_secret(
     scheme: CredentialScheme,
     secret: dict[str, object],
@@ -84,6 +88,15 @@ def validate_credential_secret(
         value = secret[name]
         if not isinstance(value, str) or not value or len(value) > 10_000:
             raise ValueError(f"credential field {name} must be non-empty text")
+    if scheme is CredentialScheme.BASIC:
+        username = secret["username"]
+        if isinstance(username, str) and ":" in username:
+            raise ValueError("Basic-auth usernames cannot contain a colon")
+    if scheme in {CredentialScheme.BEARER, CredentialScheme.API_KEY_HEADER}:
+        secret_field = "token" if scheme is CredentialScheme.BEARER else "value"
+        value = secret[secret_field]
+        if isinstance(value, str) and any(character in value for character in "\r\n\x00"):
+            raise ValueError(f"credential field {secret_field} contains unsafe characters")
     if scheme in {CredentialScheme.API_KEY_HEADER, CredentialScheme.API_KEY_QUERY}:
         name = metadata.get("name")
         if not isinstance(name, str) or not name.strip():
@@ -113,13 +126,23 @@ def validate_credential_secret(
         if len(header_values) > 64:
             raise ValueError("static_headers credentials exceed the header-count limit")
         total_value_chars = 0
+        normalized_names: set[str] = set()
         for raw_name, raw_value in header_values.items():
             if not isinstance(raw_name, str) or not _HEADER_NAME.fullmatch(raw_name):
                 raise ValueError("static credential header name is invalid")
-            if raw_name.casefold() in _FORBIDDEN_STATIC_HEADERS:
+            normalized_name = raw_name.casefold()
+            if normalized_name in normalized_names:
+                raise ValueError("static credential header names must be unique ignoring case")
+            if normalized_name in _FORBIDDEN_STATIC_HEADERS:
                 raise ValueError(f"static credential header {raw_name!r} is forbidden")
-            if not isinstance(raw_value, str) or not raw_value or len(raw_value) > 10_000:
+            if (
+                not isinstance(raw_value, str)
+                or not raw_value
+                or len(raw_value) > 10_000
+                or any(character in raw_value for character in "\r\n\x00")
+            ):
                 raise ValueError("static credential header values must be non-empty text")
+            normalized_names.add(normalized_name)
             total_value_chars += len(raw_value)
         if total_value_chars > 100_000:
             raise ValueError("static_headers credentials exceed the total value-size limit")

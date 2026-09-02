@@ -1,22 +1,31 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 
 from app.api.deps import AdminPrincipal, CsrfProtection, credential_service
 from app.schemas.credential import CredentialCreate, CredentialRead, CredentialRotate
+from app.schemas.pagination import Page
 from app.services.credentials import CredentialService
 
 router = APIRouter(prefix="/projects/{project_id}/credentials", tags=["credentials"])
 
 
-@router.get("", response_model=list[CredentialRead])
+@router.get("", response_model=Page[CredentialRead])
 async def list_credentials(
     project_id: UUID,
     _principal: AdminPrincipal,
     service: Annotated[CredentialService, Depends(credential_service)],
-) -> list[CredentialRead]:
-    return [CredentialRead.model_validate(item) for item in await service.list(project_id)]
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> Page[CredentialRead]:
+    credentials, total = await service.list_page(project_id, page=page, page_size=page_size)
+    return Page(
+        items=[CredentialRead.model_validate(item) for item in credentials],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.post("", response_model=CredentialRead, status_code=status.HTTP_201_CREATED)

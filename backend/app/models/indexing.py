@@ -88,6 +88,7 @@ class DocumentIndexGeneration(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         nullable=False,
     )
     error_summary: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    execution_token: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 

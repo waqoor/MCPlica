@@ -181,6 +181,8 @@ Approved purposes:
 - model catalog cache.
 
 No project/build authoritative truth may exist only in Redis.
+Every Redis/RQ client configures bounded socket connect and operation timeouts; blocking queue
+operations must not outlive shutdown/readiness indefinitely.
 
 ### RQ
 
@@ -273,6 +275,7 @@ Do not use OpenRouter for:
 - endpoint calls;
 - timeouts/retry-aware errors;
 - raw response normalization.
+- response streaming with endpoint-specific byte ceilings before JSON buffering.
 
 `OpenRouterProvider` owns:
 
@@ -281,12 +284,13 @@ Do not use OpenRouter for:
 - embeddings interface;
 - capability/model catalog semantics;
 - usage/cost normalization.
+- per-structured-attempt accepted/rejected/transport outcome accounting.
 
 Services never call OpenRouter HTTP endpoints directly.
 
 ### Structured outputs
 
-Use OpenRouter JSON-Schema structured outputs when supported by the selected model. Always validate returned data with Pydantic after transport validation.
+Use OpenRouter JSON-Schema structured outputs when supported by the selected model. Always validate returned data with Pydantic after transport validation and before publishing a successful reusable AI-run record.
 
 Do not rely on “valid-looking JSON” alone.
 
@@ -311,6 +315,7 @@ Engineering rules:
 
 - reuse pools;
 - explicit connect/read/write/pool timeouts;
+- one caller-owned total deadline for multi-step fetches (DNS/policy, redirects, retries, and body);
 - explicit redirect policy;
 - bounded streaming for downloads/responses;
 - TLS verification on by default;
@@ -589,10 +594,11 @@ Use `structlog` over standard logging integration for structured JSON production
 
 Requirements:
 
-- contextual request/job/project/build/deployment IDs;
+- allowlisted request/job/project/build/deployment/cleanup/runtime-command IDs;
 - development pretty output allowed;
-- central redaction processor;
-- exception stack traces only in internal logs, never API responses.
+- central redaction and JSON-safe normalization;
+- production exception diagnostics use bounded type chains, not raw exception/message text;
+- query strings, credentials, secret-like fields, and unknown context keys are omitted.
 
 ### Metrics
 

@@ -27,7 +27,13 @@ def main() -> None:
     with TemporaryDirectory(prefix="mcplica-production-config-") as directory:
         environment_file = Path(directory) / ".env"
         subprocess.run(
-            [sys.executable, "scripts/init_env.py", "--production", "--output", str(environment_file)],
+            [
+                sys.executable,
+                "scripts/init_env.py",
+                "--production",
+                "--output",
+                str(environment_file),
+            ],
             cwd=ROOT,
             capture_output=True,
             check=True,
@@ -53,20 +59,34 @@ def main() -> None:
             TRAEFIK_NETWORK="mcplica-config-check-edge",
         )
         command = [
-            "docker", "compose", "--env-file", str(environment_file),
-            "-f", "infra/compose.yaml", "-f", "infra/compose.production.yaml",
-            "config", "--format", "json",
+            "docker",
+            "compose",
+            "--env-file",
+            str(environment_file),
+            "-f",
+            "infra/compose.yaml",
+            "-f",
+            "infra/compose.production.yaml",
+            "config",
+            "--format",
+            "json",
         ]
         result = subprocess.run(
-            command, cwd=ROOT, env=environment, capture_output=True,
-            text=True, check=True, timeout=30,
+            command,
+            cwd=ROOT,
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=30,
         )
         model = json.loads(result.stdout)
         services = model["services"]
         for name in CONTROL_PLANE:
             values = services[name]["environment"]
-            with patch.dict(os.environ, {key: str(value) for key, value in values.items()}, clear=True):
-                settings = Settings(_env_file=None)
+            resolved_values = {key: str(value) for key, value in values.items()}
+            with patch.dict(os.environ, resolved_values, clear=True):
+                settings = Settings(_env_file=None)  # pyright: ignore[reportCallIssue]
             assert settings.is_production, name
             assert settings.traefik_tls and settings.traefik_entrypoint == "websecure", name
             assert settings.frontend_origin == "https://ui.example.com", name
@@ -85,11 +105,14 @@ def main() -> None:
             mounts = services[name]["volumes"]
             assert any(mount["target"] == "/config-check-runtime" for mount in mounts), name
         assert set(services["runtime-init"]["environment"]) == {
-            "RUNTIME_UID", "RUNTIME_GID", "RUNTIME_WORKER_ROOT",
+            "RUNTIME_UID",
+            "RUNTIME_GID",
+            "RUNTIME_WORKER_ROOT",
         }
         assert model["networks"]["edge"]["name"] == environment["TRAEFIK_NETWORK"]
         for name in ("api", "frontend"):
-            assert services[name]["labels"]["traefik.docker.network"] == environment["TRAEFIK_NETWORK"]
+            network_label = services[name]["labels"]["traefik.docker.network"]
+            assert network_label == environment["TRAEFIK_NETWORK"]
         network_option = "--providers.docker.network=" + environment["TRAEFIK_NETWORK"]
         assert network_option in services["traefik"]["command"]
         edge_ports = services["traefik"]["ports"]
@@ -100,11 +123,18 @@ def main() -> None:
         # Required release identifiers must fail closed; never start with a local tag.
         environment.pop("MCP_RUNTIME_IMAGE")
         missing_image = subprocess.run(
-            command, cwd=ROOT, env=environment, capture_output=True, timeout=30,
+            command,
+            cwd=ROOT,
+            env=environment,
+            capture_output=True,
+            timeout=30,
         )
         assert missing_image.returncode != 0, "missing release image did not fail closed"
     print("Production Compose settings validated for all four control-plane processes.")
-    print("TLS/ports, queue and mount overrides, secret isolation, and missing-image rejection passed.")
+    print(
+        "TLS/ports, queue and mount overrides, secret isolation, "
+        "and missing-image rejection passed."
+    )
 
 
 if __name__ == "__main__":

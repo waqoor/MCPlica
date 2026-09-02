@@ -13,17 +13,26 @@ from app.core.exceptions import ValidationError
 NONCE_BYTES: Final = 12
 
 
+def system_secret_aad(key: str) -> bytes:
+    return f"system-secret:{key}".encode()
+
+
 def configured_secret_cipher(
     encoded_key: str | None,
     key_version: str,
     *,
+    previous_encoded_keys: Mapping[str, str] | None = None,
     allow_ephemeral: bool = False,
 ) -> "AesGcmSecretCipher":
     if encoded_key is None:
         if not allow_ephemeral:
             raise ValueError("secret encryption key is required")
         encoded_key = base64.urlsafe_b64encode(os.urandom(32)).decode("ascii")
-    return AesGcmSecretCipher.from_base64_key(encoded_key, key_version)
+    encoded_keys = dict(previous_encoded_keys or {})
+    if key_version in encoded_keys:
+        raise ValueError("active encryption key version cannot also be a previous key")
+    encoded_keys[key_version] = encoded_key
+    return AesGcmSecretCipher.from_base64_keys(encoded_keys, key_version)
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,11 +60,27 @@ class AesGcmSecretCipher:
 
     @classmethod
     def from_base64_key(cls, key: str, key_version: str = "v1") -> "AesGcmSecretCipher":
+        return cls.from_base64_keys({key_version: key}, key_version)
+
+    @classmethod
+    def from_base64_keys(
+        cls, keys: Mapping[str, str], active_key_version: str
+    ) -> "AesGcmSecretCipher":
+        decoded_keys: dict[str, bytes] = {}
         try:
-            decoded = base64.urlsafe_b64decode(key.encode("ascii"))
+            for version, key in keys.items():
+                decoded_keys[version] = base64.b64decode(
+                    key.encode("ascii"),
+                    altchars=b"-_",
+                    validate=True,
+                )
         except (ValueError, UnicodeError) as exc:
             raise ValueError("secret encryption key must be URL-safe base64") from exc
-        return cls({key_version: decoded}, key_version)
+        return cls(decoded_keys, active_key_version)
+
+    @property
+    def key_versions(self) -> frozenset[str]:
+        return frozenset(self._keys)
 
     def encrypt_bytes(self, plaintext: bytes, *, associated_data: bytes) -> EncryptedSecret:
         nonce = os.urandom(NONCE_BYTES)

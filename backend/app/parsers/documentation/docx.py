@@ -3,6 +3,8 @@ from io import BytesIO
 from uuid import UUID
 
 from docx import Document
+from docx.table import Table, _Cell  # pyright: ignore[reportPrivateUsage]
+from docx.text.paragraph import Paragraph
 
 from app.core.exceptions import SourceParseError
 
@@ -38,6 +40,7 @@ def parse_docx(
     total_chars = 0
     block_count = 0
     table_cells = 0
+    table_number = 0
 
     def add_text(text: str) -> None:
         nonlocal total_chars
@@ -59,11 +62,64 @@ def parse_docx(
             )
         )
 
-    for paragraph in document.paragraphs:
+    def count_block() -> None:
+        nonlocal block_count
         block_count += 1
         if block_count > _MAX_DOCX_BLOCKS:
             raise SourceParseError("DOCX documentation exceeds the block limit")
-        text = paragraph.text.strip()
+
+    def paragraph_text(paragraph: Paragraph) -> str:
+        count_block()
+        return paragraph.text.strip()
+
+    def render_cell(cell: _Cell) -> str:
+        parts: list[str] = []
+        for inner in cell.iter_inner_content():
+            if isinstance(inner, Paragraph):
+                text = paragraph_text(inner)
+                if text:
+                    parts.append(text)
+            else:
+                nested = render_table(inner)
+                if nested:
+                    parts.append("\\n".join(nested))
+        return "\\n".join(parts)
+
+    def render_table(table: Table) -> list[str]:
+        nonlocal table_cells
+        count_block()
+        lines: list[str] = []
+        for row in table.rows:
+            table_cells += len(row.cells)
+            if table_cells > _MAX_DOCX_TABLE_CELLS:
+                raise SourceParseError("DOCX documentation exceeds the table cell limit")
+            rendered = [render_cell(cell).replace("\n", "\\n") for cell in row.cells]
+            while rendered and not rendered[-1]:
+                rendered.pop()
+            if rendered:
+                line = "\t".join(rendered)
+                add_text(line)
+                lines.append(line)
+        return lines
+
+    for block in document.iter_inner_content():
+        if isinstance(block, Table):
+            flush()
+            table_number += 1
+            lines = render_table(block)
+            if lines:
+                heading = f"Table {table_number}"
+                sections.append(
+                    DocumentSection(
+                        path=[*(headings or [root]), heading],
+                        heading=heading,
+                        text="\n".join(lines),
+                        ordinal=len(sections),
+                    )
+                )
+            continue
+        paragraph = block
+        text = paragraph_text(paragraph)
         if not text:
             continue
         style = paragraph.style
@@ -79,33 +135,6 @@ def parse_docx(
             add_text(text)
             current_lines.append(text)
     flush()
-
-    for table_number, table in enumerate(document.tables, start=1):
-        block_count += 1
-        if block_count > _MAX_DOCX_BLOCKS:
-            raise SourceParseError("DOCX documentation exceeds the block limit")
-        lines: list[str] = []
-        for row in table.rows:
-            table_cells += len(row.cells)
-            if table_cells > _MAX_DOCX_TABLE_CELLS:
-                raise SourceParseError("DOCX documentation exceeds the table cell limit")
-            rendered = [cell.text.strip().replace("\n", "\\n") for cell in row.cells]
-            while rendered and not rendered[-1]:
-                rendered.pop()
-            if rendered:
-                line = "\t".join(rendered)
-                add_text(line)
-                lines.append(line)
-        if lines:
-            heading = f"Table {table_number}"
-            sections.append(
-                DocumentSection(
-                    path=[root, heading],
-                    heading=heading,
-                    text="\n".join(lines),
-                    ordinal=len(sections),
-                )
-            )
     if not sections:
         raise SourceParseError("DOCX documentation contains no extractable text")
     if document_title is None and sections[0].heading:

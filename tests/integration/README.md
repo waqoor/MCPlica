@@ -17,6 +17,25 @@ also cover a port owned by another process, duplicate start, unhealthy startup, 
 cancellation. Fixture failures release only owned resources; no unrelated process
 is killed and no active listener is shared.
 
+The `postgres` marker suite is mandatory for foundation ownership changes. It uses
+real transactions and independent connections to prove A→B→A current-source selection,
+concurrent observation ordering, dead-owner cancellation recovery, stale Build-result
+rejection, STOP→DEPLOY predecessor ordering, final-token STOP behavior, security refresh
+against the exact active Build, runtime project-lock serialization, and stale command
+finalization rejection. `test_schema_drift_postgres.py` also creates isolated temporary
+databases for the `0025→0020→0025` migration rehearsal and the intentional `0021`
+downgrade rejection when restored source selection cannot be represented by the old schema.
+Mock-only coverage is not accepted for these invariants.
+
+The remaining `issues_002.md` hardening is exercised by the normal component
+suites: request-size/spool bounds, shared authentication selection, schema-only
+reference materialization and RFC 6901 traversal, DOCX ordering, semantic-output
+validation, total HTTP deadlines, streamed provider caps and attempt accounting,
+bounded management pagination, safe structured logs, secret-key rotation, and
+OAuth/OIDC edge cases. The frontend contract/unit suites consume the regenerated
+OpenAPI pages, while the browser and Compose acceptance below verify the integrated
+runtime rather than replacing those focused regressions.
+
 ## Full clean-install acceptance
 
 Use a **fresh clone on a disposable Linux Docker host**, with no existing `.env`,

@@ -42,12 +42,23 @@ class RuntimeCommandDispatcher:
                 lease_seconds=self._lease_seconds,
             )
         for command in commands:
+            execution_token = command.execution_token
+            if execution_token is None:
+                logger.error(
+                    "runtime_command_dispatch_missing_token",
+                    extra={"runtime_command_id": str(command.id)},
+                )
+                continue
             try:
-                await self._queue.enqueue_runtime_command(command.id, command.attempt_count)
+                await self._queue.enqueue_runtime_command(
+                    command.id,
+                    execution_token,
+                    command.attempt_count,
+                )
             except MCPlicaError as exc:
-                await self._record_dispatch_failure(command.id, exc)
+                await self._record_dispatch_failure(command.id, execution_token, exc)
             except Exception as exc:  # pragma: no cover - queue boundary safety net
-                await self._record_dispatch_failure(command.id, exc)
+                await self._record_dispatch_failure(command.id, execution_token, exc)
         return len(commands)
 
     async def run(self, stop_event: asyncio.Event) -> None:
@@ -73,20 +84,31 @@ class RuntimeCommandDispatcher:
             for task in done:
                 _ = task.result()
 
-    async def _record_dispatch_failure(self, command_id: UUID, error: Exception) -> None:
+    async def _record_dispatch_failure(
+        self,
+        command_id: UUID,
+        execution_token: UUID,
+        error: Exception,
+    ) -> None:
         code = (
             error.code.lower() if isinstance(error, MCPlicaError) else "runtime_queue_unavailable"
         )
         summary = str(error) if isinstance(error, MCPlicaError) else "Runtime queue is unavailable"
         async with self._database.session_scope() as session:
-            await self._commands.mark_failed(
+            recorded = await self._commands.mark_dispatch_failed(
                 session,
                 command_id,
+                execution_token,
                 error_code=code,
                 error_summary=summary,
-                retryable=True,
                 retry_delay_seconds=self._interval_seconds,
             )
+        if not recorded:
+            logger.info(
+                "runtime_command_stale_dispatch_failure_discarded",
+                extra={"runtime_command_id": str(command_id)},
+            )
+            return
         logger.warning(
             "runtime_command_dispatch_failed",
             extra={"runtime_command_id": str(command_id), "error_code": code},

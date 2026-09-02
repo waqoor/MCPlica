@@ -25,6 +25,7 @@ class VectorStore(ABC):
         collection: str,
         chunks: list[DocumentChunk],
         vectors: list[list[float]],
+        execution_token: UUID,
     ) -> None: ...
 
     @abstractmethod
@@ -34,6 +35,7 @@ class VectorStore(ABC):
         collection: str,
         project_id: UUID,
         generation_id: UUID,
+        execution_token: UUID | None = None,
         vector: list[float],
         limit: int,
         include_documentation: bool = True,
@@ -46,4 +48,5 @@ class VectorStore(ABC):
         collection: str,
         project_id: UUID,
         generation_id: UUID,
+        execution_token: UUID | None = None,
     ) -> None: ...

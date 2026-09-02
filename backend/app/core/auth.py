@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import hmac
 import secrets
@@ -28,8 +29,11 @@ class AccessTokenClaims:
 
 
 class PasswordManager:
-    def __init__(self) -> None:
+    def __init__(self, *, max_concurrency: int = 2) -> None:
+        if max_concurrency < 1 or max_concurrency > 32:
+            raise ValueError("password hashing concurrency must be between 1 and 32")
         self._hasher = PasswordHash.recommended()
+        self._slots = asyncio.Semaphore(max_concurrency)
 
     def hash(self, password: str) -> str:
         return self._hasher.hash(password)
@@ -45,6 +49,20 @@ class PasswordManager:
             return self._hasher.verify_and_update(password, password_hash)
         except (ValueError, TypeError):
             return False, None
+
+    async def hash_async(self, password: str) -> str:
+        async with self._slots:
+            return await asyncio.to_thread(self.hash, password)
+
+    async def verify_async(self, password: str, password_hash: str) -> bool:
+        async with self._slots:
+            return await asyncio.to_thread(self.verify, password, password_hash)
+
+    async def verify_and_update_async(
+        self, password: str, password_hash: str
+    ) -> tuple[bool, str | None]:
+        async with self._slots:
+            return await asyncio.to_thread(self.verify_and_update, password, password_hash)
 
 
 class TokenManager:

@@ -5,6 +5,7 @@ import json
 import re
 import subprocess
 from pathlib import Path
+from typing import cast
 
 ROOT = Path(__file__).resolve().parents[2]
 COMMAND = ["docker", "compose", "--env-file", ".env", "-f", "infra/compose.yaml"]
@@ -27,12 +28,15 @@ def _command(*args: str) -> str:
 
 def _records(value: str) -> list[dict[str, object]]:
     if value.lstrip().startswith("["):
-        records = json.loads(value)
+        loaded = cast(object, json.loads(value))
+        if not isinstance(loaded, list):
+            raise ValueError("Compose ps returned invalid status records")
+        records = cast(list[object], loaded)
     else:
-        records = [json.loads(line) for line in value.splitlines() if line.strip()]
-    if not isinstance(records, list) or any(not isinstance(item, dict) for item in records):
+        records = [cast(object, json.loads(line)) for line in value.splitlines() if line.strip()]
+    if any(not isinstance(item, dict) for item in records):
         raise ValueError("Compose ps returned invalid status records")
-    return records
+    return [cast(dict[str, object], item) for item in records]
 
 
 def _redact(value: str) -> str:
@@ -58,8 +62,7 @@ def main() -> None:
     args.output.mkdir(parents=True, exist_ok=True)
     records = _records(_command("ps", "--all", "--format", "json"))
     statuses = [
-        {key: row.get(key) for key in ("Service", "State", "Health", "ExitCode")}
-        for row in records
+        {key: row.get(key) for key in ("Service", "State", "Health", "ExitCode")} for row in records
     ]
     (args.output / "services.json").write_text(json.dumps(statuses, indent=2) + "\n")
     if args.check:

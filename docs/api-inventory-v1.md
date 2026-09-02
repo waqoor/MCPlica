@@ -68,3 +68,19 @@ Product routes are under `/api/v1`. The operational `/metrics` route is delibera
 The global Deployments area is a project navigator because the authoritative API exposes project-scoped deployment history, not a global deployment collection. Health, history, endpoint, authentication, and lifecycle actions remain on each project Deployment page; the browser does not fan out requests or invent an alternate aggregation path.
 
 List endpoints that can grow must expose bounded pagination before production scale. SSE/polling clients must abort on navigation, back off or use bounded intervals, and stop after terminal state. External/source calls occur only through backend clients; browser components never call OpenRouter, Milvus, upstream APIs, or arbitrary source URLs directly.
+
+## API Inventory source rules
+
+API Inventory path templates use OpenAPI-style simple parameter expressions. A
+parameter may be embedded in a segment, and one segment may contain multiple
+expressions (for example, `/files/{id}.json` and
+`/coordinates/{lat},{lon}`). Every expression must have exactly one non-empty
+name and a matching required `in: path` parameter; unmatched, nested, empty, or
+slash-containing brace expressions are rejected.
+
+Local schema references use RFC 6901 JSON Pointer traversal after URI-fragment
+decoding. Object keys, escaped `~0`/`~1` tokens, and canonical non-negative array
+indices are supported; missing members and malformed or out-of-range indices
+fail closed. Materialization follows schema-bearing keywords only. Instance-valued
+annotations such as `default`, `examples`, `const`, and `enum` remain literal
+data even when they contain keys named `$ref` or `$defs`.

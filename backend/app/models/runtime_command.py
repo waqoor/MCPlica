@@ -52,6 +52,15 @@ class RuntimeLifecycleCommand(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             "'dispatched'::runtime_command_status, 'running'::runtime_command_status)",
             name="ck_runtime_lifecycle_commands_status_shape",
         ),
+        CheckConstraint(
+            "(status IN ('dispatched'::runtime_command_status, "
+            "'running'::runtime_command_status) AND execution_token IS NOT NULL "
+            "AND lease_expires_at IS NOT NULL) OR "
+            "(status IN ('pending'::runtime_command_status, "
+            "'failed'::runtime_command_status, 'effective'::runtime_command_status) "
+            "AND execution_token IS NULL AND lease_expires_at IS NULL)",
+            name="ck_runtime_lifecycle_commands_execution_owner_shape",
+        ),
         Index(
             "ix_runtime_commands_dispatch_due",
             "next_attempt_at",
@@ -132,5 +141,6 @@ class RuntimeLifecycleCommand(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     lease_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    execution_token: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
     last_error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
     last_error_summary: Mapped[str | None] = mapped_column(Text(), nullable=True)

@@ -37,9 +37,9 @@ class UserService:
         self._audit = audit
         self._passwords = passwords
 
-    async def list(self) -> list[UserAccount]:
+    async def list(self, *, page: int, page_size: int) -> tuple[list[UserAccount], int]:
         async with self._database.session_scope() as session:
-            return await self._users.list(session)
+            return await self._users.list_page(session, page=page, page_size=page_size)
 
     async def create(
         self,
@@ -57,6 +57,7 @@ class UserService:
         if len(password) < 12 or len(password) > 1_024:
             raise ValidationError("Password must contain between 12 and 1024 characters")
         normalized_email = _normalize_email(email)
+        password_hash = await self._passwords.hash_async(password)
         async with self._database.session_scope() as session:
             await self._users.lock_email(session, normalized_email)
             if role is UserRole.ADMIN:
@@ -67,7 +68,7 @@ class UserService:
                 session,
                 email=normalized_email,
                 display_name=normalized_name,
-                password_hash=self._passwords.hash(password),
+                password_hash=password_hash,
                 role=role,
             )
             await self._audit.append(
@@ -97,14 +98,19 @@ class UserService:
             raise ValidationError("Display name cannot be empty")
         if password is not None and (len(password) < 12 or len(password) > 1_024):
             raise ValidationError("Password must contain between 12 and 1024 characters")
+        password_hash = await self._passwords.hash_async(password) if password is not None else None
         async with self._database.session_scope() as session:
             if role is not None or is_active is not None:
                 await self._users.lock_admin_mutations(session)
             current = await self._users.get(session, user_id)
             if current is None:
                 raise NotFoundError("User was not found")
-            removes_admin = current.role is UserRole.ADMIN and (
-                role is UserRole.BUILDER or is_active is False
+            proposed_role = role if role is not None else current.role
+            proposed_is_active = is_active if is_active is not None else current.is_active
+            removes_admin = (
+                current.role is UserRole.ADMIN
+                and current.is_active
+                and (proposed_role is not UserRole.ADMIN or not proposed_is_active)
             )
             if removes_admin and await self._users.count_active_admins(session) <= 1:
                 raise InvalidStateError(
@@ -114,7 +120,7 @@ class UserService:
                 session,
                 user_id,
                 display_name=normalized_name,
-                password_hash=self._passwords.hash(password) if password else None,
+                password_hash=password_hash,
                 role=role,
                 is_active=is_active,
             )
@@ -159,6 +165,7 @@ class UserService:
         if len(password) < 12 or len(password) > 1_024:
             raise ValidationError("Password must contain between 12 and 1024 characters")
         normalized_email = _normalize_email(email)
+        password_hash = await self._passwords.hash_async(password)
         async with self._database.session_scope() as session:
             await self._users.lock_admin_mutations(session)
             await self._users.lock_email(session, normalized_email)
@@ -168,7 +175,7 @@ class UserService:
                 session,
                 email=normalized_email,
                 display_name=normalized_name,
-                password_hash=self._passwords.hash(password),
+                password_hash=password_hash,
                 role=UserRole.ADMIN,
             )
             await self._audit.append(

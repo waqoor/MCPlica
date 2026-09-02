@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.domain.deployments import (
     DeploymentActivationPhase,
+    DeploymentIntent,
     DeploymentRecord,
     DeploymentStatus,
     is_rollback_eligible,
@@ -29,6 +30,7 @@ class DeploymentRead(BaseModel):
     id: UUID
     project_id: UUID
     build_id: UUID
+    intent: DeploymentIntent
     status: DeploymentStatus
     hostname: str
     endpoint_url: str

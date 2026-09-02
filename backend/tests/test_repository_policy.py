@@ -1,0 +1,66 @@
+import subprocess
+import sys
+import tomllib
+from pathlib import Path
+
+
+def test_cla_workflow_consumes_configured_external_status_without_pr_checkout() -> None:
+    root = Path(__file__).resolve().parents[2]
+    workflow = (root / ".github/workflows/cla.yml").read_text(encoding="utf-8")
+
+    assert "CLA_STATUS_CONTEXT" in workflow
+    assert "commits/${HEAD_SHA}/status" in workflow
+    assert "commits/${HEAD_SHA}/check-runs" in workflow
+    assert '== "success"' in workflow
+    assert "service status could not be queried" in workflow
+    assert "actions/checkout" not in workflow
+    assert "pull-requests: read" in workflow
+    assert "statuses: read" in workflow
+    assert "checks: read" in workflow
+
+
+def test_source_snapshot_checksum_manifest_is_complete_and_current() -> None:
+    root = Path(__file__).resolve().parents[2]
+    subprocess.run(
+        [sys.executable, "scripts/checksum_manifest.py", "--check"],
+        cwd=root,
+        check=True,
+    )
+
+
+def test_authoritative_documentation_is_not_ignored() -> None:
+    root = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        ["git", "check-ignore", "docs/operations/new-authoritative-runbook.md"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1
+
+
+def test_runtime_build_uses_the_compose_selected_image() -> None:
+    root = Path(__file__).resolve().parents[2]
+    makefile = (root / "Makefile").read_text(encoding="utf-8")
+    runtime_target = makefile.split("runtime-build:", 1)[1].split("\n\n", 1)[0]
+    assert "$(COMPOSE) build runtime-validator" in runtime_target
+    assert "docker build -t" not in runtime_target
+
+
+def test_gitleaks_fixture_allowlist_is_rule_path_and_shape_scoped() -> None:
+    root = Path(__file__).resolve().parents[2]
+    config = tomllib.loads((root / ".gitleaks.toml").read_text(encoding="utf-8"))
+
+    assert config["extend"] == {"useDefault": True}
+    assert len(config["rules"]) == 1
+    rule = config["rules"][0]
+    assert rule["id"] == "generic-api-key"
+    assert len(rule["allowlists"]) == 1
+    allowlist = rule["allowlists"][0]
+    assert allowlist["condition"] == "AND"
+    assert allowlist["regexTarget"] == "line"
+    assert allowlist["regexes"] == [
+        r"""[[:space:]]*"(key|operation_key)": "op_[0-9a-f]{24}",?[[:space:]]*"""
+    ]
+    assert allowlist["paths"] == [r"tests/fixtures/(canonical|manifests)/[^/]+\.json$"]

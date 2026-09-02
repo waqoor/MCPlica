@@ -1,6 +1,8 @@
 import asyncio
 import logging
 import time
+from contextlib import AsyncExitStack
+from dataclasses import dataclass
 from uuid import UUID
 
 from rq import get_current_job
@@ -19,7 +21,9 @@ from app.core.exceptions import (
     ClientTimeoutError,
     ClientUnavailableError,
 )
+from app.core.lifecycle import register_bounded_close
 from app.core.logging import configure_logging
+from app.domain.build_admission import BuildLeaseState
 from app.observability import observe_build_job
 from app.providers.ai.openrouter import OpenRouterProvider
 from app.providers.milvus import MilvusVectorStore
@@ -45,6 +49,66 @@ from app.services.settings import SettingsService
 from app.services.validation import ValidationService
 
 
+@dataclass(slots=True)
+class _BuildJobClients:
+    database: DatabaseClient
+    storage_client: FilesystemStorageClient
+    storage: FilesystemArtifactStorage
+    http: HttpClient
+    milvus: MilvusVectorClient
+    stack: AsyncExitStack
+
+    async def close(self) -> None:
+        await self.stack.aclose()
+
+
+async def _create_build_job_clients(settings: Settings) -> _BuildJobClients:
+    stack = AsyncExitStack()
+    await stack.__aenter__()
+    try:
+        database = DatabaseClient(
+            settings.database_url,
+            pool_size=settings.database_pool_size,
+            max_overflow=settings.database_max_overflow,
+            pool_timeout_seconds=settings.database_pool_timeout_seconds,
+        )
+        register_bounded_close(
+            stack,
+            name="build-database",
+            callback=database.close,
+            timeout_seconds=settings.shutdown_timeout_seconds,
+        )
+        storage_client = await asyncio.to_thread(
+            FilesystemStorageClient,
+            settings.artifact_root,
+        )
+        register_bounded_close(
+            stack,
+            name="build-storage",
+            callback=storage_client.close,
+            timeout_seconds=settings.shutdown_timeout_seconds,
+        )
+        storage = FilesystemArtifactStorage(storage_client)
+        http = HttpClient(timeout_seconds=settings.openrouter_timeout_seconds)
+        register_bounded_close(
+            stack,
+            name="build-http",
+            callback=http.close,
+            timeout_seconds=settings.shutdown_timeout_seconds,
+        )
+        milvus = MilvusVectorClient(settings.milvus_uri, settings.milvus_token)
+        register_bounded_close(
+            stack,
+            name="build-milvus",
+            callback=milvus.close,
+            timeout_seconds=settings.shutdown_timeout_seconds,
+        )
+    except BaseException:
+        await stack.aclose()
+        raise
+    return _BuildJobClients(database, storage_client, storage, http, milvus, stack)
+
+
 async def _run(
     build_id: UUID,
     admission_token: UUID,
@@ -58,16 +122,11 @@ async def _run(
     settings = get_settings()
     configure_logging(settings.log_level, json_logs=settings.is_production)
     logger = logging.getLogger("mcplica.builder")
-    database = DatabaseClient(
-        settings.database_url,
-        pool_size=settings.database_pool_size,
-        max_overflow=settings.database_max_overflow,
-        pool_timeout_seconds=settings.database_pool_timeout_seconds,
-    )
-    storage_client = await asyncio.to_thread(FilesystemStorageClient, settings.artifact_root)
-    storage = FilesystemArtifactStorage(storage_client)
-    http = HttpClient(timeout_seconds=settings.openrouter_timeout_seconds)
-    milvus_client = MilvusVectorClient(settings.milvus_uri, settings.milvus_token)
+    clients = await _create_build_job_clients(settings)
+    database = clients.database
+    storage = clients.storage
+    http = clients.http
+    milvus_client = clients.milvus
     admission = BuildAdmissionService(
         database,
         BuildAdmissionRepository(),
@@ -75,10 +134,13 @@ async def _run(
     )
     heartbeat_stop = asyncio.Event()
     admission_lost = asyncio.Event()
-    heartbeat_task: asyncio.Task[bool] | None = None
+    cancellation_requested = asyncio.Event()
+    heartbeat_task: asyncio.Task[BuildLeaseState] | None = None
     keep_lease_for_retry = False
     try:
-        if not await admission.begin(build_id, admission_token):
+        begin_started = time.monotonic()
+        initial_lease = await admission.begin(build_id, admission_token)
+        if initial_lease.state is BuildLeaseState.LOST:
             outcome = "stale_admission"
             logger.info(
                 "build.admission_rejected",
@@ -94,8 +156,11 @@ async def _run(
                 admission_token,
                 heartbeat_stop,
                 admission_lost,
+                cancellation_requested,
                 owner_task,
                 interval_seconds=settings.build_admission_heartbeat_seconds,
+                lease_seconds=settings.build_admission_lease_seconds,
+                confirmed_deadline=begin_started + settings.build_admission_lease_seconds,
             ),
             name=f"build-admission-heartbeat-{build_id}",
         )
@@ -107,8 +172,12 @@ async def _run(
             milvus_client=milvus_client,
         )
         try:
-            await pipeline.run(build_id)
+            await pipeline.run(build_id, admission_token)
         except asyncio.CancelledError:
+            if cancellation_requested.is_set():
+                outcome = "cancelled"
+                await pipeline.acknowledge_cancellation(build_id, admission_token)
+                return
             if admission_lost.is_set():
                 outcome = "admission_lost"
                 return
@@ -121,40 +190,44 @@ async def _run(
                 exc,
                 attempt_number=attempt_number,
                 retry_scheduled=retryable and not final_attempt,
+                admission_token=admission_token,
             )
             if final_attempt or not retryable:
-                await pipeline.fail_from_exception(build_id, exc)
+                await pipeline.fail_from_exception(
+                    build_id,
+                    exc,
+                    admission_token=admission_token,
+                )
             keep_lease_for_retry = retryable and not final_attempt
             if final_attempt or retryable:
                 raise
     finally:
         heartbeat_stop.set()
-        if heartbeat_task is not None:
-            lease_retained = await heartbeat_task
-            if not lease_retained:
-                outcome = "admission_lost"
-        if keep_lease_for_retry:
-            await admission.heartbeat(build_id, admission_token)
-        else:
-            await admission.release(build_id, admission_token)
-        duration = time.perf_counter() - started
-        observe_build_job(outcome, duration)
-        logger.info(
-            "build.job_completed",
-            extra={
-                "service": "mcplica-builder",
-                "component": "build-job",
-                "job_id": job.id if job is not None else None,
-                "build_id": str(build_id),
-                "attempt_number": attempt_number,
-                "duration_ms": round(duration * 1_000, 3),
-                "error_code": None if outcome == "succeeded" else outcome,
-            },
-        )
-        await milvus_client.close()
-        await http.close()
-        await storage_client.close()
-        await database.close()
+        try:
+            if heartbeat_task is not None:
+                lease_state = await heartbeat_task
+                if lease_state is BuildLeaseState.LOST:
+                    outcome = "admission_lost"
+            if keep_lease_for_retry:
+                await admission.heartbeat(build_id, admission_token)
+            else:
+                await admission.release(build_id, admission_token)
+        finally:
+            duration = time.perf_counter() - started
+            observe_build_job(outcome, duration)
+            logger.info(
+                "build.job_completed",
+                extra={
+                    "service": "mcplica-builder",
+                    "component": "build-job",
+                    "job_id": job.id if job is not None else None,
+                    "build_id": str(build_id),
+                    "attempt_number": attempt_number,
+                    "duration_ms": round(duration * 1_000, 3),
+                    "error_code": None if outcome == "succeeded" else outcome,
+                },
+            )
+            await clients.close()
 
 
 async def _heartbeat_admission(
@@ -163,26 +236,45 @@ async def _heartbeat_admission(
     token: UUID,
     stop_event: asyncio.Event,
     admission_lost: asyncio.Event,
+    cancellation_requested: asyncio.Event,
     owner_task: asyncio.Task[object],
     *,
     interval_seconds: float,
-) -> bool:
+    lease_seconds: float,
+    confirmed_deadline: float,
+) -> BuildLeaseState:
     while not stop_event.is_set():
+        remaining = confirmed_deadline - time.monotonic()
+        if remaining <= 0:
+            admission_lost.set()
+            owner_task.cancel()
+            return BuildLeaseState.LOST
         try:
-            await asyncio.wait_for(stop_event.wait(), timeout=interval_seconds)
-            return True
+            await asyncio.wait_for(
+                stop_event.wait(),
+                timeout=min(interval_seconds, remaining),
+            )
+            return BuildLeaseState.OWNED
         except TimeoutError:
             try:
-                if not await admission.heartbeat(build_id, token):
+                renewal_started = time.monotonic()
+                async with asyncio.timeout(max(0.001, confirmed_deadline - renewal_started)):
+                    renewal = await admission.heartbeat(build_id, token)
+                if renewal.state is BuildLeaseState.CANCELLATION_REQUESTED:
+                    cancellation_requested.set()
+                    owner_task.cancel()
+                    return renewal.state
+                if renewal.state is BuildLeaseState.LOST:
                     admission_lost.set()
                     owner_task.cancel()
-                    return False
+                    return renewal.state
+                confirmed_deadline = renewal_started + lease_seconds
             except Exception:
                 logging.getLogger("mcplica.builder").exception(
                     "build.admission_heartbeat_failed",
                     extra={"build_id": str(build_id)},
                 )
-    return True
+    return BuildLeaseState.OWNED
 
 
 def _pipeline(
@@ -209,6 +301,10 @@ def _pipeline(
             else None
         ),
         settings.secret_encryption_key_version,
+        previous_encoded_keys={
+            version: key.get_secret_value()
+            for version, key in settings.secret_encryption_previous_keys.items()
+        },
         allow_ephemeral=settings.env == "test",
     )
     settings_service = SettingsService(
@@ -284,15 +380,18 @@ def _pipeline(
 
 
 def is_retryable_build_error(exc: Exception) -> bool:
-    return isinstance(
-        exc,
-        (
-            ClientConnectionError,
-            ClientRateLimitError,
-            ClientTimeoutError,
-            ClientUnavailableError,
-        ),
+    retryable = (
+        ClientConnectionError,
+        ClientRateLimitError,
+        ClientTimeoutError,
+        ClientUnavailableError,
     )
+    current: BaseException | None = exc
+    while current is not None:
+        if isinstance(current, retryable):
+            return True
+        current = current.__cause__
+    return False
 
 
 def run_build_job(build_id: str, admission_token: str) -> None:

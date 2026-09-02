@@ -343,6 +343,25 @@ async def test_activation_predecessor_is_restarted_and_edge_proved_before_restor
     assert docker.route_probe[3:5] == (str(deployment.build_id), str(deployment.id))
 
 
+@pytest.mark.asyncio
+async def test_stop_targets_the_exact_recorded_container_identity() -> None:
+    docker = _RecordingDocker()
+    manager = RuntimeManager(docker, Settings(env="test"))
+    deployment = _deployment().model_copy(update={"container_id": "container-1"})
+
+    await manager.stop(deployment, remove=True)
+
+    assert docker.events == ["stop", "remove:False"]
+
+    docker.events.clear()
+    docker.inspect_result = ContainerInfo(
+        "replacement-container", "runtime", "running", "healthy", "sha256:runtime"
+    )
+    with pytest.raises(RuntimeHealthError, match="identity changed before stop"):
+        await manager.stop(deployment, remove=True)
+    assert docker.events == []
+
+
 def _existing_container_attrs(spec: RuntimeContainerSpec) -> dict[str, object]:
     health_test = [
         "CMD",

@@ -46,6 +46,7 @@ from app.repositories.sources import SourceRepository
 from app.repositories.validation import ValidationRepository
 from app.services.artifacts import ArtifactService
 from app.services.build_admission import BuildAdmissionDispatcher
+from app.services.builds.cancellation import BuildCancellationService
 from app.services.builds.diff import diff_builds
 from app.services.builds.operation_paging import (
     OperationPageCandidate,
@@ -102,6 +103,11 @@ class BuildService:
         self._defaults = defaults
         self._artifacts = artifacts
         self._cleanup = cleanup
+        self._cancellations = BuildCancellationService(
+            builds,
+            cleanup.repository if cleanup is not None else None,
+            audit,
+        )
         self._admission = admission
 
     async def create(
@@ -141,7 +147,7 @@ class BuildService:
                 raise InvalidStateError("Disabled Projects cannot start Builds")
             bindings = await self._sources.latest_bound_versions(session, project_id)
             current_configuration_sha256 = source_configuration_fingerprint(
-                source_version_ids=[item.version.id for item in bindings],
+                bindings=bindings,
                 default_base_url=project.default_base_url,
                 active_server_ref=project.active_server_ref,
                 server_mappings=project.server_mappings,
@@ -256,7 +262,7 @@ class BuildService:
                 build_id=build_id,
                 project_id=project_id,
                 trigger=trigger,
-                source_version_ids=[item.version.id for item in bindings],
+                source_bindings=bindings,
                 requested_by=requested_by,
                 compiler_version=COMPILER_VERSION,
                 runtime_compatibility=RUNTIME_COMPATIBILITY,
@@ -417,10 +423,12 @@ class BuildService:
             # The durable database request remains authoritative; a worker or later queue
             # recovery will observe it before performing more stage work.
             queue_acknowledged = False
-        if not queue_acknowledged and existing.status is not BuildStatus.QUEUED:
+        if not queue_acknowledged or build.admission_token is None:
+            self._admission.wake()
             return build
         return await self._acknowledge_cancellation(
             build_id,
+            admission_token=build.admission_token,
             actor_user_id=actor_user_id,
             request_id=request_id,
             acknowledgement="queue",
@@ -430,45 +438,26 @@ class BuildService:
         self,
         build_id: UUID,
         *,
+        admission_token: UUID,
         actor_user_id: UUID | None,
         request_id: str | None,
         acknowledgement: str,
     ) -> BuildRecord:
         async with self._database.session_scope() as session:
-            current = await self._builds.get(session, build_id)
-            if current is None:
-                raise NotFoundError("Build was not found")
-            cleanup_job = (
-                await self._cleanup.capture_build_cancellation(
-                    session,
-                    project_id=current.project_id,
-                    build_id=build_id,
-                    actor_user_id=actor_user_id,
-                    request_id=request_id,
-                )
-                if self._cleanup is not None
-                else None
-            )
-            cancelled = await self._builds.acknowledge_cancellation(session, build_id)
-            await self._audit.append(
+            result = await self._cancellations.acknowledge(
                 session,
+                build_id=build_id,
+                admission_token=admission_token,
                 actor_user_id=actor_user_id,
-                event_type="build.cancelled",
-                entity_type="build",
-                entity_id=build_id,
-                project_id=cancelled.project_id,
                 request_id=request_id,
-                metadata={
-                    "acknowledgement": acknowledgement,
-                    "cleanup_job_id": str(cleanup_job.id) if cleanup_job else None,
-                },
+                acknowledgement=acknowledgement,
             )
-        if cleanup_job is not None:
+        if result.cleanup_job is not None:
             cleanup = self._cleanup
             assert cleanup is not None
             cleanup.notify()
         self._admission.wake()
-        return cancelled
+        return result.build
 
     async def validation_report(self, build_id: UUID) -> ValidationReportRecord:
         async with self._database.session_scope() as session:
@@ -507,11 +496,18 @@ class BuildService:
         )
         return build, value
 
-    async def ai_runs(self, build_id: UUID) -> list[BuildAIRunRecord]:
+    async def ai_runs(
+        self, build_id: UUID, *, page: int, page_size: int
+    ) -> tuple[list[BuildAIRunRecord], int]:
         async with self._database.session_scope() as session:
             if await self._builds.get(session, build_id) is None:
                 raise NotFoundError("Build was not found")
-            return await self._ai_runs.list_for_build(session, build_id)
+            return await self._ai_runs.list_page_for_build(
+                session,
+                build_id,
+                page=page,
+                page_size=page_size,
+            )
 
     async def diff(self, build_id: UUID) -> BuildDiff:
         async with self._database.session_scope() as session:

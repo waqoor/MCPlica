@@ -4,7 +4,7 @@ from uuid import UUID
 
 from app.clients.build_queue import BuildQueueClient
 from app.clients.database import DatabaseClient
-from app.domain.build_admission import BuildAdmissionOverview
+from app.domain.build_admission import BuildAdmissionOverview, BuildLeaseRenewal
 from app.repositories.audit import AuditRepository
 from app.repositories.build_admission import BuildAdmissionRepository
 from app.services.settings import OperationalSettingsProvider
@@ -26,7 +26,7 @@ class BuildAdmissionService:
         self._repository = repository
         self._lease_seconds = lease_seconds
 
-    async def begin(self, build_id: UUID, token: UUID) -> bool:
+    async def begin(self, build_id: UUID, token: UUID) -> BuildLeaseRenewal:
         async with self._database.session_scope() as session:
             return await self._repository.begin_or_renew(
                 session,
@@ -36,7 +36,7 @@ class BuildAdmissionService:
                 serialize_with_dispatch=True,
             )
 
-    async def heartbeat(self, build_id: UUID, token: UUID) -> bool:
+    async def heartbeat(self, build_id: UUID, token: UUID) -> BuildLeaseRenewal:
         async with self._database.session_scope() as session:
             return await self._repository.begin_or_renew(
                 session,

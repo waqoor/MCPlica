@@ -2,13 +2,14 @@
 
 Repository: `yazeedhasan97/MCPlica`  
 Branch examined: `master`  
-Evidence baseline: `090ec0a82bf6689c9764716afdd20409c366d178` (commit dated 2026-08-27; branch rechecked on 2026-09-01)  
-Report date: 2026-09-01  
-Task scope: findings documentation only; no application, infrastructure, contract, or test implementation changes.
+- Finding evidence baseline: `090ec0a82bf6689c9764716afdd20409c366d178` (commit dated 2026-08-27; branch rechecked on 2026-09-01)
+- Implementation review baseline: `708401dc47a7684c8c95ab0e4061d595657c57dc`
+- Report date: 2026-09-01; implementation closure: 2026-09-02
+Task scope: reproduce and disposition every finding, implement every applicable correction, and validate the integrated repository/runtime result.
 
 ## Scope and evidence boundary
 
-This report consolidates the evidence-backed findings identified in the available source examination and the subsequent cross-component verification. The preceding every-file, line-by-line audit was **not completed**. This is therefore a consolidated inventory of identified issues, **not a claim that every repository file was reviewed or that no additional issues exist**. No full test suite, live deployment, or provider transaction was executed for this report; every Testing & Validation field below specifies required acceptance work, not a claimed passing result.
+The original report consolidated evidence-backed findings from the available source examination; it did not claim an every-file audit or that no unlisted issue existed. The 2026-09-02 closure separately rechecked all 55 registered findings against the implementation baseline, reproduced each cited contract or failure scenario, retained 12 corrections already present, and implemented the other 43. The final validation record is authoritative in [`docs/evidence/issues-002-closure.md`](docs/evidence/issues-002-closure.md). No unlisted-file completeness claim or external production-deployment claim is added by this closure.
 
 Repository links are pinned to the evidence baseline. Function names and explicitly described code areas locate evidence where line-numbered excerpts were not available. Findings distinguish source-demonstrated failure paths from explicitly labeled hardening or maintainability gaps. Severity describes impact and preconditions, not an assertion of observed production exploitation. Unverified possibilities and intentional product limitations without a demonstrated defect are not promoted to findings.
 
@@ -25,6 +26,71 @@ All remediation is to the existing canonical clients, shared contracts, services
 | **Total** | **55** |
 
 No Critical severity is assigned from the evidence available; this is not a statement that the unreviewed repository contains no critical defects.
+
+## Verified disposition (2026-09-02)
+
+All 55 findings are closed in repository scope: 12 were already remediated at the implementation
+baseline and were explicitly re-verified; 43 remained applicable and were fixed. None was dismissed
+as inapplicable and none remains open. Detailed code, schema, test, runtime, and command evidence is
+in [`docs/evidence/issues-002-closure.md`](docs/evidence/issues-002-closure.md).
+
+| Finding | Baseline status | Verified final disposition and evidence |
+| --- | --- | --- |
+| `ISS-002-001` | Already fixed | Closed; scoped chunk identity and cross-project/generation/source tests. |
+| `ISS-002-002` | Applicable | Closed by migration `0021` current-version selection and A-B-A PostgreSQL coverage. |
+| `ISS-002-003` | Applicable | Closed by frozen Build/source metadata, trustworthy-history gate, and canonicalization/fingerprint tests. |
+| `ISS-002-004` | Applicable | Closed by transition-aware stop-first conflict handling and ordered command tests. |
+| `ISS-002-005` | Applicable | Closed by final-verifier durable STOP behavior and idempotency/effect-state tests. |
+| `ISS-002-006` | Applicable | Closed by exact-active-Build `security_refresh` intent and stale-source tests. |
+| `ISS-002-007` | Applicable | Closed by live/dead-owner cancellation acknowledgement and recovery tests. |
+| `ISS-002-008` | Applicable | Closed by admission-token fencing, deadline heartbeat, migration `0025`, and stale-writer tests. |
+| `ISS-002-009` | Applicable | Closed by migration `0022` execution tokens/renewal/project lock and reclaim tests. |
+| `ISS-002-010` | Already fixed | Closed; distinct UI/API hosts are allowed exactly and unrelated hosts remain rejected. |
+| `ISS-002-011` | Already fixed | Closed; exported production Compose requires auth-overlay digest and allowed origin. |
+| `ISS-002-012` | Applicable | Closed; OpenRouter catalog includes embedding-capable models and has provider tests. |
+| `ISS-002-013` | Already fixed | Closed; canonicalization does not load documentation bodies and has read-boundary tests. |
+| `ISS-002-014` | Already fixed | Closed; long-running Compose services restart and one-shot jobs do not. |
+| `ISS-002-015` | Applicable | Closed; project-first deployment locking and PostgreSQL serialization are verified. |
+| `ISS-002-016` | Applicable | Closed; ASGI/proxy/spool capacity limits align and boundary tests pass. |
+| `ISS-002-017` | Already fixed | Closed; API startup remains independent of a live Milvus connection. |
+| `ISS-002-018` | Already fixed | Closed; shipped UID/GID is fixed and runtime-init rejects identity drift. |
+| `ISS-002-019` | Already fixed | Closed; non-string exclusion inputs return controlled validation errors. |
+| `ISS-002-020` | Applicable | Closed; required operational settings reject explicit null. |
+| `ISS-002-021` | Applicable | Closed; cleared model settings remain cleared without environment resurrection. |
+| `ISS-002-022` | Applicable | Closed; credential writes use the runtime transport/header contract. |
+| `ISS-002-023` | Applicable | Closed; exclusions are applied consistently before readiness and compilation. |
+| `ISS-002-024` | Applicable | Closed; one shared deterministic auth-selection engine owns readiness and compilation. |
+| `ISS-002-025` | Applicable | Closed; shared path parsing supports embedded/multiple placeholders. |
+| `ISS-002-026` | Applicable | Closed; schema rewriting is restricted to schema-keyword locations. |
+| `ISS-002-027` | Applicable | Closed; JSON Pointer traversal supports arrays and controlled invalid-index errors. |
+| `ISS-002-028` | Already fixed | Closed; an exact response cannot fall through to a less-specific media contract. |
+| `ISS-002-029` | Applicable | Closed; OIDC issuer identity, including trailing slash, is preserved exactly. |
+| `ISS-002-030` | Applicable | Closed; DOCX paragraph/table order and heading context are preserved. |
+| `ISS-002-031` | Applicable | Closed; warning/info snapshots remain visible and blocking errors retain context. |
+| `ISS-002-032` | Applicable | Closed; invalid AI responses cannot become successful cache entries. |
+| `ISS-002-033` | Applicable | Closed; diffs compare effective servers/security and ignore provenance-only churn. |
+| `ISS-002-034` | Applicable | Closed; cleanup aggregate updates serialize parent-first under concurrent completion. |
+| `ISS-002-035` | Applicable | Closed by migration `0024`, just-in-time claims, and exact attempt fencing. |
+| `ISS-002-036` | Applicable | Closed; retention failures are isolated and do not block due cleanup. |
+| `ISS-002-037` | Applicable | Closed; acquisition and shutdown attempt every close within bounded deadlines. |
+| `ISS-002-038` | Applicable | Closed; Redis/RQ clients have explicit connect and operation deadlines. |
+| `ISS-002-039` | Applicable | Closed; one total remote-fetch deadline covers resolution through body streaming. |
+| `ISS-002-040` | Applicable | Closed; OpenRouter bodies are stream-limited before buffering/decoding. |
+| `ISS-002-041` | Applicable | Closed; password hashing/verifying runs off-loop with admin serialization retained. |
+| `ISS-002-042` | Applicable | Closed; management collections use bounded stable pagination and frontend all-page reads. |
+| `ISS-002-043` | Applicable | Closed; storage health proves write, flush/fsync, and delete. |
+| `ISS-002-044` | Applicable | Closed; central logging allowlists safe data and omits raw sensitive messages/exceptions. |
+| `ISS-002-045` | Applicable | Closed; versioned key ring plus transactional re-encryption CLI/service supports rotation. |
+| `ISS-002-046` | Applicable | Closed; trusted activation proof cannot be replaced by weaker post-activation evidence. |
+| `ISS-002-047` | Applicable | Closed; CLA workflow consumes a configured external status/check and fails unavailable separately. |
+| `ISS-002-048` | Applicable | Closed; all structured attempts contribute outcome, token, and cost evidence exactly once. |
+| `ISS-002-049` | Applicable | Closed; the last-admin rule counts active administrators only. |
+| `ISS-002-050` | Applicable | Closed; OAuth expiry accepts only finite positive numeric values, never booleans. |
+| `ISS-002-051` | Applicable | Closed; safe lifecycle correlation fields survive structured JSON formatting. |
+| `ISS-002-052` | Already fixed | Closed; authoritative `docs/` additions are visible to Git. |
+| `ISS-002-053` | Applicable | Closed; deterministic tracked-source manifest generation/check replaces stale inventory. |
+| `ISS-002-054` | Already fixed | Closed; runtime build delegates to Compose and uses its configured image reference. |
+| `ISS-002-055` | Already fixed | Closed; the example has one runtime-version assignment and a uniqueness test. |
 
 ## Findings
 
@@ -54,6 +120,8 @@ No Critical severity is assigned from the evidence available; this is not a stat
 
 5. **Testing & Validation** — Exercise upload and URL refresh sequences A→B→A and A→A. Assert current selection, source summary, discovery fingerprint, and newly created build all reference the last accepted content. Verify historical builds remain unchanged, repeat requests are idempotent, current content survives retention, and 304 handling uses the current observation’s validators.
 
+6. **Resolution (2026-09-02)** — **Closed.** Migration `0021` adds an explicit same-source `current_version_id` selection plus observation timestamp/validator metadata and backfills the latest known version without inventing lost restoration history. Every accepted observation now selects its immutable version transactionally under the source/project lock, records `source.version_selected`, and all summary, discovery, build-binding, validator, and retention consumers use that selection. PostgreSQL regressions cover A→B→A hash reuse, repeated observations, 304 validators, concurrent commit order, frozen historical bindings, and retention. See [`docs/evidence/issues-002-foundation-closure.md`](docs/evidence/issues-002-foundation-closure.md).
+
 ---
 
 ### ISS-002-003 — Executable build identity does not freeze primary-source and dependency-alias metadata
@@ -67,6 +135,8 @@ No Critical severity is assigned from the evidence available; this is not a stat
 4. **Recommended Solution** — Capture primary role and dependency-resolution aliases alongside each existing build/source binding. Include executable-affecting metadata in the canonical configuration fingerprint and use the frozen metadata during parsing rather than live source rows. Keep secret rotations outside executable identity. Update discovery, build creation, deployment checks, contracts, and migration handling together; require rebuilding historical records whose required identity cannot be established.
 
 5. **Testing & Validation** — Create a queued build with two versioned executable sources, then switch the primary or rename an externally referenced source before worker execution. Assert the existing build remains bound to its original metadata, new discovery changes identity, and normal deployment rejects stale builds. Verify harmless metadata changes are classified consistently and historical artifacts are not rewritten.
+
+6. **Resolution (2026-09-02)** — **Closed.** Migration `0021` freezes source ID/kind/name/origin/URL/creation time, primary role, dependency aliases, and routing beside each existing Build/source-version binding. The executable fingerprint includes those values and canonicalization consumes the frozen binding rather than mutable `ProjectSource` rows. Historical bindings are explicitly marked untrustworthy and fail new activation with an actionable rebuild requirement instead of receiving fabricated provenance. Unit and PostgreSQL tests prove queued-build immutability across rename/primary changes, fingerprint drift for new discovery, and fail-closed stale/historical deployment preflight. See [`docs/evidence/issues-002-foundation-closure.md`](docs/evidence/issues-002-foundation-closure.md).
 
 ---
 
@@ -82,6 +152,8 @@ No Critical severity is assigned from the evidence available; this is not a stat
 
 5. **Testing & Validation** — With one RUNNING deployment, rotate an upstream credential and assert one committed ordered STOP→DEPLOY transition, successful eventual activation, and no self-conflict. Repeat with an in-flight deployment. Race an unrelated operator deployment and assert it cannot bypass mutual exclusion. Inject stop failure and assert the replacement does not execute prematurely.
 
+6. **Resolution (2026-09-02)** — **Closed.** Deployment transitions now persist an explicit intent and transition ID. Replacement admission excludes only the STOPPING deployment IDs created by that same locked transaction; unrelated in-progress work remains conflicting. STOP and DEPLOY commands commit in sequence, and repository claim rules require the predecessor to become effective before the successor can execute. PostgreSQL tests prove ordered stop-first security refresh, unrelated-work exclusion, retry/replay ordering, and replacement suppression after stop failure. See [`docs/evidence/issues-002-foundation-closure.md`](docs/evidence/issues-002-foundation-closure.md).
+
 ---
 
 ### ISS-002-005 — Revoking the final static MCP token rolls back instead of removing access
@@ -95,6 +167,8 @@ No Critical severity is assigned from the evidence available; this is not a stat
 4. **Recommended Solution** — Separate revocation effectiveness from replacement deployability within the existing lifecycle service. When no valid inbound verifier remains, commit revocation together with durable STOP commands for affected live/in-flight runtimes rather than constructing an invalid replacement. Preserve fail-closed authentication and accurate pending/failed/effective status until runtime shutdown is observed. Never restore the revoked token merely to satisfy deployment validation.
 
 5. **Testing & Validation** — Revoke the only token on a running project and assert the database revocation commits, STOP is durable, no invalid replacement is created, and the old token stops working when the command becomes effective. Repeat with multiple tokens, expired tokens, duplicate requests, queue outage, worker restart, and stop failure; never report effectiveness before observation.
+
+6. **Resolution (2026-09-02)** — **Closed.** Revocation now evaluates the materialized valid-verifier set under the project lock. Removing the final verifier commits the revocation and one durable STOP command without constructing an invalid replacement; duplicate revocation returns the existing lifecycle effect and cannot create another transition. Multiple-token changes retain the exact active build through the security-refresh path. PostgreSQL and unit regressions cover final/subset/expired/duplicate revocation, durable outbox behavior, queue restart, and truthful pending/effective/failed state. See [`docs/evidence/issues-002-foundation-closure.md`](docs/evidence/issues-002-foundation-closure.md).
 
 ---
 
@@ -110,6 +184,8 @@ No Critical severity is assigned from the evidence available; this is not a stat
 
 5. **Testing & Validation** — Deploy build A, upload source B without deploying it, then create/rotate/revoke access tokens and rotate a used credential. Assert maintenance applies to A or safely stops it, never deploys B implicitly, and never rolls back solely due to source drift. Assert ordinary deployment of stale A still fails and cross-project artifacts remain rejected.
 
+6. **Resolution (2026-09-02)** — **Closed.** Migration `0023` adds `normal`, `security_refresh`, and `rollback` deployment intent. Security refresh is bound to the exact active immutable build and bypasses only current-source identity comparison; artifact integrity, project ownership, runtime compatibility, and current secret material remain mandatory. If the active build cannot be safely rematerialized, the security mutation commits with a durable STOP instead of rolling back. Tests prove source B is never activated implicitly, normal stale-A activation still fails, and untrusted/cross-project inputs remain fail-closed. See [`docs/evidence/issues-002-foundation-closure.md`](docs/evidence/issues-002-foundation-closure.md).
+
 ---
 
 ### ISS-002-007 — Build cancellation can lose its worker before cancellation is acknowledged
@@ -123,6 +199,8 @@ No Critical severity is assigned from the evidence available; this is not a stat
 4. **Recommended Solution** — Distinguish requested cancellation from superseded ownership. Route cancellation through the existing idempotent acknowledgement/cleanup transaction before releasing ownership where possible. Extend the existing dispatcher’s recovery logic to finalize cancellation requests whose worker/lease is gone, without executing more pipeline stages. Preserve cleanup reference protection and prevent stale workers from publishing results after acknowledgement.
 
 5. **Testing & Validation** — Pause a running stage beyond the heartbeat interval, request cancellation, and force renewal rejection before the next pipeline checkpoint. Assert eventual CANCELLED, acknowledgement timestamp, released admission, captured cleanup, and ability to create the next build. Repeat with abrupt worker termination, Redis outage, duplicate cancellation, and a late stage result.
+
+6. **Resolution (2026-09-02)** — **Closed.** Requested cancellation no longer invalidates a live owner’s admission lease. The owner acknowledges through one idempotent cancellation/cleanup transaction at pipeline boundaries; if that owner dies or expires, dispatcher recovery claims the cancellation specifically and finalizes it without running another stage. Queue failure and duplicate requests retain durable state, release only the exact owned admission, and permit the project’s next build. Unit and PostgreSQL tests cover long-stage cancellation, dead-owner recovery, duplicate acknowledgement, cleanup capture, and replacement-build admission. See [`docs/evidence/issues-002-foundation-closure.md`](docs/evidence/issues-002-foundation-closure.md).
 
 ---
 
@@ -138,6 +216,8 @@ No Critical severity is assigned from the evidence available; this is not a stat
 
 5. **Testing & Validation** — Pause worker A in a provider request, make heartbeat renewal fail through lease expiry, and let worker B claim the build. Resume A and assert its result/state writes affect zero rows and cannot fail or complete B’s build. Verify normal renewal, delayed responses, cancellation, and connection recovery do not duplicate accepted artifacts or usage records.
 
+6. **Resolution (2026-09-02)** — **Closed.** The admission token is now carried through the canonical pipeline and every ownership-sensitive Build, stage, validation, AI-run, artifact, usage, and index-generation publication verifies the live database lease and exact token. The heartbeat uses a monotonic deadline derived from the last database-confirmed lease and cancels new work after ownership uncertainty reaches expiry. Migration `0025` records the accepted execution token on index generations; physical Milvus row IDs are attempt-scoped while canonical chunk IDs remain stable, so stale cleanup cannot delete a replacement’s rows. PostgreSQL and vector tests resume a stale worker after reclaim and reject every late writer/result. See [`docs/evidence/issues-002-foundation-closure.md`](docs/evidence/issues-002-foundation-closure.md).
+
 ---
 
 ### ISS-002-009 — Runtime lifecycle command leases have no execution-owner fencing or renewal
@@ -151,6 +231,8 @@ No Critical severity is assigned from the evidence available; this is not a stat
 4. **Recommended Solution** — Add ownership fencing to the existing command record/claim contract and pass the claimed attempt or token into execution and terminal updates. Renew ownership during long operations and verify it before destructive Docker actions and activation writes. Reconcile already-observed effects idempotently after crashes. Ensure predecessors remain effective before successors execute, including after redispatch; do not add a second command queue or execution path.
 
 5. **Testing & Validation** — Run a command longer than its lease, redispatch it, and resume the stale attempt. Assert stale terminal writes are rejected and only the current owner may activate or stop the target. Cover duplicate queue delivery, reordered STOP/DEPLOY commands, crash after Docker success, and failure during lease renewal.
+
+6. **Resolution (2026-09-02)** — **Closed.** Migration `0022` adds the execution token to the durable command claim, queue payload, lease renewal, ownership checkpoints, and exact-token terminal updates. Claims and renewal use PostgreSQL time; the executor stops at its last confirmed monotonic deadline and holds a PostgreSQL session advisory project lock around Docker effects. Predecessor effectiveness is rechecked, deployment state writes are fenced, and STOP verifies then targets the exact recorded container ID rather than a reusable name. Unit and PostgreSQL concurrency tests cover duplicate/reordered delivery, reclaim, stale finalization, database-heartbeat outage, project serialization, exact-container stop, and crash/retry reconciliation. See [`docs/evidence/issues-002-foundation-closure.md`](docs/evidence/issues-002-foundation-closure.md).
 
 ---
 

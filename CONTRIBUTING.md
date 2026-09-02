@@ -6,7 +6,7 @@ Thank you for contributing.
 
 MCPlica uses a **CLA-only** contribution model. **DCO is not used.** External code contributions may not be merged until the contributor's applicable individual/entity CLA status is verified.
 
-The repository-level automation in `.github/workflows/cla.yml` fails closed until the founder-approved CLA service is connected. Maintainers must not bypass that required check or treat DCO sign-off as a substitute.
+The repository-level automation in `.github/workflows/cla.yml` reads the exact status/check name configured in the `CLA_STATUS_CONTEXT` repository variable. It succeeds only when the founder-approved CLA service reports success for the pull request head commit, reports an ordinary policy failure for unsigned contributions, and reports service unavailability separately. Maintainers must not bypass that required check or treat DCO sign-off as a substitute.
 
 All contributors must follow `CODE_OF_CONDUCT.md`. Security vulnerabilities belong in private vulnerability reporting, not normal issues or pull requests.
 

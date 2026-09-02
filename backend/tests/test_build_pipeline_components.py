@@ -28,7 +28,13 @@ from app.services.builds.credential_mapping import map_credentials
 from app.services.builds.diff import diff_builds
 
 
-def _canonical(*, summary: str = "Get product", secured: bool = False):
+def _canonical(
+    *,
+    summary: str = "Get product",
+    secured: bool = False,
+    server_url: str = "https://inventory.example.com",
+    source_version_id: UUID | None = None,
+):
     operation: dict[str, object] = {
         "operationId": "getProduct",
         "summary": summary,
@@ -37,7 +43,7 @@ def _canonical(*, summary: str = "Get product", secured: bool = False):
     source: dict[str, object] = {
         "openapi": "3.1.0",
         "info": {"title": "Inventory", "version": "1.0"},
-        "servers": [{"url": "https://inventory.example.com"}],
+        "servers": [{"url": server_url}],
         "paths": {"/products": {"get": operation}},
     }
     if secured:
@@ -50,7 +56,7 @@ def _canonical(*, summary: str = "Get product", secured: bool = False):
     return parse_openapi(
         source,
         project_id=UUID(int=1),
-        source_version_id=UUID(int=2),
+        source_version_id=source_version_id or UUID(int=2),
         content_sha256=hashlib.sha256(summary.encode()).hexdigest(),
     )
 
@@ -84,6 +90,58 @@ def test_credential_mapping_fails_closed_on_ambiguity_and_honors_explicit_bindin
         )
         == {}
     )
+
+
+def test_credential_mapping_tries_later_alternative_after_invalid_oauth_defaults() -> None:
+    source = {
+        "openapi": "3.1.0",
+        "info": {"title": "Alternative auth", "version": "1.0"},
+        "servers": [{"url": "https://api.example.com"}],
+        "components": {
+            "securitySchemes": {
+                "oauth": {
+                    "type": "oauth2",
+                    "flows": {
+                        "clientCredentials": {
+                            "tokenUrl": "/token",
+                            "scopes": {"read": "Read"},
+                        }
+                    },
+                },
+                "backup": {"type": "http", "scheme": "bearer"},
+            }
+        },
+        "paths": {
+            "/items": {
+                "get": {
+                    "operationId": "getItems",
+                    "security": [{"oauth": ["read"]}, {"backup": []}],
+                    "responses": {"200": {"description": "OK"}},
+                }
+            }
+        },
+    }
+    canonical = parse_openapi(
+        source,
+        project_id=UUID(int=1),
+        source_version_id=UUID(int=2),
+        content_sha256=hashlib.sha256(b"alternatives").hexdigest(),
+    )
+    oauth = BuildCredentialSnapshot(
+        id=UUID(int=20),
+        scheme_type=CredentialScheme.OAUTH2_CLIENT_CREDENTIALS,
+        metadata={"security_scheme": "oauth", "scope": "unadvertised"},
+    )
+    backup = BuildCredentialSnapshot(
+        id=UUID(int=21),
+        scheme_type=CredentialScheme.BEARER,
+        metadata={"security_scheme": "backup"},
+    )
+
+    selection = map_credentials(canonical, [oauth, backup])[canonical.operations[0].key]
+
+    assert selection.scheme_name == "backup"
+    assert selection.credential_ref == str(backup.id)
 
 
 def test_oauth_profiles_preserve_exact_operation_scopes_method_and_optional_auth() -> None:
@@ -205,6 +263,27 @@ def test_build_diff_is_structural_and_stable() -> None:
     assert result.removed_operations == []
     assert result.changed_operations[0].operation_key == current.operations[0].key
     assert result.changed_operations[0].changes == ["source_semantics"]
+
+
+def test_build_diff_resolves_effective_server_instead_of_only_comparing_key() -> None:
+    previous = _canonical(server_url="https://inventory.example.com/v1")
+    current = _canonical(server_url="https://inventory.example.com/v2")
+
+    result = diff_builds(current, previous)
+
+    assert result.changed_operations[0].changes == ["server"]
+
+
+def test_build_diff_ignores_source_version_provenance_only_changes() -> None:
+    previous = _canonical(source_version_id=UUID(int=2))
+    current = _canonical(source_version_id=UUID(int=3))
+
+    result = diff_builds(current, previous)
+
+    assert result.changed_operations == []
+    assert result.unchanged_operations == [current.operations[0].key]
+    assert result.changed_schemas == []
+    assert result.changed_security == []
 
 
 class _MemoryStorage:

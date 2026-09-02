@@ -18,7 +18,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.domain.deployments import DeploymentActivationPhase, DeploymentStatus
+from app.domain.deployments import DeploymentActivationPhase, DeploymentIntent, DeploymentStatus
 from app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
 
 
@@ -117,6 +117,11 @@ class Deployment(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         ForeignKey("builds.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
+    )
+    intent: Mapped[DeploymentIntent] = mapped_column(
+        Enum(DeploymentIntent, name="deployment_intent", values_callable=_enum_values),
+        default=DeploymentIntent.NORMAL,
+        nullable=False,
     )
     previous_active_deployment_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True),

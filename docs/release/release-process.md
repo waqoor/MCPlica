@@ -9,7 +9,9 @@ Before the first external contribution or release, enable private vulnerability 
 ## Prepare
 
 1. Reconcile the release against the six authoritative documents and update version/changelog/release notes.
-2. Confirm frozen Python/pnpm locks, migrations, contracts, generated schemas/artifacts, and documentation are synchronized.
+2. Confirm frozen Python/pnpm locks, migrations, contracts, generated schemas/artifacts,
+   documentation, and `MANIFEST.sha256` are synchronized. For the 2026-09-02 schema line, rehearse
+   migrations `0021` through `0025` and the documented source-selection downgrade refusal.
 3. Run lint, format checks, type checks, unit/integration tests, frontend production build, cross-browser E2E, Compose rendering, image builds, non-root/health/header checks, and secret/dependency/source/image scans.
 4. Complete threat-model review, upgrade/rollback rehearsal, backup/restore drill, and live TLS/MCP authentication acceptance for the target environment.
 5. Resolve every blocker or mark the release not ready. Do not waive deterministic coverage, secret, auth, network, image-digest, or runtime-health gates.

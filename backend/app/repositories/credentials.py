@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.credentials import CredentialRecord, CredentialScheme
@@ -37,9 +37,33 @@ class CredentialRepository:
         result = await session.scalars(
             select(ProjectCredential)
             .where(ProjectCredential.project_id == project_id)
-            .order_by(ProjectCredential.created_at.asc())
+            .order_by(ProjectCredential.created_at.asc(), ProjectCredential.id.asc())
         )
         return [_to_domain(model) for model in result]
+
+    async def list_page(
+        self,
+        session: AsyncSession,
+        project_id: UUID,
+        *,
+        page: int,
+        page_size: int,
+    ) -> tuple[list[CredentialRecord], int]:
+        predicate = ProjectCredential.project_id == project_id
+        total = int(
+            await session.scalar(
+                select(func.count()).select_from(ProjectCredential).where(predicate)
+            )
+            or 0
+        )
+        result = await session.scalars(
+            select(ProjectCredential)
+            .where(predicate)
+            .order_by(ProjectCredential.created_at.asc(), ProjectCredential.id.asc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        return [_to_domain(model) for model in result], total
 
     async def get(self, session: AsyncSession, credential_id: UUID) -> CredentialRecord | None:
         model = await session.get(ProjectCredential, credential_id)

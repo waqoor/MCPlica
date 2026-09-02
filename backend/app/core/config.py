@@ -66,7 +66,10 @@ class Settings(BaseSettings):
     database_max_overflow: int = Field(default=20, ge=0, le=200)
     database_pool_timeout_seconds: float = Field(default=30.0, gt=0, le=300)
     readiness_timeout_seconds: float = Field(default=5.0, gt=0, le=30)
+    shutdown_timeout_seconds: float = Field(default=15.0, gt=0, le=120)
     redis_url: str = "redis://localhost:6379/0"
+    redis_socket_connect_timeout_seconds: float = Field(default=2.0, gt=0, le=30)
+    redis_socket_timeout_seconds: float = Field(default=4.0, gt=0, le=30)
     build_queue_name: str = "mcplica-builds"
     deployment_queue_name: str = "mcplica-deployments"
     build_job_timeout_seconds: int = Field(default=3600, ge=60, le=86_400)
@@ -84,6 +87,7 @@ class Settings(BaseSettings):
     runtime_command_dispatch_interval_seconds: float = Field(default=1.0, ge=0.1, le=60)
     runtime_command_dispatch_lease_seconds: float = Field(default=30.0, ge=5, le=300)
     runtime_command_execution_lease_seconds: float = Field(default=1_200.0, ge=60, le=7_200)
+    runtime_command_execution_heartbeat_seconds: float = Field(default=30.0, ge=1, le=300)
     cleanup_dispatch_interval_seconds: float = Field(default=5.0, ge=0.1, le=300)
     cleanup_lease_seconds: float = Field(default=60.0, ge=5, le=3_600)
     cleanup_max_attempts: int = Field(default=8, ge=1, le=100)
@@ -110,6 +114,10 @@ class Settings(BaseSettings):
 
     secret_encryption_key: OptionalSecret = Field(default=None, repr=False)
     secret_encryption_key_version: str = Field(default="v1", min_length=1, max_length=64)
+    secret_encryption_previous_keys: dict[str, SecretStr] = Field(
+        default_factory=dict,
+        repr=False,
+    )
     auth_signing_key: OptionalSecret = Field(default=None, repr=False)
     refresh_token_pepper: OptionalSecret = Field(default=None, repr=False)
     bootstrap_secret: OptionalSecret = Field(default=None, repr=False)
@@ -124,7 +132,12 @@ class Settings(BaseSettings):
     login_rate_limit_window_seconds: int = Field(default=300, ge=10, le=3600)
 
     artifact_root: str = "./artifacts"
-    upload_max_bytes: int = Field(default=100_000_000, ge=1_024, le=500_000_000)
+    upload_max_bytes: int = Field(default=100_000_000, ge=1_024, le=100_000_000)
+    multipart_spool_capacity_bytes: int = Field(
+        default=220_000_000,
+        ge=101_048_576,
+        le=1_000_000_000,
+    )
     document_max_bytes: int = Field(default=100_000_000, ge=1_024, le=500_000_000)
     fetch_max_bytes: int = Field(default=25_000_000, ge=1_024, le=500_000_000)
     fetch_timeout_seconds: float = Field(default=30.0, gt=0, le=300)
@@ -227,8 +240,25 @@ class Settings(BaseSettings):
             )
         if self.build_queue_name == self.deployment_queue_name:
             raise ValueError("build and deployment jobs require separate RQ queues")
+        if (
+            self.redis_socket_connect_timeout_seconds > self.readiness_timeout_seconds
+            or self.redis_socket_timeout_seconds > self.readiness_timeout_seconds
+        ):
+            raise ValueError("Redis socket timeouts cannot exceed the readiness timeout")
         if self.build_admission_heartbeat_seconds * 2 >= self.build_admission_lease_seconds:
             raise ValueError("build admission lease must exceed two heartbeat intervals")
+        if self.multipart_spool_capacity_bytes < self.upload_max_bytes + 1_048_576:
+            raise ValueError("multipart spool capacity must exceed the upload limit")
+        if (
+            self.runtime_command_execution_heartbeat_seconds * 2
+            >= self.runtime_command_execution_lease_seconds
+        ):
+            raise ValueError("runtime command lease must exceed two heartbeat intervals")
+        for version in self.secret_encryption_previous_keys:
+            if not version.strip() or len(version) > 64 or version != version.strip():
+                raise ValueError("previous encryption key versions must be non-empty safe names")
+            if version == self.secret_encryption_key_version:
+                raise ValueError("active encryption key version cannot also be a previous key")
         for label, value in (
             ("build_queue_name", self.build_queue_name),
             ("deployment_queue_name", self.deployment_queue_name),

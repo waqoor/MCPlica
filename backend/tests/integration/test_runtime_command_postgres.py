@@ -9,7 +9,11 @@ from sqlalchemy import delete, select, update
 
 from app.clients.database import DatabaseClient
 from app.clients.runtime_files import RuntimeFilesClient
-from app.core.exceptions import DockerOperationError, RuntimeHealthError
+from app.core.exceptions import (
+    DockerOperationError,
+    ExecutionOwnershipError,
+    RuntimeHealthError,
+)
 from app.domain.auth import UserRole
 from app.domain.builds import BuildStatus, BuildTrigger
 from app.domain.deployments import (
@@ -158,6 +162,40 @@ async def _seed(database: DatabaseClient) -> None:
         )
 
 
+async def test_project_advisory_lock_serializes_external_runtime_effects() -> None:
+    database = DatabaseClient(_database_url(), pool_size=3, max_overflow=0)
+    first_acquired = asyncio.Event()
+    release_first = asyncio.Event()
+    second_acquired = asyncio.Event()
+
+    async def first() -> None:
+        async with database.project_advisory_lock(UUID(int=500)):
+            first_acquired.set()
+            await release_first.wait()
+
+    async def second() -> None:
+        await first_acquired.wait()
+        async with database.project_advisory_lock(UUID(int=500)):
+            second_acquired.set()
+
+    first_task = asyncio.create_task(first())
+    second_task = asyncio.create_task(second())
+    try:
+        await first_acquired.wait()
+        await asyncio.sleep(0.05)
+        assert not second_acquired.is_set()
+        release_first.set()
+        await asyncio.wait_for(asyncio.gather(first_task, second_task), timeout=2)
+        assert second_acquired.is_set()
+    finally:
+        release_first.set()
+        for task in (first_task, second_task):
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(first_task, second_task, return_exceptions=True)
+        await database.close()
+
+
 async def test_transactional_outbox_leases_replay_and_restart_reconciliation() -> None:
     database = DatabaseClient(_database_url(), pool_size=4, max_overflow=0)
     commands = RuntimeCommandRepository()
@@ -231,9 +269,13 @@ async def test_transactional_outbox_leases_replay_and_restart_reconciliation() -
         assert sum(value == UUID(int=107) for group in concurrent_claims for value in group) == 1
 
         async with database.session_scope() as session:
+            dispatched = await commands.get(session, UUID(int=107))
+            assert dispatched is not None and dispatched.execution_token is not None
+            stale_token = dispatched.execution_token
             running = await commands.claim_for_execution(
                 session,
                 UUID(int=107),
+                stale_token,
                 lease_seconds=60,
             )
             assert running is not None
@@ -255,9 +297,30 @@ async def test_transactional_outbox_leases_replay_and_restart_reconciliation() -
             )
             assert [command.id for command in recovered] == [UUID(int=107)]
             assert recovered[0].attempt_count == 2
+            assert recovered[0].execution_token is not None
+            assert recovered[0].execution_token != stale_token
+            current_token = recovered[0].execution_token
+
+        with pytest.raises(ExecutionOwnershipError):
+            async with database.session_scope() as session:
+                await commands.mark_effective(session, UUID(int=107), stale_token)
 
         async with database.session_scope() as session:
-            await commands.mark_effective(session, UUID(int=107))
+            running = await commands.claim_for_execution(
+                session,
+                UUID(int=107),
+                current_token,
+                lease_seconds=60,
+            )
+            assert running is not None
+            renewal = await commands.renew_execution(
+                session,
+                UUID(int=107),
+                current_token,
+                lease_seconds=90,
+            )
+            assert renewal.lease_expires_at is not None
+            await commands.mark_effective(session, UUID(int=107), current_token)
         async with database.session_scope() as session:
             effective = await session.scalar(
                 select(RuntimeLifecycleCommand).where(RuntimeLifecycleCommand.id == UUID(int=107))
@@ -269,6 +332,7 @@ async def test_transactional_outbox_leases_replay_and_restart_reconciliation() -
                 await commands.claim_for_execution(
                     session,
                     UUID(int=107),
+                    current_token,
                     lease_seconds=60,
                 )
                 is None
@@ -318,15 +382,25 @@ async def test_transactional_outbox_leases_replay_and_restart_reconciliation() -
                 lease_seconds=30,
             )
             assert [command.id for command in ordered_claim] == [UUID(int=110)]
+            first_token = ordered_claim[0].execution_token
+            assert first_token is not None
             assert (
                 await commands.claim_for_execution(
                     session,
                     UUID(int=111),
+                    UUID(int=999),
                     lease_seconds=60,
                 )
                 is None
             )
-            await commands.mark_effective(session, UUID(int=110))
+            claimed_first = await commands.claim_for_execution(
+                session,
+                UUID(int=110),
+                first_token,
+                lease_seconds=60,
+            )
+            assert claimed_first is not None
+            await commands.mark_effective(session, UUID(int=110), first_token)
 
         async with database.session_scope() as session:
             next_claim = await commands.claim_due_for_dispatch(

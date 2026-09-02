@@ -53,7 +53,9 @@ class OidcKeyProvider(Protocol):
 class OidcTokenVerifier(TokenVerifier):
     def __init__(self, config: InboundAuthSecrets, client: OidcKeyProvider) -> None:
         assert config.issuer_url is not None
-        self._issuer = str(config.issuer_url).rstrip("/")
+        # OIDC issuer comparison is exact; in particular, trailing-slash and
+        # non-trailing-slash issuer identifiers are not interchangeable.
+        self._issuer = str(config.issuer_url)
         self._audiences = config.audiences
         self._algorithms = config.allowed_algorithms
         self._client = client

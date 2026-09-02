@@ -1,5 +1,6 @@
 import hashlib
 from collections.abc import Awaitable, Callable
+from uuid import UUID
 
 from mcp_contracts import CanonicalApi, MCPManifest
 
@@ -48,6 +49,7 @@ class ValidationService:
         canonical_sha256: str,
         manifest: MCPManifest,
         manifest_bytes: bytes,
+        admission_token: UUID,
         cancellation_check: Callable[[], Awaitable[None]] | None = None,
     ) -> ValidationReportRecord:
         async with self._database.session_scope() as session:
@@ -122,6 +124,7 @@ class ValidationService:
                     manifest=manifest,
                     model=build.validation_model,
                     max_context_chars=config.max_context_chars,
+                    admission_token=admission_token,
                     cancellation_check=cancellation_check,
                 )
                 if cancellation_check is not None:
@@ -150,6 +153,7 @@ class ValidationService:
                 blocking_error_count=blocking,
                 warning_count=warnings,
                 findings=findings,
+                admission_token=admission_token,
             )
 
 

@@ -1,17 +1,23 @@
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import pytest
-from sqlalchemy import delete, update
+from sqlalchemy import delete, func, select, update
 
 from app.clients.database import DatabaseClient
+from app.core.exceptions import InvalidStateError
 from app.domain.auth import UserRole
 from app.domain.builds import PIPELINE_STATUSES, BuildConfiguration, BuildStatus, BuildTrigger
+from app.domain.validation import ValidationStatus
 from app.models.auth import User
-from app.models.build import Build
+from app.models.build import Build, BuildAIRun
+from app.models.indexing import DocumentIndexGeneration
 from app.models.project import Project
-from app.repositories.builds import BuildRepository
+from app.models.validation import ValidationReport
+from app.repositories.builds import BuildAIRunRepository, BuildRepository
+from app.repositories.indexing import IndexGenerationRepository
+from app.repositories.validation import ValidationRepository
 
 pytestmark = pytest.mark.postgres_integration
 
@@ -124,7 +130,16 @@ def _build(build_id: UUID, sequence: int, stage: BuildStatus) -> Build:
         requested_by=USER_ID,
         started_at=None if stage is BuildStatus.QUEUED else now,
         completed_at=None,
+        admission_token=_token(build_id),
+        admission_acquired_at=now,
+        admission_heartbeat_at=now,
+        admission_lease_expires_at=now + timedelta(minutes=5),
+        admission_attempt_count=1,
     )
+
+
+def _token(build_id: UUID) -> UUID:
+    return UUID(int=build_id.int + 1_000)
 
 
 async def test_failure_preserves_every_authoritative_pipeline_stage() -> None:
@@ -143,6 +158,7 @@ async def test_failure_preserves_every_authoritative_pipeline_stage() -> None:
                     build_id,
                     error_code=f"FAIL_{stage.value}",
                     error_summary=f"Injected failure during {stage.value}",
+                    admission_token=_token(build_id),
                 )
                 failed = await repository.get(session, build_id)
                 assert failed is not None
@@ -169,9 +185,134 @@ async def test_monotonic_transition_persists_the_new_current_stage() -> None:
                     build_id,
                     expected=current,
                     target=target,
+                    admission_token=_token(build_id),
                 )
                 assert transitioned.status is target
                 assert transitioned.pipeline_stage is target
+    finally:
+        await _cleanup(database)
+        await database.close()
+
+
+async def test_reclaimed_build_rejects_every_stale_result_writer() -> None:
+    """ISS-002-008: an obsolete owner cannot publish any pipeline evidence."""
+
+    database = DatabaseClient(_database_url(), pool_size=4, max_overflow=0)
+    build_id = UUID(int=18_300)
+    stale_token = _token(build_id)
+    current_token = UUID(int=19_301)
+    ai_runs = BuildAIRunRepository()
+    generations = IndexGenerationRepository()
+    validations = ValidationRepository()
+    try:
+        await _cleanup(database)
+        await _seed(database)
+        async with database.session_scope() as session:
+            session.add(_build(build_id, 1, BuildStatus.ANALYZING))
+        async with database.session_scope() as session:
+            await session.execute(
+                update(Build)
+                .where(Build.id == build_id)
+                .values(admission_token=current_token, admission_attempt_count=2)
+            )
+
+        async with database.session_scope() as session:
+            with pytest.raises(InvalidStateError, match="ownership is stale"):
+                await ai_runs.create(
+                    session,
+                    build_id=build_id,
+                    run_key="stale-analysis",
+                    stage="analysis",
+                    operation_key=None,
+                    model="analysis/model",
+                    prompt_template_id="analysis",
+                    prompt_template_version="1",
+                    input_context_sha256="1" * 64,
+                    retrieved_chunk_ids=[],
+                    response_schema_id="analysis/v1",
+                    response_sha256="2" * 64,
+                    response_json={"accepted": True},
+                    usage=None,
+                    cost=None,
+                    latency_ms=1,
+                    status="succeeded",
+                    admission_token=stale_token,
+                )
+        async with database.session_scope() as session:
+            with pytest.raises(InvalidStateError, match="ownership is stale"):
+                await generations.prepare(
+                    session,
+                    generation_id=UUID(int=18_302),
+                    project_id=PROJECT_ID,
+                    build_id=build_id,
+                    embedding_model="embedding/model",
+                    generation_key="3" * 64,
+                    source_fingerprint="4" * 64,
+                    admission_token=stale_token,
+                )
+        async with database.session_scope() as session:
+            with pytest.raises(InvalidStateError, match="ownership is stale"):
+                await validations.create_report(
+                    session,
+                    build_id=build_id,
+                    overall_status=ValidationStatus.PASS,
+                    operation_source_count=0,
+                    operation_excluded_count=0,
+                    operation_expected_count=0,
+                    operation_generated_count=0,
+                    coverage_percent=100,
+                    blocking_error_count=0,
+                    warning_count=0,
+                    findings=[],
+                    admission_token=stale_token,
+                )
+
+        async with database.session_scope() as session:
+            assert (
+                await session.scalar(
+                    select(func.count(BuildAIRun.id)).where(BuildAIRun.build_id == build_id)
+                )
+                == 0
+            )
+            assert (
+                await session.scalar(
+                    select(func.count(DocumentIndexGeneration.id)).where(
+                        DocumentIndexGeneration.build_id == build_id
+                    )
+                )
+                == 0
+            )
+            assert (
+                await session.scalar(
+                    select(func.count(ValidationReport.id)).where(
+                        ValidationReport.build_id == build_id
+                    )
+                )
+                == 0
+            )
+
+        async with database.session_scope() as session:
+            accepted = await ai_runs.create(
+                session,
+                build_id=build_id,
+                run_key="current-analysis",
+                stage="analysis",
+                operation_key=None,
+                model="analysis/model",
+                prompt_template_id="analysis",
+                prompt_template_version="1",
+                input_context_sha256="5" * 64,
+                retrieved_chunk_ids=[],
+                response_schema_id="analysis/v1",
+                response_sha256="6" * 64,
+                response_json={"accepted": True},
+                usage=None,
+                cost=None,
+                latency_ms=1,
+                status="succeeded",
+                admission_token=current_token,
+            )
+            assert accepted.run_key == "current-analysis"
     finally:
         await _cleanup(database)
         await database.close()

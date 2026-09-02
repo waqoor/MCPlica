@@ -230,6 +230,7 @@ async def test_reused_enrichment_is_audited_without_calling_ai_or_retrieval() ->
         max_context_chars=120_000,
         max_concurrency=4,
         retrieval_top_k=5,
+        admission_token=UUID(int=22),
         reusable={operation_key: _enrichment(operation_key)},
     )
     assert result.operations[operation_key].title == "List products"
