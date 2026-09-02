@@ -2,6 +2,7 @@ import asyncio
 from collections.abc import Awaitable
 
 from fastapi import APIRouter, Request, Response, status
+from mcp_contracts import VERSION
 
 from app.schemas.health import HealthRead, ReadinessDependenciesRead, ReadinessRead
 
@@ -10,7 +11,7 @@ router = APIRouter(tags=["system"])
 
 @router.get("/health", response_model=HealthRead)
 async def health() -> HealthRead:
-    return HealthRead(status="ok", service="mcplica-api")
+    return HealthRead(status="ok", service="mcplica-api", version=VERSION)
 
 
 async def _bounded_health(check: Awaitable[bool], timeout_seconds: float) -> bool:

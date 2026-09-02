@@ -20,9 +20,18 @@ def _dotenv_value(value: str) -> str:
 def create_environment(output: Path, *, production: bool = False) -> None:
     """Use exclusive creation: an existing installation's keys must never be replaced."""
     template = (ROOT / ".env.example").read_text(encoding="utf-8")
+    resolved_output = output.resolve()
+    try:
+        control_plane_env_file = os.path.relpath(resolved_output, ROOT / "infra").replace(
+            os.sep, "/"
+        )
+    except ValueError:
+        control_plane_env_file = resolved_output.as_posix()
     password = secrets.token_urlsafe(32)
     values = {
         "ENV": "production" if production else "development",
+        "MCPLICA_VERSION": (ROOT / "VERSION").read_text(encoding="utf-8").strip(),
+        "CONTROL_PLANE_ENV_FILE": control_plane_env_file,
         "POSTGRES_PASSWORD": password,
         "DATABASE_URL": f"postgresql+psycopg://mcplica:{password}@postgres:5432/mcplica",
         "MINIO_ROOT_USER": "mcplica-" + secrets.token_hex(8),
@@ -34,7 +43,7 @@ def create_environment(output: Path, *, production: bool = False) -> None:
         "METRICS_BEARER_TOKEN": secrets.token_urlsafe(48),
         "DEFAULT_ADMIN_EMAIL": "" if production else "admin@admin.com",
         "DEFAULT_ADMIN_PASSWORD": "" if production else secrets.token_urlsafe(24),
-        "RUNTIME_HOST_ROOT": str(output.resolve().parent / ".runtime"),
+        "RUNTIME_HOST_ROOT": str(resolved_output.parent / ".runtime"),
     }
     socket = Path("/var/run/docker.sock")
     if socket.exists():

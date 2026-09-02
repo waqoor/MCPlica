@@ -38,8 +38,8 @@ runtime rather than replacing those focused regressions.
 
 ## Full clean-install acceptance
 
-Use a **fresh clone on a disposable Linux Docker host**, with no existing `.env`,
-MCPlica Compose project, active runtimes, or retained volumes. The test changes model
+Use a **fresh clone on a disposable Linux Docker host**, with no existing selected environment
+file, MCPlica Compose project, active runtimes, or retained volumes. The test changes model
 settings, creates projects/secrets, stops services, replaces runtimes, and recreates
 containers. It refuses `ENV=production` and requires `RUN_DOCKER_INTEGRATION=1`.
 This is a separate verification operation, never a deployment startup step.
@@ -53,6 +53,21 @@ Set `E2E_UPSTREAM_BASE_URL` to the exact bridge-gateway URL printed by preparati
 GitHub Actions exports it automatically. Do not substitute Desktop-only DNS on Linux.
 The fixtures own host ports 9009 and 9010; the canonical test UI uses 8080 and the
 HTTP edge uses 80. An occupied fixture port fails without disturbing its owner.
+
+For a second disposable project on a development host, select a separate ignored environment
+file, project name, host ports, runtime root, and network names. The preparation helper writes the
+isolated values without replacing the retained `.env`:
+
+```bash
+python tests/integration/prepare_compose.py --output .env.v1rc --project-name mcplica-v1rc --api-port 18000 --frontend-port 18080 --edge-tls-port 18443
+export MCPLICA_ENV_FILE="$(pwd)/.env.v1rc"
+docker compose --env-file "$MCPLICA_ENV_FILE" -f infra/compose.yaml config --quiet
+```
+
+Pass `--api-base http://127.0.0.1:18080/api/v1` to the workflow in that isolated case. The
+canonical HTTP edge still requires host port 80 and fixture ports 9009/9010 must be free; stop a
+conflicting development proxy without deleting its volumes, then restore it after the test. Never
+point the helper or harness at retained volumes or a production environment.
 
 ```bash
 docker compose --env-file .env -f infra/compose.yaml config --quiet
@@ -70,6 +85,13 @@ MCP access tokens, four HTTP-method mappings, runtime calls during builder/provi
 outage, recovery, changed-source rebuild/diff, redeployment, rollback, and persisted
 active state plus MCP execution after database/cache/control-plane recreation.
 The persistence exercise retains named volumes; it is not a backup/restore drill.
+
+`prepare_compose.py --project-name <name>` persists that name as
+`COMPOSE_PROJECT_NAME` and writes `CONTROL_PLANE_ENV_FILE` relative to the canonical
+Compose file. Every later Compose command and every backend container therefore
+target the same disposable project and configuration. Use a unique name for
+side-by-side local validation; do not reuse the name of an installation you intend
+to retain.
 
 The existing CI also runs `backend/tests/integration/test_dynamic_runtime_docker.py`
 with its configured isolated runtime paths, then the actual UI:

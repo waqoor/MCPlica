@@ -40,12 +40,41 @@ def test_authoritative_documentation_is_not_ignored() -> None:
     assert result.returncode == 1
 
 
+def test_custom_runtime_roots_are_ignored() -> None:
+    root = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        ["git", "check-ignore", "--no-index", ".runtime-release-candidate/secrets.json"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0
+
+
 def test_runtime_build_uses_the_compose_selected_image() -> None:
     root = Path(__file__).resolve().parents[2]
     makefile = (root / "Makefile").read_text(encoding="utf-8")
     runtime_target = makefile.split("runtime-build:", 1)[1].split("\n\n", 1)[0]
     assert "$(COMPOSE) build runtime-validator" in runtime_target
     assert "docker build -t" not in runtime_target
+
+
+def test_make_backend_tests_use_backend_pytest_configuration() -> None:
+    root = Path(__file__).resolve().parents[2]
+    makefile = (root / "Makefile").read_text(encoding="utf-8")
+    test_target = makefile.split("test:", 1)[1].split("\n\n", 1)[0]
+
+    assert "pytest -c pyproject.toml" in test_target
+
+
+def test_ruff_classifies_repository_scripts_as_first_party_consistently() -> None:
+    root = Path(__file__).resolve().parents[2]
+
+    for config_path in (root / "pyproject.toml", root / "backend/pyproject.toml"):
+        config = tomllib.loads(config_path.read_text(encoding="utf-8"))
+        known_first_party = config["tool"]["ruff"]["lint"]["isort"]["known-first-party"]
+        assert "scripts" in known_first_party
 
 
 def test_gitleaks_fixture_allowlist_is_rule_path_and_shape_scoped() -> None:

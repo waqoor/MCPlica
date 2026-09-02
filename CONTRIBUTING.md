@@ -36,12 +36,28 @@ See `docs/operations/installation.md` and `docs/operations/configuration.md` for
 
 ## Pull requests
 
-1. Create a focused branch.
+1. Create a focused `feature/<topic>`, `fix/<topic>`, `docs/<topic>`, or
+   `release/vX.Y.Z-preparation` branch. Release tags are `vX.Y.Z` or `vX.Y.Z-prerelease`; do not
+   use a tag as a development branch.
 2. Add behavior-focused tests and any required migration or contract fixture.
-3. Run `make lint`, `make typecheck`, and `make test`.
+3. Run `make repository-check`, `make format-check`, `make lint`, `make typecheck`,
+   `make api-contract-check`, and `make test`.
 4. For frontend changes, run `pnpm --dir frontend test`, `pnpm --dir frontend build`, and the relevant `pnpm --dir frontend test:e2e` journeys.
 5. Update user, operator, security, and release documentation affected by the change.
 6. Explain architecture, security, data, compatibility, and rollback impact in the pull request.
 7. Ensure CLA verification passes before merge.
+
+## Versions and changelog
+
+Root `VERSION` is the only version authority. For a release bump, edit that file, run
+`python scripts/release_version.py --sync`, regenerate contracts, and review every resulting
+change. Never edit only one package/runtime/image version. Internal protocol/schema/prompt
+identifiers change only when their own contract changes.
+
+Add user-visible, security, compatibility, migration, deprecation, and operator-impacting changes
+under `CHANGELOG.md`'s `[Unreleased]` section. During release preparation, move those entries into
+a dated version section and create `docs/releases/vX.Y.Z.md`. Fix-only commits may omit a changelog
+entry only when they have no user, operator, security, compatibility, or release impact; explain
+that decision in the pull request.
 
 Commits should be reviewable and must not mix broad cleanup with a functional change. A maintainer may request a design discussion before accepting changes to contracts, persistence, compiler behavior, runtime isolation, authentication, deployment, or governance.

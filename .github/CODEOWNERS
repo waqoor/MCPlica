@@ -3,6 +3,10 @@
 
 # Security, release, governance, and legal controls
 /.github/ @yazeedhasan97
+/VERSION @yazeedhasan97
+/CHANGELOG.md @yazeedhasan97
+/docs/releases/ @yazeedhasan97
+/docs/release/ @yazeedhasan97
 /SECURITY.md @yazeedhasan97
 /GOVERNANCE.md @yazeedhasan97
 /CLA.md @yazeedhasan97

@@ -2,13 +2,17 @@
 
 import argparse
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
 from typing import cast
 
 ROOT = Path(__file__).resolve().parents[2]
-COMMAND = ["docker", "compose", "--env-file", ".env", "-f", "infra/compose.yaml"]
+ENV_FILE = Path(os.getenv("MCPLICA_ENV_FILE", ".env"))
+if not ENV_FILE.is_absolute():
+    ENV_FILE = ROOT / ENV_FILE
+COMMAND = ["docker", "compose", "--env-file", str(ENV_FILE), "-f", "infra/compose.yaml"]
 ONESHOT = {"migrate", "runtime-init"}
 
 
@@ -40,7 +44,7 @@ def _records(value: str) -> list[dict[str, object]]:
 
 
 def _redact(value: str) -> str:
-    env_file = ROOT / ".env"
+    env_file = ENV_FILE
     if env_file.exists():
         for line in env_file.read_text().splitlines():
             name, sep, secret = line.partition("=")

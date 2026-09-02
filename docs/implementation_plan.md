@@ -1,16 +1,17 @@
 # MCPlica Implementation Plan
 
-**Status:** Authoritative AI-executable implementation roadmap; `issues_001.md` and `issues_002.md` repository verification complete
+**Status:** Authoritative AI-executable implementation roadmap; current tracked verification is in `issues_002.md`, while `issues_001.md` is an unshipped historical source register
 
 **Date:** 2026-08-27
 
 **Execution mode:** Incremental, direct implementation against the live repository
 
-The current implementation disposition is evidence-backed in
-`evidence/issues-001-closure.md`. It records all 48 `issues_001.md` findings using the
-required VERIFIED COMPLETE/FIXED IN SECOND ROUND/BLOCKED vocabulary and is the current
-verification record: 22 were verified without another code change, 26 were fixed in the second
-round, and none is blocked. This plan remains the implementation-sequence authority.
+The historical implementation disposition is retained in
+`evidence/issues-001-closure.md`. It records 48 findings from the unshipped `issues_001.md`
+source register using the required VERIFIED COMPLETE/FIXED IN SECOND ROUND/BLOCKED vocabulary:
+22 were verified without another code change, 26 were fixed in the second round, and none was
+blocked. It is snapshot evidence, not current-release proof. This plan remains the
+implementation-sequence authority.
 
 The 2026-09-02 hardening pass rechecked all 55 `issues_002.md` findings: 12 existing
 corrections were retained and 43 applicable gaps were fixed, with zero repository-scope findings
@@ -476,7 +477,7 @@ Implement:
 
 - create/list/get/update;
 - slug validation/uniqueness;
-- hostname generation from `MCP_BASE_DOMAIN`;
+- hostname generation from `MCP_DOMAIN`;
 - enable/disable;
 - controlled deletion preconditions.
 
@@ -1565,7 +1566,8 @@ Configure/document:
 
 ### 12.4 Funding files
 
-Add `.github/FUNDING.yml` pointing primarily to the creator's GitHub Sponsors profile and approved personal portfolio sponsorship gateway.
+Do not add an empty `.github/FUNDING.yml`. After the creator verifies a GitHub Sponsors profile
+or approved portfolio sponsorship gateway, add only the confirmed channel identifiers.
 
 Add support/sponsorship sections to README/docs without intrusive in-app monetization.
 

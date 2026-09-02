@@ -36,10 +36,13 @@ _TERMINAL_BUILD_STATUSES = {"READY", "FAILED", "CANCELLED"}
 _TERMINAL_DEPLOYMENT_STATUSES = {"running", "unhealthy", "stopped", "failed"}
 
 
+def _environment_file() -> Path:
+    value = Path(os.getenv("MCPLICA_ENV_FILE", ".env"))
+    return value if value.is_absolute() else Path(__file__).resolve().parents[2] / value
+
+
 def _configured_default_admin_credentials() -> tuple[str | None, str | None]:
-    settings = Settings(
-        _env_file=Path(__file__).resolve().parents[2] / ".env"  # pyright: ignore[reportCallIssue]
-    )
+    settings = Settings(_env_file=_environment_file())  # pyright: ignore[reportCallIssue]
     email = str(settings.default_admin_email) if settings.default_admin_email is not None else None
     password = (
         settings.default_admin_password.get_secret_value()
@@ -431,7 +434,7 @@ async def _compose(*arguments: str) -> None:
         "docker",
         "compose",
         "--env-file",
-        ".env",
+        str(_environment_file()),
         "-f",
         "infra/compose.yaml",
         *arguments,
@@ -895,9 +898,7 @@ async def run(*, api_base: str, email: str, password: str) -> dict[str, object]:
 
 
 def main() -> None:
-    settings = Settings(
-        _env_file=Path(__file__).resolve().parents[2] / ".env"  # pyright: ignore[reportCallIssue]
-    )
+    settings = Settings(_env_file=_environment_file())  # pyright: ignore[reportCallIssue]
     if settings.env == "production" or os.getenv("RUN_DOCKER_INTEGRATION") != "1":
         raise SystemExit(
             "This destructive acceptance harness requires RUN_DOCKER_INTEGRATION=1 "

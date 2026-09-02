@@ -1,0 +1,22 @@
+[
+  {"name": "type: bug", "color": "d73a4a", "description": "Confirmed or reported defect"},
+  {"name": "type: enhancement", "color": "a2eeef", "description": "Product or engineering improvement"},
+  {"name": "type: documentation", "color": "0075ca", "description": "Documentation correction or addition"},
+  {"name": "type: security", "color": "b60205", "description": "Public security hardening without embargoed detail"},
+  {"name": "type: release", "color": "5319e7", "description": "Release preparation or publication"},
+  {"name": "status: needs-triage", "color": "fbca04", "description": "Needs scope and impact review"},
+  {"name": "status: needs-design", "color": "d4c5f9", "description": "Needs an accepted design and boundary review"},
+  {"name": "status: blocked", "color": "000000", "description": "Cannot progress until a named dependency changes"},
+  {"name": "status: ready", "color": "0e8a16", "description": "Meets the documented entry criteria for implementation"},
+  {"name": "priority: p0", "color": "b60205", "description": "Critical security, data-integrity, or availability impact"},
+  {"name": "priority: p1", "color": "d93f0b", "description": "High-impact work for the active release line"},
+  {"name": "priority: p2", "color": "fbca04", "description": "Important planned work without immediate critical impact"},
+  {"name": "priority: p3", "color": "c5def5", "description": "Lower-priority maintenance or improvement"},
+  {"name": "area: backend", "color": "1d76db", "description": "FastAPI control plane or workers"},
+  {"name": "area: runtime", "color": "0052cc", "description": "Generic MCP serving runtime"},
+  {"name": "area: frontend", "color": "7057ff", "description": "Browser application and user experience"},
+  {"name": "area: contracts", "color": "006b75", "description": "Shared schemas, compiler, or generated API contracts"},
+  {"name": "area: infrastructure", "color": "0b4f6c", "description": "Docker, Compose, networking, CI, or release automation"},
+  {"name": "area: documentation", "color": "0075ca", "description": "User, operator, API, security, or governance documentation"},
+  {"name": "breaking-change", "color": "e11d48", "description": "Requires explicit migration and release-note treatment"}
+]

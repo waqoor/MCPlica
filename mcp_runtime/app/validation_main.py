@@ -4,7 +4,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import cast
 
-from mcp_contracts import MCPManifest
+from mcp_contracts import VERSION, MCPManifest
 from pydantic import Field, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from starlette.applications import Starlette
@@ -19,7 +19,7 @@ from app.validation_harness import inspect_runtime_candidate
 class RuntimeValidatorSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="MCP_", extra="ignore")
 
-    runtime_version: str = Field(default="1.0.0", min_length=1, max_length=64)
+    runtime_version: str = Field(default=VERSION, min_length=1, max_length=64)
     max_manifest_bytes: int = Field(default=10_000_000, ge=1_024, le=50_000_000)
     validator_max_concurrency: int = Field(default=2, ge=1, le=32)
     validator_timeout_seconds: float = Field(default=60.0, gt=0.0, le=600.0)

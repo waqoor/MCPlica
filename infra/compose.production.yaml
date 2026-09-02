@@ -45,7 +45,7 @@ services:
     build: !reset null
     pull_policy: always
     environment:
-      MCP_RUNTIME_VERSION: ${MCP_RUNTIME_VERSION:?Set MCP_RUNTIME_VERSION}
+      MCP_RUNTIME_VERSION: ${MCPLICA_VERSION:?Set MCPLICA_VERSION}
 
   deployment-worker:
     build: !reset null

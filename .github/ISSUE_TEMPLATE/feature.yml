@@ -1,7 +1,7 @@
 name: Feature proposal
 description: Propose a scoped change within MCPlica's product boundaries.
 title: "proposal: "
-labels: [enhancement, needs-design]
+labels: ["type: enhancement", "status: needs-design"]
 body:
   - type: textarea
     id: problem

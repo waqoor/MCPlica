@@ -4,7 +4,10 @@
 
 It ingests a company's OpenAPI specification or structured API inventory, optionally incorporates product/API documentation, uses OpenRouter and Milvus only during analysis/build/review, deterministically compiles and validates an MCP manifest, and serves each project through an isolated generic MCP runtime.
 
-> **Release status:** MCPlica is pre-stable. The repository contains the product workspaces, typed control-plane/runtime boundaries, deployment/security controls, CI/release automation, and operator documentation, but a production release still requires the external and live-environment gates in `docs/release/release-checklist.md`.
+> **Release status:** `1.0.0` is the prepared release candidate; `VERSION` is authoritative. No
+> `v1.0.0` tag, GitHub Release, or production image is created until the release-readiness pull
+> request is accepted and the external/live gates in the
+> [release checklist](docs/release/release-checklist.md) are complete.
 
 ## Non-negotiable boundaries
 
@@ -32,6 +35,8 @@ infra/               Docker Compose, Traefik, Milvus, Dockerfiles
 scripts/             Developer/bootstrap utilities
 tests/               Cross-component fixtures/integration tests
 docs/                Authoritative implementation specifications
+VERSION              Authoritative product/release version
+CHANGELOG.md          Versioned repository change history
 ```
 
 ## Prerequisites
@@ -40,6 +45,9 @@ docs/                Authoritative implementation specifications
 - Python 3.13 for environment initialization and host-side verification.
 - Capacity for the configured Milvus limit (default `8g`), the other services, and each active project runtime.
 - uv and Node.js matching `.node-version`, with Corepack/pnpm, only for host development or tests. Docker builds install application dependencies themselves.
+
+See the [v1 compatibility matrix](docs/compatibility.md) for supported production/development
+platforms, exact toolchain lines, MCP client requirements, and unverified combinations.
 
 ## How to run with Docker
 
@@ -66,6 +74,8 @@ Use Python 3.13 (`python3` where that is its executable name). The initializer c
 and an absolute runtime-files path. It refuses to overwrite an existing file.
 **For an existing installation, keep its `.env`, encryption key, and data; skip the
 initializer.** Do not use the example administrator password or commit your `.env`.
+An environment created before v1 must add `MCPLICA_VERSION=1.0.0` and remove the obsolete
+operator-set `MCP_RUNTIME_VERSION`; follow the release-specific upgrade notes before recreation.
 
 ### 2. Configure the installation
 
@@ -113,7 +123,8 @@ configure required upstream credentials, build, configure MCP access, and deploy
 The deployment worker creates the isolated project runtime from the reusable image;
 **do not start a second ad hoc runtime or inject its credentials through `docker run`.**
 Use the exact project endpoint and authentication details shown in the UI. See the
-[user guide](docs/user-guide.md) and [MCP connection guide](docs/mcp-client-connection.md).
+[user guide](docs/user-guide.md), [API guide](docs/api.md), and
+[MCP connection guide](docs/mcp-client-connection.md).
 
 PostgreSQL, Redis, Milvus, etcd, and MinIO have no published host ports. API and UI
 host ports are loopback-bound; the development HTTP edge is published, so keep this
@@ -178,8 +189,9 @@ removes project runtimes, and do not delete their host files while they are acti
 
 For another environment filename, use
 `make compose-up ENV_FILE=/absolute/path/to/environment`. With direct Compose
-commands, set `MCPLICA_ENV_FILE` to that same absolute path and pass it to
-`--env-file`; the two settings control different configuration inputs.
+commands, pass that file to `--env-file`. Files created by `scripts/init_env.py`
+contain the matching service-level `CONTROL_PLANE_ENV_FILE`; host-side validation
+scripts additionally read `MCPLICA_ENV_FILE`.
 
 ### Production with Docker Compose
 
@@ -214,6 +226,7 @@ ACME state, and does not locally build release images. Use both Compose files fo
 subsequent status, logs, restart, and shutdown operations.
 
 Read the [installation](docs/operations/installation.md),
+[Docker Compose](docs/operations/docker-compose.md),
 [TLS/DNS](docs/operations/domain-tls.md), and
 [backup/restore](docs/operations/backup-restore.md) instructions before production
 use. Configuration validation is not proof of public DNS, certificate issuance,
@@ -224,8 +237,8 @@ release-image availability, provider behavior, or backup restoration.
 Follow [cross-service acceptance](tests/integration/README.md) on a **disposable
 installation only**. The harness deliberately stops/recreates services and changes
 project settings; it must not run against production or retained business data.
-Normal Docker startup never invokes it. Commit-specific validation results and
-limitations are in [Compose evidence](docs/evidence/compose-validation-2026-09-01.md).
+Normal Docker startup never invokes it. Commit-specific validation results and limitations are in
+the [v1.0.0 release-candidate evidence](docs/evidence/v1.0.0-release-candidate.md).
 
 For the post-merge regression scope and remaining limitations, see
 [post-merge validation](docs/evidence/post-merge-validation-2026-09-01.md).
@@ -254,7 +267,8 @@ uv run pytest tests/test_manifest_security.py tests/test_protocol_and_auth.py
 
 Deployed runtime liveness is `/healthz`, readiness is `/readyz`, and MCP Streamable HTTP is `/mcp`. Do not inject ad hoc credential environment variables in place of the canonical secret bundle.
 
-The complete setup, production TLS, configuration, backup, and upgrade procedures are in `docs/operations/`.
+The complete setup, production TLS, configuration, Compose, troubleshooting, backup, and upgrade
+procedures are in `docs/operations/`.
 
 ## Implemented product surface
 
@@ -287,10 +301,25 @@ Read these before changing product behavior:
 5. `docs/tech_stack.md`
 6. `docs/open_source_and_sponsorship_model.md`
 
-`docs/implementation_plan.md` is the execution order. `docs/README.md` indexes user, API, operations, security, and release documentation. The evidence-backed second-round disposition of all 48 findings in `issues_001.md` (22 verified, 26 fixed, zero blocked) is recorded in `docs/evidence/issues-001-closure.md`; the verified disposition of all 55 `issues_002.md` findings (12 retained fixes, 43 implemented fixes, zero open) is recorded in `docs/evidence/issues-002-closure.md`, with focused foundation proof for `ISS-002-002` through `ISS-002-009` in `docs/evidence/issues-002-foundation-closure.md`.
+`docs/implementation_plan.md` is the execution order. `docs/README.md` indexes user, API,
+operations, security, and release documentation. The historical second-round disposition of 48
+findings from the unshipped `issues_001.md` source register is retained in
+`docs/evidence/issues-001-closure.md`; it is not independently reconstructible from this checkout.
+The verified disposition of all 55 tracked `issues_002.md` findings (12 retained fixes, 43
+implemented fixes, zero open) is recorded in `docs/evidence/issues-002-closure.md`, with focused
+foundation proof for `ISS-002-002` through `ISS-002-009` in
+`docs/evidence/issues-002-foundation-closure.md`.
+
+Release users should start with the [v1.0.0 notes](docs/releases/v1.0.0.md),
+[changelog](CHANGELOG.md), [compatibility matrix](docs/compatibility.md), and
+[release process](docs/release/release-process.md). Historical audit ledgers remain evidence for
+their stated snapshots; they are not proof of the current release candidate by themselves.
 
 ## License and contributions
 
 MCPlica is licensed under **GNU Affero General Public License v3.0 only (`AGPL-3.0-only`)**.
 
-External code contributions require acceptance of the MCPlica Contributor License Agreement. DCO is intentionally not used. See `CLA.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, and `GOVERNANCE.md`.
+External code contributions require acceptance of the MCPlica Contributor License Agreement. DCO
+is intentionally not used. See [CONTRIBUTING.md](CONTRIBUTING.md),
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), [GOVERNANCE.md](GOVERNANCE.md), and
+[SUPPORT.md](SUPPORT.md).

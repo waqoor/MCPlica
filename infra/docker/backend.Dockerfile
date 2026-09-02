@@ -1,6 +1,15 @@
 FROM ghcr.io/astral-sh/uv:0.12.1@sha256:cf4eedcaa81655197f625739489effcbe71b61ceb1506f332c3facae5deceded AS uv
 
 FROM python:3.13.15-slim-trixie@sha256:7e3a6aca9d74f93cca21a91d86a8dad8c34749afd5b4a98ee481c9c47b9f5ed4
+ARG VERSION
+ARG VCS_REF=local
+ARG SOURCE_URL=https://github.com/yazeedhasan97/MCPlica
+LABEL org.opencontainers.image.title="MCPlica control plane" \
+      org.opencontainers.image.description="MCPlica API, migration, and worker runtime" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.source="${SOURCE_URL}" \
+      org.opencontainers.image.licenses="AGPL-3.0-only"
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
@@ -22,12 +31,14 @@ RUN apt-get update \
     && mkdir -p /data/artifacts \
     && chown -R mcplica:mcplica /data/artifacts
 WORKDIR /workspace
-COPY pyproject.toml uv.lock ./
+COPY VERSION pyproject.toml uv.lock ./
 COPY packages/contracts /workspace/packages/contracts
 COPY mcp_runtime/pyproject.toml /workspace/mcp_runtime/pyproject.toml
 COPY backend /workspace/backend
 COPY migrations /workspace/migrations
-RUN uv sync --frozen --package mcplica-backend --no-dev --no-editable \
+RUN test -n "${VERSION}" \
+    && test "$(cat VERSION)" = "${VERSION}" \
+    && uv sync --frozen --package mcplica-backend --no-dev --no-editable \
     && rm -rf /root/.cache/uv \
     && chown -R mcplica:mcplica /workspace/backend/.venv
 WORKDIR /workspace/backend

@@ -17,6 +17,11 @@ It does not redefine product scope (`product_requirements.md`), system boundarie
 
 All production dependencies must be **explicitly pinned through lockfiles/container image tags or digests**. Do not deploy floating `latest` tags.
 
+Root `VERSION` is authoritative for the product/package/API/frontend/runtime/image release. Literal
+copies required by package managers and generated artifacts are synchronized by
+`scripts/release_version.py` and checked in CI. Protocol/schema/prompt versions remain independent
+and change only with their contracts.
+
 The versions below define the approved major/minor baseline as of this specification date. During the initial implementation, use the newest stable/security-patched release within the approved line unless a documented compatibility issue requires the immediately preceding supported release.
 
 Patch/minor security upgrades that do not change the architecture may be accepted through normal dependency maintenance and lockfile updates. Major-version upgrades require compatibility tests and an update to this document when they materially affect contracts.

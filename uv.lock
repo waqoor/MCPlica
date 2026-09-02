@@ -686,7 +686,7 @@ wheels = [
 
 [[package]]
 name = "mcplica-backend"
-version = "0.1.0"
+version = "1.0.0"
 source = { editable = "backend" }
 dependencies = [
     { name = "alembic" },
@@ -776,7 +776,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "mcplica-contracts"
-version = "0.1.0"
+version = "1.0.0"
 source = { editable = "packages/contracts" }
 dependencies = [
     { name = "packaging" },
@@ -791,7 +791,7 @@ requires-dist = [
 
 [[package]]
 name = "mcplica-runtime"
-version = "0.1.0"
+version = "1.0.0"
 source = { editable = "mcp_runtime" }
 dependencies = [
     { name = "httpcore" },
@@ -837,7 +837,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "mcplica-workspace"
-version = "0.1.0"
+version = "1.0.0"
 source = { virtual = "." }
 
 [[package]]

@@ -12,6 +12,7 @@ async def test_health_endpoint() -> None:
     assert (await health()).model_dump() == {
         "status": "ok",
         "service": "mcplica-api",
+        "version": "1.0.0",
     }
 
 

@@ -19,6 +19,8 @@ output
 # Local runtime state and nested private settings are never build inputs.
 .runtime
 **/.runtime
+.runtime-*
+**/.runtime-*
 **/.env
 **/.env.*
 !**/.env.example
