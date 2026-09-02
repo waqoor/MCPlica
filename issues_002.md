@@ -1,9 +1,10 @@
 # MCPlica — issues_002
 
 Repository: `yazeedhasan97/MCPlica`  
-Branch examined: `master`  
+Branch examined: `master`; post-closure verification branch: `release/v1.0.0-preparation`
 - Finding evidence baseline: `090ec0a82bf6689c9764716afdd20409c366d178` (commit dated 2026-08-27; branch rechecked on 2026-09-01)
 - Implementation review baseline: `708401dc47a7684c8c95ab0e4061d595657c57dc`
+- Final code and repository-validation baseline: `801f0ee57e0ed73bf7feeb85649a5ca9b6014c1a`
 - Report date: 2026-09-01; implementation closure: 2026-09-02
 Task scope: reproduce and disposition every finding, implement every applicable correction, and validate the integrated repository/runtime result.
 
@@ -33,6 +34,13 @@ All 55 findings are closed in repository scope: 12 were already remediated at th
 baseline and were explicitly re-verified; 43 remained applicable and were fixed. None was dismissed
 as inapplicable and none remains open. Detailed code, schema, test, runtime, and command evidence is
 in [`docs/evidence/issues-002-closure.md`](docs/evidence/issues-002-closure.md).
+
+The release-branch revalidation repeated the source, schema, migration, contract, component,
+PostgreSQL, Linux-container, Compose, browser, and security boundaries. It also exposed and fixed
+four defects in the canonical validation path: the root Make target now loads the backend pytest
+configuration explicitly, Ruff classifies repository scripts consistently, the source manifest
+hashes canonical Git index blobs on every platform, and documentation validation reads only tracked
+Markdown. Focused repository-policy regressions cover each correction.
 
 | Finding | Baseline status | Verified final disposition and evidence |
 | --- | --- | --- |

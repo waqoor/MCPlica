@@ -331,7 +331,7 @@ a7f3dde8ec6f27bcfa7547b96e657f588dfcb1802067fdc83b95fd474490d447  ./docs/evidenc
 f4ba46e747dbfc1472a1247aac9f6b04459c2ce29e9a31428b6af1dc6b6f22a1  ./docs/evidence/compose-validation-2026-09-01.md
 c7aba3da13455285092aecd5a9f277121f19aef299c1086e2e4daf4c39141632  ./docs/evidence/final-integrated-validation.md
 e5dd7a3808614c65e33cf5f820f8a9b51d2b40f870cb49d919c6b308e244dd2f  ./docs/evidence/issues-001-closure.md
-658df7fdc29859333f4dddf96dd78d0096ddaa19c86aad6e45fc08e7a5fdf5eb  ./docs/evidence/issues-002-closure.md
+3c9169b97a8febfecfd14586874e9db7c056462795357d2f2f524b5d90f3e6eb  ./docs/evidence/issues-002-closure.md
 dffd0e736e7c8be4aa7f00eafbe109b4745e643e1dcc87777f1ca8402940e52e  ./docs/evidence/issues-002-foundation-closure.md
 1d1eb0c7eb0a26d5f2eb22e893d4e7088f7e348333460ba72c51d4ce79f06c64  ./docs/evidence/post-merge-2026-09-01/services.json
 fd237430a787e5058ba7533b8faef0071cabad1ba09d3bef9489b10c4b6ca55c  ./docs/evidence/post-merge-2026-09-01/validation-summary.json
@@ -518,7 +518,7 @@ dac10959aad32b10881404e7de6b6ceb8ec1b51c509ac9defde7b8871f9347e3  ./infra/docker
 7324d86b50ff1c1783603f2fcf4fdb153ef67a109ced31d29289d07b32d49afd  ./infra/docker/runtime.Dockerfile
 b1519c46d6151866d48f9c2e80424dfa00bf5a6dfd023f833acde9d40fa66e77  ./infra/milvus/README.md
 0ae3733d0ad7d81a9aed47a0ffd4fe7cbeb7b796d144315cf8ddc4d67c360061  ./infra/traefik/traefik.yml
-4b0ce686ce70a077155e93acbac620df34197383a236579e91b85058f51b24a2  ./issues_002.md
+352536811b00d4bc7fc9208eec3ebf0881f6af118114456c3c4d4775b2de4b2c  ./issues_002.md
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./mcp_runtime/app/__init__.py
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./mcp_runtime/app/auth/__init__.py
 de617101b108101c84c930065aefecc2c0be9b35c49f7b59cd9cb8c62410c861  ./mcp_runtime/app/auth/inbound.py
