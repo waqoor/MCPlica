@@ -10,7 +10,7 @@ dc7deb222562f89c1f784f33ac4ddc120a93f1b187c78890e6222971772f18fa  ./.github/ISSU
 1b74b3c3ebe115d64f891b4a87b8e3e1950d54297e9d084a2618b211c9e00abd  ./.github/PULL_REQUEST_TEMPLATE.md
 9c37fd0a0b56ac61f527f34231612ebed67f6badd6250f194359ba6702bdf1ed  ./.github/dependabot.yml
 7253616122553fb19e66f9e6dbd0891ad33a77ca48a82833a9a1a14e1cc82516  ./.github/labels.json
-dca80b22505a16426fb148c2aa9b1dd62c55e9f97715d3d84d011dbbed147ff2  ./.github/workflows/ci.yml
+df75de350f3faf66795384deeaf57f9eda0869126885697fda6f587c8e0754ed  ./.github/workflows/ci.yml
 3bf2fc1df3e49d81495abe7668adf502052107ade4b53bb49dceb25ecc7e209b  ./.github/workflows/cla.yml
 a0c08bf86412f32bd177d7ed06c76f0ae62982dfad64e31c726389675c7a578d  ./.github/workflows/labels.yml
 c493c7afde424ea3ecd2f66820e2bdea75f06e676bf3f902d1d20c227edae56a  ./.github/workflows/release.yml
@@ -363,7 +363,7 @@ c8ae9749b175b172b89e43eb5d559e04c796d77384b4221309d7d88f407cca06  ./docs/user-gu
 0bb3f59f28c0dca2bf45c5afa59d1cce9a0670ffe2f3d2b6a3ecfc523cc49699  ./frontend/.prettierignore
 e4c6d67d458abff6f71fb1c8ab7df963be99e6125cbbc0cf1d696b7bafad92ce  ./frontend/e2e/accessibility-security.spec.ts
 b4296409e27a1d34597bc0a26829a40b3bc0a8f80588afe6871e03baf0534e20  ./frontend/e2e/core-journey.spec.ts
-e8620242222f0886f192bd2ec469fdbd1c46e56c7b268b3c4c3188fcf533094f  ./frontend/e2e/live-stack.spec.ts
+dc1bbb3194a9b2280cbfdfab4dd06332ba25859e1c524ec04797092a6e931848  ./frontend/e2e/live-stack.spec.ts
 21d530ddf58b370892307912dde326ed85c5fb0387d492b2ceb5dbc527d6d7e0  ./frontend/e2e/mock-api.ts
 8f595cd312894708fe0fb67a160cc7aec4e957113303ce722ff74bf2e0f25ca0  ./frontend/eslint.config.js
 8ffa3736447e4d7bf699155c9de840855803691ad747751a88f47ac9864d36b9  ./frontend/index.html
