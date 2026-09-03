@@ -235,9 +235,8 @@ jobs:
         run: |
           prerelease=()
           if [[ "${GITHUB_REF_NAME}" == *-* ]]; then prerelease+=(--prerelease); fi
-          gh release create "${GITHUB_REF_NAME}" \
+          gh release create "${GITHUB_REF_NAME}" release-assets/* \
             --verify-tag \
             --title "MCPlica ${GITHUB_REF_NAME}" \
             --notes-file "docs/releases/${GITHUB_REF_NAME}.md" \
             "${prerelease[@]}"
-          gh release upload "${GITHUB_REF_NAME}" release-assets/*

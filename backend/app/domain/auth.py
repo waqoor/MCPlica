@@ -32,6 +32,9 @@ class UserIdentity(BaseModel):
     display_name: str
     role: UserRole
     is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    last_login_at: datetime | None = None
 
 
 class AuthSessionRecord(BaseModel):

@@ -179,7 +179,7 @@ class SourceVersionMetadataRead(SourceVersionRead):
 
 
 class ServerCandidateRead(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
 
     ref: str
     url: str
@@ -190,7 +190,7 @@ class ServerCandidateRead(BaseModel):
 
 
 class OperationServerRoutingRead(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
 
     operation_key: str
     method: str
@@ -203,7 +203,7 @@ class OperationServerRoutingRead(BaseModel):
 
 
 class SecuritySchemeDiscoveryRead(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
 
     name: str
     type: str
@@ -217,7 +217,7 @@ class SecuritySchemeDiscoveryRead(BaseModel):
 
 
 class OperationSecurityRequirementRead(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
 
     operation_key: str
     alternatives: list[dict[str, list[str]]]
@@ -225,7 +225,7 @@ class OperationSecurityRequirementRead(BaseModel):
 
 
 class SourceConfigurationDiscoveryRead(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
 
     source_version_ids: list[UUID]
     configuration_sha256: str

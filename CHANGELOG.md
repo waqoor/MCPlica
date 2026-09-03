@@ -8,6 +8,18 @@ version is not published until its immutable tag and release workflow complete.
 
 ### Changed
 
+- Moved canonical repository and OCI source metadata to the `waqoor/MCPlica` organization
+  namespace, added the owner-operated public-prerelease security/settings ledger, and made release
+  asset publication compatible with GitHub immutable releases.
+- Updated the unprivileged Nginx image to `1.31.5-alpine3.24-slim` and made nested
+  source-configuration response models validate domain records through Pydantic attribute access.
+- Preserved account timestamps in authenticated identities so `GET /api/v1/auth/me` returns the
+  same `created_at`, `updated_at`, and `last_login_at` values as the user record.
+- Replaced the organization-license-dependent Gitleaks Action with an offline, digest-pinned
+  Gitleaks CLI history scan so the required `secrets` job remains executable after transfer.
+- Migrated the frontend toolchain to pnpm 11.25.0 and its explicit `allowBuilds` configuration,
+  and made CI audit the complete pnpm lockfile through a digest-pinned OSV-Scanner instead of the
+  registry's retired legacy endpoint.
 - Added an admin-only, route-backed **Settings > Providers** workspace for write-only encrypted
   OpenRouter key rotation, live connection testing, and distinct credential/reachability/build
   readiness states.
@@ -75,5 +87,5 @@ version is not published until its immutable tag and release workflow complete.
 - See [the v1.0.0 release notes](docs/releases/v1.0.0.md) for the complete compatibility,
   migration, and evidence boundary.
 
-[Unreleased]: https://github.com/yazeedhasan97/MCPlica/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/yazeedhasan97/MCPlica/releases/tag/v1.0.0
+[Unreleased]: https://github.com/waqoor/MCPlica/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/waqoor/MCPlica/releases/tag/v1.0.0

@@ -35,7 +35,7 @@ plane, build workers, and every concurrently active 512 MiB project runtime in a
 | Python             | `>=3.13,<3.14`; container baseline 3.13.15                                          |
 | uv                 | Container/release baseline 0.12.9; use a compatible current uv for host development |
 | Node.js            | `>=24,<25`; `.node-version` pins 24.16.0                                            |
-| pnpm               | 10.24.0 through Corepack                                                            |
+| pnpm               | 11.25.0 through Corepack                                                            |
 | PostgreSQL         | Compose image 18.6 by immutable digest                                              |
 | Redis              | Compose image 8.2 Alpine by immutable digest                                        |
 | Milvus             | Compose image 3.0.1 by immutable digest                                             |
