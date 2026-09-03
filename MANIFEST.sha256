@@ -18,7 +18,7 @@ c493c7afde424ea3ecd2f66820e2bdea75f06e676bf3f902d1d20c227edae56a  ./.github/work
 f69aeaa9b65a3d99386c98289e5f5d9d5bebe75d37348910751c8cd2403e161c  ./.gitignore
 ca5ed42241ed10ec74f85b10c0e4bc663eed7a64795059c3267a26b1b30f5705  ./.gitleaks.toml
 2722b61f414f07f08be7f1f1316012813818f26f1c40d6a24a748686cec7d2ff  ./.node-version
-3c3d6b18a02a1350449b09044032e1328336a7683798e77bd2e46d2c510b8df9  ./CHANGELOG.md
+1725a3f96ba093b37a77f55aec2b750ef8b9f06bf41f4cae8c146d34c31c5df1  ./CHANGELOG.md
 0585e1c779a468e97d78777c4a9abf7dfa28beff282a3168fb68f1cfca79f02c  ./CLA.md
 92c932998038bbcd6bee7b9305b3ddc442b9a6c315c8e883174f64606c16b54c  ./CODE_OF_CONDUCT.md
 32ee273fa2c907888d14cc01d667f2be0311327a1e9dc7734e92644c479a1310  ./CONTRIBUTING.md
@@ -28,7 +28,7 @@ b1e2de6a24d704320f17b92555c0ee445f2b2af16dabfac6ec26d3fdb38588d5  ./LICENSE
 1488d564cae29decceb10d7517b425029a3780e82ccf365d75145f95d19277cb  ./MAINTAINERS.md
 dd22de8b17a6c4c2997b77f3eab9d7bc943b6530fd0837461c0a0316da15652f  ./Makefile
 e34f9be408157646d834d5f5c0a1071184e259c870548251c930b4e16f783726  ./README.md
-fd4313ca41b7a540a52692ca837f5c4138de7c54aae5b9e65d206f45a57c58fd  ./SECURITY.md
+adf0f56176c0fa55b7cc0997a06f5fd05d0653659bd8cd9782ee5563c556a1b1  ./SECURITY.md
 fb80b0ff070a246e01b856bb3868b4239710b9ecad33653f47dc18dd4ecc487c  ./SPONSORS.md
 824f9aa8926e08a221ca6697a4d256b33f8d285f7853ebf6aeb424bd4b3bf723  ./SPONSORSHIP.md
 d355e1d8a0683ba2c178fe579f7b631087b9419ce98b84583a9e99e184212141  ./SUPPORT.md
@@ -340,8 +340,8 @@ dffd0e736e7c8be4aa7f00eafbe109b4745e643e1dcc87777f1ca8402940e52e  ./docs/evidenc
 fd237430a787e5058ba7533b8faef0071cabad1ba09d3bef9489b10c4b6ca55c  ./docs/evidence/post-merge-2026-09-01/validation-summary.json
 6dd33af3d14233bf43bf238a5be11b816d3c5c94d65e821c8db717a681fe8cce  ./docs/evidence/post-merge-2026-09-01/workflow.json
 62a789990a5e3cbed71d205e2b922af1ded6ed4465bb99f7462d22836fc1598e  ./docs/evidence/post-merge-validation-2026-09-01.md
-6a4bdc0501ae954214251320c80def57e47d2878e643e6873e2e78ff98b0054a  ./docs/evidence/v1.0.0-branch-and-gate-audit.md
-13e47660a386a52e8070efe921db7dcf0ce76ba3a380b4ebb395fc3002d57a81  ./docs/evidence/v1.0.0-release-candidate.md
+bd45e82919a7763df6fa35fb0535b8186f406f5f2c354d9741ef755c80cba374  ./docs/evidence/v1.0.0-branch-and-gate-audit.md
+9596014aa1df2692831f6da50e8e09fb7227d2f6d424e1e5e8f386a329db95de  ./docs/evidence/v1.0.0-release-candidate.md
 7c875393177732dfb11f916a57e3ac798939bf847298cd27d8233e4ae9407e9a  ./docs/implementation_plan.md
 88b1bf1cc1467d191bdbf9077a41fff1aa36093cba2974ba5aee230b405b5d37  ./docs/mcp-client-connection.md
 cc4a31395f46dc181699a163a2ac397bb042b42b5c88b01ea75d2a6c30be216a  ./docs/open_source_and_sponsorship_model.md
@@ -354,8 +354,8 @@ b2b50db7016179df69e4d10875d3ff09cbeb63c30bf9012bfb77dea0bf98a27b  ./docs/operati
 215b82eba9cc57f4b544fece0b50a9c7f765a7881d81310a9475fbb6f223daa8  ./docs/operations/troubleshooting.md
 2d2f7e556910770b8d31cfe6eb1ddbe3fa356af3f930111b1e9bf430f7172274  ./docs/operations/upgrade.md
 0e58d27e209116f1e9f0acb7988ef81d86c83ca01141a1d561db261f0549d4d3  ./docs/product_requirements.md
-a9bd13ec6c144041b13fa3f09321cff1cd2793e85c3bc47abe7cb837af85433f  ./docs/release/release-checklist.md
-536621baa4645196500e8722c06cf0cdee9996377606cd3f114ebed091e6a878  ./docs/release/release-process.md
+7508ff5f68b5cc2c79a3f2d8825922f24b014b4ae6ef95c85bf68809185f5918  ./docs/release/release-checklist.md
+84b69a9d2040bc1e134173116bdca38c20bea53230eb9d65d3ba891ad5d01c01  ./docs/release/release-process.md
 71651ffb4c8e791986b68a9053970e8ddda2386aefa9626f090f27a1b4648ed8  ./docs/releases/v1.0.0.md
 2d87fe8fd8a50ac3a7742488f7550c13713b549746da99c6f0ca55540f6147da  ./docs/security/hardening.md
 3fc6e1a72ed7c6f8fa85ed441b29a3868b288f456b6cfd0a0f5f3e59dc799052  ./docs/security/threat-model.md

@@ -24,6 +24,9 @@ version is not published until its immutable tag and release workflow complete.
   journey refetch cannot race the URL back to the start-build step.
 - Made hosted Playwright retries diagnostic only: any flaky retry now fails CI, with regression
   coverage that rejects post-build journey requests lacking the created build identity.
+- Restricted repository Actions to the recursively audited full-SHA direct/transitive action
+  closure, enabled Dependabot vulnerability alerts and automated fixes, and documented the exact
+  unavailable private-platform security gates without treating local scans as substitutes.
 
 ## [1.0.0] - 2026-09-02
 
