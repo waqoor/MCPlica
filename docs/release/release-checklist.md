@@ -4,7 +4,32 @@ Every checked item needs an exact URL, workflow run, command output, or stored e
 the release commit. “Not applicable” needs a written reason. An unchecked/unknown item means the
 release is not ready; local evidence cannot satisfy a hosted or production-host gate.
 
-## Current v1.0.0 disposition (2026-09-03)
+## Current public-prerelease disposition (2026-09-04)
+
+The repository now belongs to the `waqoor` organization. Founder/owner approval of exact commit
+`22ee7926f7117f26c0d8ca8f6cfa123d3a62c5bd` is recorded in PR #44, and PR #44 was merged into
+`master` as `6d09e4c431acc37174342e7bdd608aed58332362`. That approval is release authorization; it is not
+represented as an independent code review.
+
+The organization-transfer integration branch incorporates the exact heads of the remaining two
+applicable branches: the Nginx dependency update from PR #46 and the source-configuration response
+fix plus QA evidence from PR #47. It also corrects the canonical organization namespace, adds a
+regression for nested domain-to-response validation, fixes the moved documentation link, makes
+release asset publication compatible with immutable releases, and adds the exact
+[GitHub public-prerelease owner settings](github-public-prerelease-settings.md). The obsolete
+`fix/foundation-closure-20260901` branch remains intentionally unmerged because its only unique
+file is disposable review tooling rather than product/release work.
+
+The checkout is still synchronized to the final-looking `1.0.0` identity. Before publication, the
+founder must select and synchronize a SemVer prerelease identity such as `1.0.0-rc.1`, add matching
+release notes/changelog data, and rerun every exact-head gate. Do not create `v1.0.0` for this
+prerelease. GitHub owner controls, independent review of the final integrated head, CLA service,
+and production/operator evidence remain separate gates.
+
+## Historical v1.0.0 disposition (2026-09-03)
+
+> This section preserves the pre-transfer/pre-approval snapshot. PR #44 is now merged; use the
+> current disposition above and the latest pull-request evidence for decisions.
 
 The exact branch, pull-request, dependency, hosted-log, repository-control, and external-gate
 inventory is in the [current branch and release-gate
@@ -15,11 +40,11 @@ navigation correction, request-level regression, and fail-closed flaky-test poli
 repository-control and documentation heads passed all ten hosted checks under the final
 selected-action policy. Their replacement Docker artifacts independently matched GitHub's digest
 and recorded all 13 required service states plus the complete workflow. Immutable results and the
-exact 20-reference execution closure are in [PR #44](https://github.com/yazeedhasan97/MCPlica/pull/44).
+exact 20-reference execution closure are in [PR #44](https://github.com/waqoor/MCPlica/pull/44).
 Its dependency-remediation head `6d5abba` also passed all ten checks: CI
-[33705386979](https://github.com/yazeedhasan97/MCPlica/actions/runs/33705386979), Security
-[33705386981](https://github.com/yazeedhasan97/MCPlica/actions/runs/33705386981), and CLA
-[33705384466](https://github.com/yazeedhasan97/MCPlica/actions/runs/33705384466). Artifact
+[33705386979](https://github.com/waqoor/MCPlica/actions/runs/33705386979), Security
+[33705386981](https://github.com/waqoor/MCPlica/actions/runs/33705386981), and CLA
+[33705384466](https://github.com/waqoor/MCPlica/actions/runs/33705384466). Artifact
 `9875280973` independently matched GitHub's SHA-256 and recorded the same complete acceptance
 surface. Embedding the current candidate hash here would change that hash; the exact final PR head
 and its checks must therefore be retained in PR evidence after this refresh.
@@ -44,7 +69,7 @@ protection/rulesets, independent review, founder-approved external CLA service, 
 vulnerability reporting/code scanning/secret scanning, target-host acceptance, backup/restore, and
 publication evidence remain unchecked operator gates. No tag or Release exists.
 The owner-assigned external-action ledger is [issue
-#45](https://github.com/yazeedhasan97/MCPlica/issues/45).
+#45](https://github.com/waqoor/MCPlica/issues/45).
 
 ## Release identity and repository state
 
@@ -64,7 +89,7 @@ The owner-assigned external-action ledger is [issue
 - [x] Repository Actions permits only the recursively audited 20-reference full-SHA execution
       closure; broad GitHub-owned/verified-creator allowances are disabled, workflow tokens default
       to read-only, and workflows cannot approve reviews. The exact-policy CI/Security/CLA reruns
-      are recorded in [PR #44](https://github.com/yazeedhasan97/MCPlica/pull/44#issuecomment-5518862289).
+      are recorded in [PR #44](https://github.com/waqoor/MCPlica/pull/44#issuecomment-5518862289).
 - [x] Dependabot vulnerability alerts and automated security fixes are enabled. The completed scan
       found alert #1 for pytest GHSA-6w46-j5rx-g56g/CVE-2025-71176; the corrective branch uses the
       patched 9.1.1 lock and audits all optional development dependencies.

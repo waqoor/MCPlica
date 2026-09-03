@@ -24,7 +24,7 @@ public test fixture.
 > maintainer publishes a tested private channel; do not put the report into a public GitHub object.
 
 After enablement is recorded in the release evidence, use [GitHub private vulnerability
-reporting](https://github.com/yazeedhasan97/MCPlica/security/advisories/new). Include the affected
+reporting](https://github.com/waqoor/MCPlica/security/advisories/new). Include the affected
 commit/version, component, impact, minimal reproduction, and any suggested mitigation. Remove
 credentials, proprietary API material, and personal data.
 

@@ -39,6 +39,9 @@ These six documents define scope and implementation authority. Later explicit de
 - `releases/v1.0.0.md` — v1.0.0 release notes, migration guidance, limitations, and final commands.
 - `release/release-process.md`
 - `release/release-checklist.md`
+- `release/github-public-prerelease-settings.md` — exact organization, ruleset, vulnerability
+  reporting, code scanning, secret scanning, immutable-release, and public-prerelease settings that
+  the repository owner must configure and verify on GitHub.
 - `evidence/v1.0.0-branch-and-gate-audit.md` — current branch disposition, integrated hosted
   evidence, corrective release head, repository controls, and exact external gates.
 - `evidence/v1.0.0-release-candidate.md` — historical release-preparation results and external gates.

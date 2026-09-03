@@ -1,51 +1,67 @@
-The goal is now correctly marked blocked on external authorization—not repository work.
+# Current organization and public-prerelease handoff
 
-Live revalidation confirms:
+Live audit date: 2026-09-04.
 
-- PR #44 remains open, conflict-free, and mergeable at `22ee7926f7117f26c0d8ca8f6cfa123d3a62c5bd`.
-- All 10 hosted checks remain successful.
-- Zero reviews and zero requested reviewers exist.
-- `master` remains `b22ff7e`.
-- Dependabot alert #1 remains open and undismissed because GitHub scans the [default branch](https://docs.github.com/en/code-security/concepts/supply-chain-security/dependabot-alerts).
-- The corrective worktree is clean; the user’s original `todo_features.md` deletion and `plan/` directory remain untouched.
+## Completed repository work
 
-## Final branch disposition
+- The canonical repository is now the `waqoor/MCPlica` organization repository.
+- Founder/owner approval of exact commit
+  `22ee7926f7117f26c0d8ca8f6cfa123d3a62c5bd` is recorded in
+  [PR #44](https://github.com/waqoor/MCPlica/pull/44#issuecomment-5532626474). It is explicitly
+  founder/release authorization, not an independent technical review.
+- PR #44 was merged to `master` as
+  `6d09e4c431acc37174342e7bdd608aed58332362`.
+- The post-transfer integration branch contains the exact PR #46 Nginx update and exact PR #47
+  source-configuration/QA head, plus organization namespace, immutable-release, documentation,
+  and regression-test corrections.
+- All public repository, Docker source, GHCR, issue-template, signature-identity, and evidence links
+  now use `waqoor/MCPlica`; founder profile and CODEOWNERS references remain `@yazeedhasan97`.
+- The complete owner-operated GitHub control list is
+  [docs/release/github-public-prerelease-settings.md](docs/release/github-public-prerelease-settings.md).
+
+## Remote branch disposition
 
 | Branch | Disposition |
 |---|---|
-| `fix/post-merge-compose-hardening-20260901` | PR #22 merged; fully contained. Do not remerge. |
-| `fix/foundation-closure-20260901` | No PR; only unique content is obsolete temporary PostgreSQL tooling. Do not merge. |
-| `release/v1.0.0-preparation` | PR #23 merged; fully contained. |
-| `fix/cleanup-cycle-retry` | PR #42 merged; fully contained. |
-| `docs/final-release-evidence` | PR #43 merged, but its retry-masked browser evidence is superseded. |
-| `fix/final-release-closure-20260903` | [PR #44](https://github.com/yazeedhasan97/MCPlica/pull/44); canonical final corrective path, awaiting independent approval. |
+| `docs/final-release-evidence` | Already contained in `master`; do not remerge. |
+| `fix/cleanup-cycle-retry` | Already contained in `master`; do not remerge. |
+| `fix/compose-e2e-validation-20260901` | Already contained in `master`; do not remerge. |
+| `fix/final-release-closure-20260903` | Approved exact head is contained in `master` through PR #44. |
+| `fix/post-merge-compose-hardening-20260901` | Already contained in `master`; do not remerge. |
+| `release/v1.0.0-preparation` | Already contained in `master`; do not remerge. |
+| `dependabot/docker/infra/docker/nginxinc/nginx-unprivileged-1.31.5-alpine3.24-slim` | Exact head incorporated once into the integration branch. |
+| `qa/mohammed-ghunaim` | Exact head incorporated once into the integration branch; nested domain-to-response validation now has a regression test. |
+| `fix/foundation-closure-20260901` | Intentionally not merged: its only unique file is an obsolete temporary PostgreSQL-binary review workflow. |
 
-Merge order remains:
+No remote branch was deleted.
 
-1. PR #22
-2. Foundation commits `45480586`, `0d2b7bb`
-3. PR #23
-4. PR #42
-5. PR #43
-6. PR #44 after independent approval
+## Publication boundary
 
-Repository-controlled fixes include the browser race, fail-on-flaky enforcement, pytest security upgrade, all-extras advisory audits, selected 20-reference action allowlist, fail-closed CLA behavior, documentation corrections, manifest regeneration, and complete Docker acceptance.
+The checkout remains synchronized to `1.0.0`, which looks final. Before publishing, choose and
+synchronize a prerelease such as `1.0.0-rc.1` / `v1.0.0-rc.1`; add matching changelog/release
+notes and rerun every exact-head gate. Do not publish `v1.0.0` as the requested prerelease.
 
-Final evidence:
+The integration pull request is the source of truth for its exact final SHA and hosted CI,
+Security, CLA, dependency, secret, image, and Compose results. It must not merge on a failing or
+pending gate.
 
-- [CI 33706338894](https://github.com/yazeedhasan97/MCPlica/actions/runs/33706338894): six jobs passed; backend 403/1 skip, runtime 70, frontend 159, browser 16/8 with no flaky result.
-- [Security 33706338947](https://github.com/yazeedhasan97/MCPlica/actions/runs/33706338947): dependencies, Trivy/SBOM, and secrets passed.
-- [CLA 33706338275](https://github.com/yazeedhasan97/MCPlica/actions/runs/33706338275): policy passed.
-- Docker artifact `9875586578`: independently matched SHA-256 `b4b37226b5c9e842be430f3d7012fa60dad479ac65394cf730130d0fc250c68e`; all 13 service states and the complete 81.555-second workflow passed.
-- [Exact-head evidence](https://github.com/yazeedhasan97/MCPlica/pull/44#issuecomment-5519339205).
+## Owner actions still required
 
-Remaining authorized actions are recorded in [issue #45](https://github.com/yazeedhasan97/MCPlica/issues/45):
-
-1. Founder appoints/delegates an independent reviewer; that reviewer approves exact head `22ee792`.
-2. Authorized maintainer merges it, waits for default-branch re-indexing, and verifies alert #1 closes as fixed.
-3. Repository owner upgrades/enables branch protection, rulesets, private vulnerability reporting, code scanning, and secret scanning.
-4. Founder/legal configures and validates the external CLA service.
-5. Operations supplies production-host, provider/upstream, backup/restore, upgrade, rollback, and recovery evidence.
-6. Release maintainer signs/tags and verifies all publication artifacts only after those gates pass.
-
-The repository-controlled candidate is complete and green. The repository is not yet fully merge-ready or publication-ready until those operator-owned gates are satisfied.
+1. Make the repository public only after the staged/public snapshot and full Git history are clean.
+2. Add a second trusted organization owner and require secure 2FA after checking collaborator and
+   service-account readiness.
+3. Configure the active `master` and `v*` rulesets, exact required checks, independent review,
+   force-push/deletion blocks, and narrowly controlled bypass described in the owner checklist.
+4. Enable and verify private vulnerability reporting, CodeQL for Python and JavaScript/TypeScript,
+   secret scanning, repository push protection, security notifications, and immutable releases.
+5. Confirm Dependabot alert #1 closes as fixed after default-branch re-indexing; do not dismiss it.
+6. Appoint an independent maintainer/reviewer and update CODEOWNERS/team scope. Repository write
+   access alone is not a governance appointment.
+7. Configure and test the founder-approved external CLA service/context before accepting an
+   untrusted contribution.
+8. Select the prerelease version, obtain independent review of its exact final head, create the
+   annotated/signed tag, and verify every Release/GHCR checksum, signature, SBOM, digest, and
+   attestation.
+9. Keep production DNS/TLS, target-host, real-provider, backup/restore, upgrade, rollback, and
+   recovery gates open until separately executed. A public prerelease is not production
+   certification.

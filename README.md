@@ -4,10 +4,13 @@
 
 It ingests a company's OpenAPI specification or structured API inventory, optionally incorporates product/API documentation, uses OpenRouter and Milvus only during analysis/build/review, deterministically compiles and validates an MCP manifest, and serves each project through an isolated generic MCP runtime.
 
-> **Release status:** `1.0.0` is the prepared release candidate; `VERSION` is authoritative. No
-> `v1.0.0` tag, GitHub Release, or production image is created until the release-readiness pull
-> request is accepted and the external/live gates in the
-> [release checklist](docs/release/release-checklist.md) are complete. The current
+> **Release status:** the checkout is synchronized to the `1.0.0` code line, but it must not be
+> published as final. Before the first public artifact, select and synchronize a SemVer prerelease
+> such as `1.0.0-rc.1`; `VERSION` remains authoritative. No tag, GitHub Release, or production image
+> is created until the release-readiness pull request is accepted and the external/live gates in
+> the [release checklist](docs/release/release-checklist.md) and
+> [public-prerelease owner checklist](docs/release/github-public-prerelease-settings.md) are
+> complete. The current
 > [branch and gate audit](docs/evidence/v1.0.0-branch-and-gate-audit.md) records the integrated
 > branch disposition, corrective release head, and remaining operator actions.
 
@@ -64,7 +67,7 @@ production. No host-side Node.js, pnpm, or uv installation is needed to run it.
 For a new checkout:
 
 ```bash
-git clone https://github.com/yazeedhasan97/MCPlica.git
+git clone https://github.com/waqoor/MCPlica.git
 cd MCPlica
 docker version
 docker compose version
@@ -323,8 +326,11 @@ foundation proof for `ISS-002-002` through `ISS-002-009` in
 
 Release users should start with the [v1.0.0 notes](docs/releases/v1.0.0.md),
 [changelog](CHANGELOG.md), [compatibility matrix](docs/compatibility.md), and
-[release process](docs/release/release-process.md). Historical audit ledgers remain evidence for
-their stated snapshots; they are not proof of the current release candidate by themselves.
+[release process](docs/release/release-process.md). Organization owners preparing a public
+prerelease must also complete the [GitHub owner settings
+checklist](docs/release/github-public-prerelease-settings.md). Historical audit ledgers remain
+evidence for their stated snapshots; they are not proof of the current release candidate by
+themselves.
 
 ## License and contributions
 

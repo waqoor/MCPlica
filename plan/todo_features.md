@@ -1,6 +1,6 @@
 # MCPlica — Business Feature Backlog
 
-**Repository:** `yazeedhasan97/MCPlica`  
+**Repository:** `waqoor/MCPlica`
 **Branch reviewed:** `master`  
 **Code/product baseline:** `2273e46d79104ba661f1a6efbff0951d3a9597b0`  
 **Research date:** 2026-09-01  
@@ -12,7 +12,7 @@ This backlog identifies useful business capabilities beyond MCPlica's existing A
 
 This is a product/capability review, not a completed every-file audit, penetration test, customer-demand survey, or comparative performance benchmark. “New” means not present in the reviewed canonical product surface; “Extend” identifies an existing capability with a specific additional outcome. Recheck implementation status before starting each feature. Vendor documentation establishes advertised behavior, not independent proof of quality, availability, or superiority. Business benefits are proposed outcomes to measure, not guaranteed savings.
 
-Existing defects remain in [issues_002.md](issues_002.md). Do not disguise their correction as new functionality or assume they have been resolved.
+Existing defects remain in [issues_002.md](../issues_002.md). Do not disguise their correction as new functionality or assume they have been resolved.
 
 ## 2. Existing strengths to preserve
 
@@ -529,16 +529,16 @@ Ordinary fixes for source restoration, index isolation, revocation, build owners
 
 All repository links below are pinned to the reviewed commit. They identify current behavior and the existing component boundaries to extend; they do not prove that every unrelated repository file was examined.
 
-- **R1 — Product overview and implemented surface:** [README.md](https://github.com/yazeedhasan97/MCPlica/blob/2273e46d79104ba661f1a6efbff0951d3a9597b0/README.md).
-- **R2 — Architecture and non-negotiable constraints:** [docs/architecture.md](https://github.com/yazeedhasan97/MCPlica/blob/2273e46d79104ba661f1a6efbff0951d3a9597b0/docs/architecture.md), especially sections 3–7.
-- **R3 — Product requirements and exclusions:** [docs/product_requirements.md](https://github.com/yazeedhasan97/MCPlica/blob/2273e46d79104ba661f1a6efbff0951d3a9597b0/docs/product_requirements.md), especially source/build/authentication requirements, NFR-014, and section 12.
-- **R4 — Runtime tool/resource listing and invocation:** [mcp_runtime/app/server/factory.py](https://github.com/yazeedhasan97/MCPlica/blob/2273e46d79104ba661f1a6efbff0951d3a9597b0/mcp_runtime/app/server/factory.py), `build_server()`, `_page()`, and `build_app()`.
-- **R5 — Runtime static/OIDC identity handling:** [mcp_runtime/app/auth/inbound.py](https://github.com/yazeedhasan97/MCPlica/blob/2273e46d79104ba661f1a6efbff0951d3a9597b0/mcp_runtime/app/auth/inbound.py), `StaticBearerTokenVerifier`, `OidcTokenVerifier`, and `build_inbound_auth()`.
-- **R6 — Shared tool, resource, request, and authentication contracts:** [packages/contracts/src/mcp_contracts/manifest.py](https://github.com/yazeedhasan97/MCPlica/blob/2273e46d79104ba661f1a6efbff0951d3a9597b0/packages/contracts/src/mcp_contracts/manifest.py), `MCPTool`, `MCPResource`, `RequestMapping`, `AuthProfile`, and `MCPManifest`.
-- **R7 — Existing source/build/access/lifecycle findings and component locations:** [issues_002.md](https://github.com/yazeedhasan97/MCPlica/blob/2273e46d79104ba661f1a6efbff0951d3a9597b0/issues_002.md). Treat this as the prior static findings register, not new test evidence.
-- **R8 — Control-plane identity model:** [backend/app/domain/auth.py](https://github.com/yazeedhasan97/MCPlica/blob/2273e46d79104ba661f1a6efbff0951d3a9597b0/backend/app/domain/auth.py), `UserRole`, `UserAccount`, and `AuthPrincipal`.
-- **R9 — Existing administrative workspaces:** [frontend/src/app.tsx](https://github.com/yazeedhasan97/MCPlica/blob/2273e46d79104ba661f1a6efbff0951d3a9597b0/frontend/src/app.tsx), project, operation, build, validation, deployment, and user routes.
-- **R10 — Runtime HTTP execution, limits, and response formats:** [mcp_runtime/app/clients/api_client.py](https://github.com/yazeedhasan97/MCPlica/blob/2273e46d79104ba661f1a6efbff0951d3a9597b0/mcp_runtime/app/clients/api_client.py), `ApiClient.execute()` and `UpstreamResult`.
+- **R1 — Product overview and implemented surface:** [README.md](https://github.com/waqoor/MCPlica/blob/2273e46d79104ba661f1a6efbff0951d3a9597b0/README.md).
+- **R2 — Architecture and non-negotiable constraints:** [docs/architecture.md](https://github.com/waqoor/MCPlica/blob/2273e46d79104ba661f1a6efbff0951d3a9597b0/docs/architecture.md), especially sections 3–7.
+- **R3 — Product requirements and exclusions:** [docs/product_requirements.md](https://github.com/waqoor/MCPlica/blob/2273e46d79104ba661f1a6efbff0951d3a9597b0/docs/product_requirements.md), especially source/build/authentication requirements, NFR-014, and section 12.
+- **R4 — Runtime tool/resource listing and invocation:** [mcp_runtime/app/server/factory.py](https://github.com/waqoor/MCPlica/blob/2273e46d79104ba661f1a6efbff0951d3a9597b0/mcp_runtime/app/server/factory.py), `build_server()`, `_page()`, and `build_app()`.
+- **R5 — Runtime static/OIDC identity handling:** [mcp_runtime/app/auth/inbound.py](https://github.com/waqoor/MCPlica/blob/2273e46d79104ba661f1a6efbff0951d3a9597b0/mcp_runtime/app/auth/inbound.py), `StaticBearerTokenVerifier`, `OidcTokenVerifier`, and `build_inbound_auth()`.
+- **R6 — Shared tool, resource, request, and authentication contracts:** [packages/contracts/src/mcp_contracts/manifest.py](https://github.com/waqoor/MCPlica/blob/2273e46d79104ba661f1a6efbff0951d3a9597b0/packages/contracts/src/mcp_contracts/manifest.py), `MCPTool`, `MCPResource`, `RequestMapping`, `AuthProfile`, and `MCPManifest`.
+- **R7 — Existing source/build/access/lifecycle findings and component locations:** [issues_002.md](https://github.com/waqoor/MCPlica/blob/2273e46d79104ba661f1a6efbff0951d3a9597b0/issues_002.md). Treat this as the prior static findings register, not new test evidence.
+- **R8 — Control-plane identity model:** [backend/app/domain/auth.py](https://github.com/waqoor/MCPlica/blob/2273e46d79104ba661f1a6efbff0951d3a9597b0/backend/app/domain/auth.py), `UserRole`, `UserAccount`, and `AuthPrincipal`.
+- **R9 — Existing administrative workspaces:** [frontend/src/app.tsx](https://github.com/waqoor/MCPlica/blob/2273e46d79104ba661f1a6efbff0951d3a9597b0/frontend/src/app.tsx), project, operation, build, validation, deployment, and user routes.
+- **R10 — Runtime HTTP execution, limits, and response formats:** [mcp_runtime/app/clients/api_client.py](https://github.com/waqoor/MCPlica/blob/2273e46d79104ba661f1a6efbff0951d3a9597b0/mcp_runtime/app/clients/api_client.py), `ApiClient.execute()` and `UpstreamResult`.
 
 ### Competitor and practitioner primary sources
 

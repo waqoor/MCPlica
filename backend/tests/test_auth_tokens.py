@@ -1,14 +1,17 @@
 import asyncio
 import threading
 import time
+from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import uuid4
 
 import pytest
 
+from app.api.auth import me
 from app.core.auth import PasswordManager, TokenManager
 from app.core.exceptions import AuthenticationError
-from app.domain.auth import UserRole
+from app.domain.auth import AuthPrincipal, UserAccount, UserRole
+from app.services.auth import _identity
 
 
 def _tokens() -> TokenManager:
@@ -63,6 +66,35 @@ def test_refresh_verifier_is_keyed_and_passwords_use_argon2() -> None:
         True,
         None,
     )
+
+
+@pytest.mark.asyncio
+async def test_me_preserves_account_timestamps_in_authenticated_identity() -> None:
+    created_at = datetime(2026, 9, 2, 10, 13, 11, tzinfo=UTC)
+    updated_at = datetime(2026, 9, 2, 11, 44, 4, tzinfo=UTC)
+    last_login_at = datetime(2026, 9, 2, 11, 44, 3, tzinfo=UTC)
+    account = UserAccount(
+        id=uuid4(),
+        email="admin@example.com",
+        display_name="MCPlica Admin",
+        password_hash="not-exposed",
+        role=UserRole.ADMIN,
+        is_active=True,
+        created_at=created_at,
+        updated_at=updated_at,
+        last_login_at=last_login_at,
+    )
+    principal = AuthPrincipal(
+        user=_identity(account),
+        session_id=uuid4(),
+        csrf_token="csrf-value",
+    )
+
+    response = await me(principal)
+
+    assert response.created_at == created_at
+    assert response.updated_at == updated_at
+    assert response.last_login_at == last_login_at
 
 
 @pytest.mark.asyncio

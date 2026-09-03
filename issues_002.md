@@ -1,6 +1,6 @@
 # MCPlica — issues_002
 
-Repository: `yazeedhasan97/MCPlica`  
+Repository: `waqoor/MCPlica`
 Branch examined: `master`; post-closure verification branch: `release/v1.0.0-preparation`
 - Finding evidence baseline: `090ec0a82bf6689c9764716afdd20409c366d178` (commit dated 2026-08-27; branch rechecked on 2026-09-01)
 - Implementation review baseline: `708401dc47a7684c8c95ab0e4061d595657c57dc`
@@ -850,7 +850,7 @@ Markdown. Focused repository-policy regressions cover each correction.
 
 1. **Description** — MANIFEST.sha256 contains an entry for ./AGENT3_HANDOFF.md, but that path is absent from the reviewed root tree. A full checksum verification therefore cannot succeed against this snapshot. The manifest’s intended coverage/freshness is not self-consistent with the actual repository inventory.
 
-2. **Location & Evidence** — [`MANIFEST.sha256`][src-087] — ./AGENT3_HANDOFF.md entry. Inventory evidence: [reviewed root tree](https://github.com/yazeedhasan97/MCPlica/tree/090ec0a82bf6689c9764716afdd20409c366d178).
+2. **Location & Evidence** — [`MANIFEST.sha256`][src-087] — ./AGENT3_HANDOFF.md entry. Inventory evidence: [reviewed root tree](https://github.com/waqoor/MCPlica/tree/090ec0a82bf6689c9764716afdd20409c366d178).
 
 3. **Criticality** — **Low** — Integrity/reproducibility evidence contains a demonstrably stale inventory entry.
 
@@ -887,91 +887,91 @@ Markdown. Focused repository-policy regressions cover each correction.
 5. **Testing & Validation** — Parse assignment names from .env.example and assert uniqueness. Change the single runtime version in a test fixture and verify all documented consumers resolve it consistently. Confirm comments and blank optional values do not trigger false positives.
 
 
-[src-001]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/parsers/documentation/chunker.py
-[src-002]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/clients/vector.py
-[src-003]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/providers/milvus.py
-[src-004]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/sources.py
-[src-005]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/repositories/sources.py
-[src-006]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/models/source.py
-[src-007]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/domain/sources.py
-[src-008]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/domain/builds.py
-[src-009]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/models/build.py
-[src-010]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/canonicalization/service.py
-[src-011]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/builds/configuration_identity.py
-[src-012]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/deployment/service.py
-[src-013]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/repositories/deployments.py
-[src-014]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/credentials.py
-[src-015]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/mcp_access.py
-[src-016]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/deployment/preflight.py
-[src-017]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/packages/contracts/src/mcp_contracts/runtime_secrets.py
-[src-018]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/repositories/build_admission.py
-[src-019]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/jobs/build.py
-[src-020]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/builds/pipeline.py
-[src-021]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/builds/service.py
-[src-022]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/repositories/builds.py
-[src-023]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/repositories/runtime_commands.py
-[src-024]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/deployment/command_executor.py
-[src-025]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/clients/queue.py
-[src-026]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/infra/docker/nginx.conf
-[src-027]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/main.py
-[src-028]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/infra/compose.production.yaml
-[src-029]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/artifacts.py
-[src-030]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/mcp_runtime/app/core/config.py
-[src-031]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/mcp_runtime/app/main.py
-[src-032]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/clients/ai.py
-[src-033]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/settings.py
-[src-034]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/infra/compose.yaml
-[src-035]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/projects.py
-[src-036]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/schemas/setting.py
-[src-037]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/api/sources.py
-[src-038]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/api/health.py
-[src-039]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/infra/docker/backend.Dockerfile
-[src-040]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/clients/runtime_files.py
-[src-041]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/.env.example
-[src-042]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/schemas/build.py
-[src-043]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/api/builds.py
-[src-044]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/domain/credentials.py
-[src-045]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/schemas/credential.py
-[src-046]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/deployment/secret_materializer.py
-[src-047]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/builds/readiness.py
-[src-048]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/builds/credential_mapping.py
-[src-049]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/packages/contracts/src/mcp_contracts/canonical.py
-[src-050]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/packages/contracts/src/mcp_contracts/inventory.py
-[src-051]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/parsers/api_inventory/parser.py
-[src-052]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/mcp_runtime/app/executor/response_contract.py
-[src-053]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/mcp_runtime/app/clients/oidc_client.py
-[src-054]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/parsers/documentation/docx.py
-[src-055]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/schemas/source.py
-[src-056]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/analysis/review.py
-[src-057]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/builds/diff.py
-[src-058]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/repositories/cleanup.py
-[src-059]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/models/cleanup.py
-[src-060]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/cleanup.py
-[src-061]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/clients/cache.py
-[src-062]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/clients/build_queue.py
-[src-063]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/clients/http.py
-[src-064]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/core/network_policy.py
-[src-065]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/providers/ai/openrouter.py
-[src-066]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/users.py
-[src-067]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/core/auth.py
-[src-068]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/repositories/users.py
-[src-069]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/repositories/projects.py
-[src-070]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/repositories/mcp_access.py
-[src-071]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/repositories/credentials.py
-[src-072]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/clients/storage.py
-[src-073]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/core/logging.py
-[src-074]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/core/redaction.py
-[src-075]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/SECURITY.md
-[src-076]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/core/crypto.py
-[src-077]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/models/credential.py
-[src-078]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/models/setting.py
-[src-079]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/domain/deployments.py
-[src-080]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/.github/workflows/cla.yml
-[src-081]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/CONTRIBUTING.md
-[src-082]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/CLA.md
-[src-083]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/mcp_runtime/app/clients/oauth_client.py
-[src-084]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/build_admission.py
-[src-085]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/.gitignore
-[src-086]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/GOVERNANCE.md
-[src-087]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/MANIFEST.sha256
-[src-088]: https://github.com/yazeedhasan97/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/Makefile
+[src-001]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/parsers/documentation/chunker.py
+[src-002]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/clients/vector.py
+[src-003]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/providers/milvus.py
+[src-004]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/sources.py
+[src-005]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/repositories/sources.py
+[src-006]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/models/source.py
+[src-007]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/domain/sources.py
+[src-008]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/domain/builds.py
+[src-009]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/models/build.py
+[src-010]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/canonicalization/service.py
+[src-011]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/builds/configuration_identity.py
+[src-012]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/deployment/service.py
+[src-013]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/repositories/deployments.py
+[src-014]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/credentials.py
+[src-015]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/mcp_access.py
+[src-016]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/deployment/preflight.py
+[src-017]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/packages/contracts/src/mcp_contracts/runtime_secrets.py
+[src-018]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/repositories/build_admission.py
+[src-019]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/jobs/build.py
+[src-020]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/builds/pipeline.py
+[src-021]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/builds/service.py
+[src-022]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/repositories/builds.py
+[src-023]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/repositories/runtime_commands.py
+[src-024]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/deployment/command_executor.py
+[src-025]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/clients/queue.py
+[src-026]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/infra/docker/nginx.conf
+[src-027]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/main.py
+[src-028]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/infra/compose.production.yaml
+[src-029]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/artifacts.py
+[src-030]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/mcp_runtime/app/core/config.py
+[src-031]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/mcp_runtime/app/main.py
+[src-032]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/clients/ai.py
+[src-033]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/settings.py
+[src-034]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/infra/compose.yaml
+[src-035]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/projects.py
+[src-036]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/schemas/setting.py
+[src-037]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/api/sources.py
+[src-038]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/api/health.py
+[src-039]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/infra/docker/backend.Dockerfile
+[src-040]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/clients/runtime_files.py
+[src-041]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/.env.example
+[src-042]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/schemas/build.py
+[src-043]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/api/builds.py
+[src-044]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/domain/credentials.py
+[src-045]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/schemas/credential.py
+[src-046]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/deployment/secret_materializer.py
+[src-047]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/builds/readiness.py
+[src-048]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/builds/credential_mapping.py
+[src-049]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/packages/contracts/src/mcp_contracts/canonical.py
+[src-050]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/packages/contracts/src/mcp_contracts/inventory.py
+[src-051]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/parsers/api_inventory/parser.py
+[src-052]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/mcp_runtime/app/executor/response_contract.py
+[src-053]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/mcp_runtime/app/clients/oidc_client.py
+[src-054]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/parsers/documentation/docx.py
+[src-055]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/schemas/source.py
+[src-056]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/analysis/review.py
+[src-057]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/builds/diff.py
+[src-058]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/repositories/cleanup.py
+[src-059]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/models/cleanup.py
+[src-060]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/cleanup.py
+[src-061]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/clients/cache.py
+[src-062]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/clients/build_queue.py
+[src-063]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/clients/http.py
+[src-064]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/core/network_policy.py
+[src-065]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/providers/ai/openrouter.py
+[src-066]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/users.py
+[src-067]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/core/auth.py
+[src-068]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/repositories/users.py
+[src-069]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/repositories/projects.py
+[src-070]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/repositories/mcp_access.py
+[src-071]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/repositories/credentials.py
+[src-072]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/clients/storage.py
+[src-073]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/core/logging.py
+[src-074]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/core/redaction.py
+[src-075]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/SECURITY.md
+[src-076]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/core/crypto.py
+[src-077]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/models/credential.py
+[src-078]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/models/setting.py
+[src-079]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/domain/deployments.py
+[src-080]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/.github/workflows/cla.yml
+[src-081]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/CONTRIBUTING.md
+[src-082]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/CLA.md
+[src-083]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/mcp_runtime/app/clients/oauth_client.py
+[src-084]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/backend/app/services/build_admission.py
+[src-085]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/.gitignore
+[src-086]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/GOVERNANCE.md
+[src-087]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/MANIFEST.sha256
+[src-088]: https://github.com/waqoor/MCPlica/blob/090ec0a82bf6689c9764716afdd20409c366d178/Makefile

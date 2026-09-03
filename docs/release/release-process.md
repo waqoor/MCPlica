@@ -84,8 +84,8 @@ The tag is the only publication trigger. `.github/workflows/release.yml` then:
 5. attaches build provenance and the SBOM to the immutable registry digest;
 6. creates a source archive/source SBOM, per-image evidence/checksums, overall `SHA256SUMS`, and a
    keyless signature bundle; and
-7. creates the GitHub Release from the committed versioned notes and uploads assets without
-   clobbering existing files.
+7. passes the committed notes and every asset to one `gh release create` operation so GitHub CLI
+   stages the draft, uploads the assets, and publishes only after the asset upload succeeds.
 
 No workflow creates `latest`, floating major/minor tags, production deployment, or a second release
 path.
@@ -98,7 +98,7 @@ Download every release asset and verify its filenames against the release page b
 sha256sum --check SHA256SUMS
 cosign verify-blob \
   --bundle SHA256SUMS.bundle.json \
-  --certificate-identity "https://github.com/yazeedhasan97/MCPlica/.github/workflows/release.yml@refs/tags/v1.0.0" \
+  --certificate-identity "https://github.com/waqoor/MCPlica/.github/workflows/release.yml@refs/tags/v1.0.0" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
   SHA256SUMS
 ```
@@ -108,14 +108,14 @@ attestations against the same tag-specific workflow identity:
 
 ```bash
 cosign verify \
-  --certificate-identity "https://github.com/yazeedhasan97/MCPlica/.github/workflows/release.yml@refs/tags/v1.0.0" \
+  --certificate-identity "https://github.com/waqoor/MCPlica/.github/workflows/release.yml@refs/tags/v1.0.0" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-  ghcr.io/yazeedhasan97/mcplica/runtime@sha256:<digest>
+  ghcr.io/waqoor/mcplica/runtime@sha256:<digest>
 
 cosign verify-attestation --type slsaprovenance \
-  --certificate-identity "https://github.com/yazeedhasan97/MCPlica/.github/workflows/release.yml@refs/tags/v1.0.0" \
+  --certificate-identity "https://github.com/waqoor/MCPlica/.github/workflows/release.yml@refs/tags/v1.0.0" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-  ghcr.io/yazeedhasan97/mcplica/runtime@sha256:<digest>
+  ghcr.io/waqoor/mcplica/runtime@sha256:<digest>
 ```
 
 Repeat for backend/frontend and review each SPDX SBOM plus scanner result. Configure production

@@ -171,3 +171,14 @@ def test_gitleaks_fixture_allowlist_is_rule_path_and_shape_scoped() -> None:
         r"""[[:space:]]*"(key|operation_key)": "op_[0-9a-f]{24}",?[[:space:]]*"""
     ]
     assert allowlist["paths"] == [r"tests/fixtures/(canonical|manifests)/[^/]+\.json$"]
+
+
+def test_release_assets_are_attached_before_an_immutable_release_is_published() -> None:
+    root = Path(__file__).resolve().parents[2]
+    workflow = (root / ".github/workflows/release.yml").read_text(encoding="utf-8")
+
+    assert 'gh release create "${GITHUB_REF_NAME}" release-assets/*' in workflow
+    assert 'gh release upload "${GITHUB_REF_NAME}"' not in workflow
+    assert "--verify-tag" in workflow
+    assert 'if [[ "${GITHUB_REF_NAME}" == *-* ]]' in workflow
+    assert "prerelease+=(--prerelease)" in workflow

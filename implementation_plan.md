@@ -1,6 +1,6 @@
 # MCPlica — Detailed Implementation and Business Delivery Plan
 
-**Repository:** `yazeedhasan97/MCPlica`  
+**Repository:** `waqoor/MCPlica`
 **Target branch:** `master`  
 **Planning baseline:** `aac31ef30edf178587cab7234f173cec322a14a9`  
 **Date:** 2026-09-01  
@@ -1515,17 +1515,17 @@ Start IP-0 on current `master`, reproduce the source/access/ownership failure ca
 
 Repository links are pinned to the planning commit. Paths elsewhere in the plan identify implementation targets and proposed changes; they do not claim a new file/class/route already exists. Public standards links identify the explicit revision consulted, not a promise that every later draft is implemented. Competitor-derived ideas remain documented in `todo_features.md`; they were not newly benchmarked for this plan.
 
-[R1]: https://github.com/yazeedhasan97/MCPlica/blob/aac31ef30edf178587cab7234f173cec322a14a9/issues_002.md
-[R2]: https://github.com/yazeedhasan97/MCPlica/blob/aac31ef30edf178587cab7234f173cec322a14a9/todo_features.md
-[R3]: https://github.com/yazeedhasan97/MCPlica/blob/aac31ef30edf178587cab7234f173cec322a14a9/docs/implementation_plan.md
-[R4]: https://github.com/yazeedhasan97/MCPlica/blob/aac31ef30edf178587cab7234f173cec322a14a9/docs/architecture.md
-[R5]: https://github.com/yazeedhasan97/MCPlica/blob/aac31ef30edf178587cab7234f173cec322a14a9/docs/product_requirements.md
-[R6]: https://github.com/yazeedhasan97/MCPlica/blob/aac31ef30edf178587cab7234f173cec322a14a9/docs/release/release-checklist.md
-[R7]: https://github.com/yazeedhasan97/MCPlica/blob/aac31ef30edf178587cab7234f173cec322a14a9/Makefile
-[R8]: https://github.com/yazeedhasan97/MCPlica/blob/aac31ef30edf178587cab7234f173cec322a14a9/.github/workflows/ci.yml
+[R1]: https://github.com/waqoor/MCPlica/blob/aac31ef30edf178587cab7234f173cec322a14a9/issues_002.md
+[R2]: https://github.com/waqoor/MCPlica/blob/aac31ef30edf178587cab7234f173cec322a14a9/todo_features.md
+[R3]: https://github.com/waqoor/MCPlica/blob/aac31ef30edf178587cab7234f173cec322a14a9/docs/implementation_plan.md
+[R4]: https://github.com/waqoor/MCPlica/blob/aac31ef30edf178587cab7234f173cec322a14a9/docs/architecture.md
+[R5]: https://github.com/waqoor/MCPlica/blob/aac31ef30edf178587cab7234f173cec322a14a9/docs/product_requirements.md
+[R6]: https://github.com/waqoor/MCPlica/blob/aac31ef30edf178587cab7234f173cec322a14a9/docs/release/release-checklist.md
+[R7]: https://github.com/waqoor/MCPlica/blob/aac31ef30edf178587cab7234f173cec322a14a9/Makefile
+[R8]: https://github.com/waqoor/MCPlica/blob/aac31ef30edf178587cab7234f173cec322a14a9/.github/workflows/ci.yml
 [S1]: https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization
 [S2]: https://modelcontextprotocol.io/specification/2025-11-25/server/tools
 [S3]: https://openid.net/specs/openid-connect-core-1_0.html
 [S4]: https://www.rfc-editor.org/rfc/rfc8693
 
-[R9]: https://github.com/yazeedhasan97/MCPlica/blob/aac31ef30edf178587cab7234f173cec322a14a9/docs/open_source_and_sponsorship_model.md
+[R9]: https://github.com/waqoor/MCPlica/blob/aac31ef30edf178587cab7234f173cec322a14a9/docs/open_source_and_sponsorship_model.md

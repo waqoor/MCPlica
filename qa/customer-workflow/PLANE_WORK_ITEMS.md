@@ -99,6 +99,9 @@ enforcement on mutating endpoints, cookie attributes.
 
 **Status this round:** 8 PASS, 1 FAIL (`BUG-001`), 1 BLOCKED, 1 not yet attempted.
 
+**Integration follow-up (2026-09-04):** `BUG-001` is fixed in code with an automated
+regression. The original executed result remains FAIL until live Docker re-verification.
+
 ---
 
 ## 4. Project Lifecycle QA

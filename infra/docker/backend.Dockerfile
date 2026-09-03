@@ -3,7 +3,7 @@ FROM ghcr.io/astral-sh/uv:0.12.9@sha256:8b940d3a9d65bed080436972241af2e21c84b5e8
 FROM python:3.13.15-slim-trixie@sha256:7e3a6aca9d74f93cca21a91d86a8dad8c34749afd5b4a98ee481c9c47b9f5ed4
 ARG VERSION
 ARG VCS_REF=local
-ARG SOURCE_URL=https://github.com/yazeedhasan97/MCPlica
+ARG SOURCE_URL=https://github.com/waqoor/MCPlica
 LABEL org.opencontainers.image.title="MCPlica control plane" \
       org.opencontainers.image.description="MCPlica API, migration, and worker runtime" \
       org.opencontainers.image.version="${VERSION}" \

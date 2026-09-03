@@ -127,11 +127,4 @@ async def logout(
 
 @router.get("/me", response_model=UserRead)
 async def me(principal: CurrentPrincipal) -> UserRead:
-    user = principal.user
-    return UserRead(
-        id=user.id,
-        email=user.email,
-        display_name=user.display_name,
-        role=user.role,
-        is_active=user.is_active,
-    )
+    return UserRead.model_validate(principal.user)
