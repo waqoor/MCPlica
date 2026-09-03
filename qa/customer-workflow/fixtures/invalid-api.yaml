@@ -1,0 +1,50 @@
+openapi: 3.1.0
+info:
+  title: QA Invalid API (duplicate operationId)
+  version: "1.0.0"
+  description: >
+    Deliberately invalid fixture containing exactly ONE defect: the same
+    operationId ("getWidget") is reused on two different paths. Per
+    backend/app/parsers/openapi/parser.py (duplicate operationId check),
+    this is a hard parse-time failure. Everything else in this document is
+    valid OpenAPI 3.1 so the fixture isolates this single failure mode
+    rather than masking it behind unrelated errors.
+
+    Other documented invalid-input classes are NOT included here as
+    separate fixtures (to keep fixture count minimal per the QA task
+    scope). They are covered as tester-authored variants of this same file
+    -- see TESTING_PLAN.md section "Negative source-fixture catalog" for
+    the exact minimal edit each one requires:
+      - missing info.title
+      - unresolved/malformed $ref
+      - relative server URL with no project default_base_url configured
+      - non-OpenAPI document (e.g. Swagger 2.0 `swagger: "2.0"`)
+servers:
+  - url: https://api.qa-invalid.example.com/v1
+paths:
+  /widgets/{widgetId}:
+    get:
+      operationId: getWidget
+      summary: Get a widget
+      parameters:
+        - name: widgetId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The widget.
+  /widgets/{widgetId}/details:
+    get:
+      operationId: getWidget
+      summary: Get widget details (duplicate operationId of the operation above)
+      parameters:
+        - name: widgetId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Widget details.

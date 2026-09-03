@@ -1,0 +1,128 @@
+openapi: 3.0.3
+info:
+  title: QA Simple Bookstore API
+  version: "1.0.0"
+  description: >
+    Minimal, well-formed REST API used as the QA "golden path" fixture.
+    Deliberately small: one resource (books), three operations, one bearer
+    auth scheme, a mix of required/optional fields and one enum. Used to
+    prove the happy-path customer workflow end to end (import -> parse ->
+    AI analysis -> MCP manifest -> build -> deploy -> tool call) without any
+    schema complexity that could itself be a source of ambiguity.
+servers:
+  - url: https://api.qa-bookstore.example.com/v1
+security:
+  - bearerAuth: []
+paths:
+  /books:
+    get:
+      operationId: listBooks
+      summary: List books
+      description: Returns a paginated list of books in the catalog.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [available, out_of_stock, discontinued]
+          description: Filter by availability status.
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: A page of books.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Book"
+        "401":
+          description: Missing or invalid bearer token.
+    post:
+      operationId: createBook
+      summary: Create a book
+      description: Adds a new book to the catalog.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, author, price]
+              properties:
+                title:
+                  type: string
+                  maxLength: 200
+                author:
+                  type: string
+                price:
+                  type: number
+                  minimum: 0
+                status:
+                  type: string
+                  enum: [available, out_of_stock, discontinued]
+                  default: available
+      responses:
+        "201":
+          description: Book created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Book"
+        "400":
+          description: Validation error.
+  /books/{bookId}:
+    get:
+      operationId: getBook
+      summary: Get a single book
+      description: Returns one book by its identifier.
+      parameters:
+        - name: bookId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The requested book.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Book"
+        "404":
+          description: Book not found.
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    Book:
+      type: object
+      required: [id, title, author, price, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        author:
+          type: string
+        price:
+          type: number
+        status:
+          type: string
+          enum: [available, out_of_stock, discontinued]
