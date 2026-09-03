@@ -17,6 +17,9 @@ version is not published until its immutable tag and release workflow complete.
   same `created_at`, `updated_at`, and `last_login_at` values as the user record.
 - Replaced the organization-license-dependent Gitleaks Action with an offline, digest-pinned
   Gitleaks CLI history scan so the required `secrets` job remains executable after transfer.
+- Migrated the frontend toolchain to pnpm 11.25.0 and its explicit `allowBuilds` configuration,
+  and made CI audit the complete pnpm lockfile through a digest-pinned OSV-Scanner instead of the
+  registry's retired legacy endpoint.
 - Added an admin-only, route-backed **Settings > Providers** workspace for write-only encrypted
   OpenRouter key rotation, live connection testing, and distinct credential/reachability/build
   readiness states.

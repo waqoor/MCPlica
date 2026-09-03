@@ -727,7 +727,7 @@ Approved release/security tools:
 - Gitleaks for secret scanning;
 - Trivy for container/filesystem vulnerability scans;
 - pip-audit (or an equivalent maintained Python advisory scanner compatible with uv lock/export);
-- pnpm audit / ecosystem advisory checks;
+- digest-pinned OSV-Scanner checks for the complete pnpm lockfile;
 - Syft for SBOM generation;
 - Cosign for image signing when release infrastructure is configured;
 - GitHub Dependabot as the canonical automated dependency PR mechanism; do not configure Renovate in parallel.

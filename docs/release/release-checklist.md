@@ -136,8 +136,8 @@ The owner-assigned external-action ledger is [issue
       real-Milvus isolation, live browser, authenticated MCP calls, rebuild/redeploy, rollback,
       outage recovery, and persistence-after-recreation checks pass on a disposable Linux runner.
 - [ ] Gitleaks, GitHub introduced-dependency review where the repository supports it, private-repo
-      locked-graph `pip-audit`/`pnpm audit`, Trivy source/misconfiguration/secret scans, and all
-      three pre-publication image scans have no unaccepted HIGH/CRITICAL blocker.
+      locked-graph `pip-audit`/OSV-Scanner, Trivy source/misconfiguration/secret scans, and all three
+      pre-publication image scans have no unaccepted HIGH/CRITICAL blocker.
 - [ ] `python scripts/checksum_manifest.py --check` passes and CI preserves the exact tracked source
       plus bounded/redacted diagnostics for the release commit.
 

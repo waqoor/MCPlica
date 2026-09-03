@@ -14,6 +14,7 @@ required = [
     "packages/contracts/src/mcp_contracts/manifest.py",
     "frontend/package.json",
     "frontend/pnpm-lock.yaml",
+    "frontend/pnpm-workspace.yaml",
     "frontend/playwright.config.ts",
     "uv.lock",
     "infra/compose.yaml",
