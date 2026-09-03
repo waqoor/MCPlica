@@ -4,6 +4,22 @@ Every checked item needs an exact URL, workflow run, command output, or stored e
 the release commit. “Not applicable” needs a written reason. An unchecked/unknown item means the
 release is not ready; local evidence cannot satisfy a hosted or production-host gate.
 
+## Current v1.0.0 disposition (2026-09-03)
+
+The exact branch, pull-request, dependency, hosted-log, repository-control, and external-gate
+inventory is in the [current branch and release-gate
+audit](../evidence/v1.0.0-branch-and-gate-audit.md). The previously integrated `master` head
+`b22ff7e` is superseded as release evidence because its nominally successful E2E job contained a
+WebKit failure that passed on retry. `fix/final-release-closure-20260903` contains the canonical
+navigation correction, request-level regression, and fail-closed flaky-test policy. Its hosted
+checks and independent approval are required before merge.
+
+Repository Actions now requires full-SHA pins and all workflow actions comply. The private locked
+dependency graphs have no known vulnerability, and the CLA workflow is fail-closed for untrusted
+contributors. Branch protection/rulesets, independent review, founder-approved external CLA
+service, private security intake, target-host acceptance, backup/restore, and publication evidence
+remain unchecked operator gates. No tag or Release exists.
+
 ## Release identity and repository state
 
 - [ ] `VERSION`, all package/lock/runtime/frontend/API/image consumers, `CHANGELOG.md`, and

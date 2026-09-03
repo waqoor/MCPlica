@@ -43,6 +43,14 @@ def test_dependency_review_has_an_executable_private_repository_fallback() -> No
     assert "uvx pip-audit" in workflow
 
 
+def test_playwright_retries_cannot_mask_flaky_ci_results() -> None:
+    root = Path(__file__).resolve().parents[2]
+    config = (root / "frontend/playwright.config.ts").read_text(encoding="utf-8")
+
+    assert "failOnFlakyTests: Boolean(process.env.CI)" in config
+    assert "retries: process.env.CI ? 2 : 0" in config
+
+
 def test_source_snapshot_checksum_manifest_is_complete_and_current() -> None:
     root = Path(__file__).resolve().parents[2]
     subprocess.run(

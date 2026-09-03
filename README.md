@@ -7,7 +7,9 @@ It ingests a company's OpenAPI specification or structured API inventory, option
 > **Release status:** `1.0.0` is the prepared release candidate; `VERSION` is authoritative. No
 > `v1.0.0` tag, GitHub Release, or production image is created until the release-readiness pull
 > request is accepted and the external/live gates in the
-> [release checklist](docs/release/release-checklist.md) are complete.
+> [release checklist](docs/release/release-checklist.md) are complete. The current
+> [branch and gate audit](docs/evidence/v1.0.0-branch-and-gate-audit.md) records the integrated
+> branch disposition, corrective release head, and remaining operator actions.
 
 ## Non-negotiable boundaries
 
@@ -246,7 +248,8 @@ Follow [cross-service acceptance](tests/integration/README.md) on a **disposable
 installation only**. The harness deliberately stops/recreates services and changes
 project settings; it must not run against production or retained business data.
 Normal Docker startup never invokes it. Commit-specific validation results and limitations are in
-the [v1.0.0 release-candidate evidence](docs/evidence/v1.0.0-release-candidate.md).
+the [current branch and gate audit](docs/evidence/v1.0.0-branch-and-gate-audit.md) and historical
+[v1.0.0 release-candidate evidence](docs/evidence/v1.0.0-release-candidate.md).
 
 For the post-merge regression scope and remaining limitations, see
 [post-merge validation](docs/evidence/post-merge-validation-2026-09-01.md).

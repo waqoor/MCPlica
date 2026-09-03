@@ -44,6 +44,7 @@ test("completes the durable source-to-runtime journey through typed contracts", 
   let accessConfigured = false;
   let accessTokenCreated = false;
   let deployed = false;
+  let unboundJourneyRequestsAfterBuild = 0;
   const unknownRequests: string[] = [];
   const mutationCsrfHeaders: Array<string | null> = [];
 
@@ -341,7 +342,11 @@ test("completes the durable source-to-runtime journey through typed contracts", 
       });
     }
     if (path === `/api/v1/projects/${projectId}/journey` && method === "GET") {
-      return json(route, journey(url.searchParams.get("build_id")));
+      const requestedBuildId = url.searchParams.get("build_id");
+      if (buildCreated && requestedBuildId === null) {
+        unboundJourneyRequestsAfterBuild += 1;
+      }
+      return json(route, journey(requestedBuildId));
     }
     if (
       path === `/api/v1/projects/${projectId}/source-configuration` &&
@@ -603,6 +608,7 @@ test("completes the durable source-to-runtime journey through typed contracts", 
   expect(buildCreated).toBe(true);
   expect(accessConfigured).toBe(true);
   expect(deployed).toBe(true);
+  expect(unboundJourneyRequestsAfterBuild).toBe(0);
   expect(mutationCsrfHeaders).not.toHaveLength(0);
   expect(new Set(mutationCsrfHeaders)).toEqual(new Set(["e2e-csrf-token"]));
   expect(unknownRequests).toEqual([]);
