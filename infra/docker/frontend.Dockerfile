@@ -3,7 +3,7 @@ ARG VERSION
 WORKDIR /app
 RUN corepack enable
 COPY VERSION /VERSION
-COPY frontend/package.json frontend/pnpm-lock.yaml ./
+COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
 RUN test -n "${VERSION}" \
     && test "$(cat /VERSION)" = "${VERSION}" \
     && node -e "if (require('./package.json').version !== process.env.VERSION) process.exit(1)" \

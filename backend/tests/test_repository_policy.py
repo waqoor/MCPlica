@@ -1,4 +1,5 @@
 import hashlib
+import json
 import subprocess
 import sys
 import tomllib
@@ -36,9 +37,9 @@ def test_dependency_review_has_an_executable_private_repository_fallback() -> No
     workflow = (root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 
     assert "github.event.repository.private == false" in workflow
-    assert "working-directory: frontend" in workflow
-    assert "pnpm install --frozen-lockfile" in workflow
-    assert "pnpm audit --audit-level high" in workflow
+    assert "ghcr.io/google/osv-scanner:v2.4.0@sha256:" in workflow
+    assert "5116601dedc01c1c580eb92371883ec052fc4c13c3fbc109d621a63ac416d475" in workflow
+    assert "--lockfile /src/frontend/pnpm-lock.yaml" in workflow
     assert "uv export --frozen --all-packages --all-extras --no-emit-workspace" in workflow
     assert "uvx pip-audit" in workflow
 
@@ -50,6 +51,18 @@ def test_python_advisory_audits_include_optional_development_dependencies() -> N
         workflow = (root / path).read_text(encoding="utf-8")
         assert "uv export --frozen --all-packages --all-extras --no-emit-workspace" in workflow
         assert "--no-dev" not in workflow
+
+
+def test_frontend_package_manager_uses_current_security_configuration() -> None:
+    root = Path(__file__).resolve().parents[2]
+    package = json.loads((root / "frontend/package.json").read_text(encoding="utf-8"))
+    workspace = (root / "frontend/pnpm-workspace.yaml").read_text(encoding="utf-8")
+    dockerfile = (root / "infra/docker/frontend.Dockerfile").read_text(encoding="utf-8")
+
+    assert package["packageManager"] == "pnpm@11.25.0"
+    assert "pnpm" not in package
+    assert workspace == "allowBuilds:\n  esbuild: true\n"
+    assert "frontend/pnpm-workspace.yaml" in dockerfile
 
 
 def test_playwright_retries_cannot_mask_flaky_ci_results() -> None:

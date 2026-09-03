@@ -40,25 +40,23 @@ jobs:
 
   dependencies:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: .node-version
-          package-manager-cache: false
-      - run: corepack enable
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm audit --audit-level high
+      - name: Audit the locked frontend dependency graph
+        run: >-
+          docker run --rm
+          --volume "${{ github.workspace }}:/src:ro"
+          ghcr.io/google/osv-scanner:v2.4.0@sha256:5116601dedc01c1c580eb92371883ec052fc4c13c3fbc109d621a63ac416d475
+          scan source
+          --lockfile /src/frontend/pnpm-lock.yaml
+          --format vertical
+          --verbosity info
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           python-version: "3.13"
           enable-cache: true
           cache-dependency-glob: uv.lock
       - name: Audit the locked Python workspace
-        working-directory: .
         run: |
           uv export --frozen --all-packages --all-extras --no-emit-workspace --output-file /tmp/mcplica-requirements.txt
           uvx pip-audit --requirement /tmp/mcplica-requirements.txt
