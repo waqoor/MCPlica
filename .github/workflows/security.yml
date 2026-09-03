@@ -55,7 +55,7 @@ jobs:
       - name: Audit the locked Python workspace
         working-directory: .
         run: |
-          uv export --frozen --all-packages --no-dev --no-emit-workspace --output-file /tmp/mcplica-requirements.txt
+          uv export --frozen --all-packages --all-extras --no-emit-workspace --output-file /tmp/mcplica-requirements.txt
           uvx pip-audit --requirement /tmp/mcplica-requirements.txt
 
   repository-scan:

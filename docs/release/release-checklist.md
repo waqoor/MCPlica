@@ -12,13 +12,13 @@ audit](../evidence/v1.0.0-branch-and-gate-audit.md). The previously integrated `
 `b22ff7e` is superseded as release evidence because its nominally successful E2E job contained a
 WebKit failure that passed on retry. `fix/final-release-closure-20260903` contains the canonical
 navigation correction, request-level regression, and fail-closed flaky-test policy. Its hosted
-pre-documentation repository-control head `ed5e7d2` passed all ten hosted checks under the final
-selected-action policy: CI attempt 2, Security attempt 3, and CLA attempt 2. Its replacement Docker
-artifact independently matched GitHub's digest and recorded all 13 required service states plus the
-complete workflow. Immutable results and the exact 20-reference execution closure are in [PR
-#44](https://github.com/yazeedhasan97/MCPlica/pull/44#issuecomment-5518862289). Embedding the current
-documentation commit hash here would change that hash; the exact final PR head and its checks must
-therefore be retained in PR evidence after this refresh.
+repository-control and documentation heads passed all ten hosted checks under the final
+selected-action policy. Their replacement Docker artifacts independently matched GitHub's digest
+and recorded all 13 required service states plus the complete workflow. Immutable results and the
+exact 20-reference execution closure are in [PR
+#44](https://github.com/yazeedhasan97/MCPlica/pull/44#issuecomment-5519011375). Embedding the current
+candidate hash here would change that hash; the exact final PR head and its checks must therefore be
+retained in PR evidence after the dependency correction below.
 
 No independent review is currently requested: the only listed maintainer and CODEOWNER is the PR
 author, and another account's repository write access is not an explicit governance appointment.
@@ -27,9 +27,13 @@ requesting approval, so the PR remains deliberately unmerged.
 
 Repository Actions now permits only the recursively audited 20-reference full-SHA closure; broad
 GitHub-owned and verified-creator allowances are disabled. Workflow tokens default to read-only and
-cannot approve reviews. Dependabot vulnerability alerts and automated security fixes are enabled,
-with zero open alerts at the audit snapshot. The private locked dependency graphs have no known
-vulnerability, and the CLA workflow is fail-closed for untrusted contributors. Branch
+cannot approve reviews. Dependabot vulnerability alerts and automated security fixes are enabled.
+Their asynchronous first response of zero alerts was provisional: the completed scan then opened
+alert #1 for pytest GHSA-6w46-j5rx-g56g/CVE-2025-71176. The corrective branch now constrains both
+Python projects to the patched pytest line, locks 9.1.1, and makes both frozen advisory audits cover
+all optional development dependencies. Local Python 3.13 audit and compatibility evidence is clean;
+GitHub must automatically close the alert and the exact final hosted head must repeat the audits.
+The CLA workflow remains fail-closed for untrusted contributors. Branch
 protection/rulesets, independent review, founder-approved external CLA service, GitHub private
 vulnerability reporting/code scanning/secret scanning, target-host acceptance, backup/restore, and
 publication evidence remain unchecked operator gates. No tag or Release exists.
@@ -55,8 +59,12 @@ The owner-assigned external-action ledger is [issue
       closure; broad GitHub-owned/verified-creator allowances are disabled, workflow tokens default
       to read-only, and workflows cannot approve reviews. The exact-policy CI/Security/CLA reruns
       are recorded in [PR #44](https://github.com/yazeedhasan97/MCPlica/pull/44#issuecomment-5518862289).
-- [x] Dependabot vulnerability alerts and automated security fixes are enabled; the live audit
-      returned zero open Dependabot alerts. Recheck immediately before tagging.
+- [x] Dependabot vulnerability alerts and automated security fixes are enabled. The completed scan
+      found alert #1 for pytest GHSA-6w46-j5rx-g56g/CVE-2025-71176; the corrective branch uses the
+      patched 9.1.1 lock and audits all optional development dependencies.
+- [ ] GitHub has re-indexed the exact final candidate, automatically closed alert #1, and reports
+      zero open Dependabot alerts; both final hosted all-extras Python audits pass. Recheck again
+      immediately before tagging.
 - [ ] `master` protection/rulesets require pull requests, sensitive CODEOWNERS review,
       conversation resolution, current CI/Security/CLA checks, and block force pushes/deletion with
       administrator enforcement.
