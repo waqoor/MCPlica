@@ -13,7 +13,20 @@ hardening, TLS, secrets, image signatures/digests, monitoring, and recovery.
 
 ## Private reporting
 
-Do not disclose an exploitable vulnerability in an issue, discussion, pull request, log excerpt, or public test fixture. Use [GitHub private vulnerability reporting](https://github.com/yazeedhasan97/MCPlica/security/advisories/new). Include the affected commit/version, component, impact, minimal reproduction, and any suggested mitigation. Remove credentials, proprietary API material, and personal data.
+Do not disclose an exploitable vulnerability in an issue, discussion, pull request, log excerpt, or
+public test fixture.
+
+> **Pre-publication intake status (2026-09-03):** GitHub private vulnerability reporting is not
+> enabled for this private repository; its API and advisory-creation route are unavailable. Until
+> the security/release administrator enables and tests that route, the repository has no verified
+> public-facing private intake and publication remains blocked. If you already have an established
+> private channel with the maintainer, use it. Otherwise, withhold vulnerability details until the
+> maintainer publishes a tested private channel; do not put the report into a public GitHub object.
+
+After enablement is recorded in the release evidence, use [GitHub private vulnerability
+reporting](https://github.com/yazeedhasan97/MCPlica/security/advisories/new). Include the affected
+commit/version, component, impact, minimal reproduction, and any suggested mitigation. Remove
+credentials, proprietary API material, and personal data.
 
 The maintainer will acknowledge a usable report, validate severity, coordinate a fix and release, and agree on disclosure timing. Response times depend on maintainer availability and are goals rather than a paid SLA. Good-faith researchers who respect privacy, avoid persistence/data destruction, and allow coordinated remediation will be credited if they wish.
 

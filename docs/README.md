@@ -39,7 +39,9 @@ These six documents define scope and implementation authority. Later explicit de
 - `releases/v1.0.0.md` — v1.0.0 release notes, migration guidance, limitations, and final commands.
 - `release/release-process.md`
 - `release/release-checklist.md`
-- `evidence/v1.0.0-release-candidate.md` — current release-preparation results and external gates.
+- `evidence/v1.0.0-branch-and-gate-audit.md` — current branch disposition, integrated hosted
+  evidence, corrective release head, repository controls, and exact external gates.
+- `evidence/v1.0.0-release-candidate.md` — historical release-preparation results and external gates.
 - `evidence/post-merge-validation-2026-09-01.md` — historical post-merge regression snapshot.
 - `evidence/compose-validation-2026-09-01.md` — historical Compose corrections, commit-bound CI results, and verification boundaries for its stated snapshot.
 - `evidence/final-integrated-validation.md` — historical traceability and local execution proof for its stated snapshots.

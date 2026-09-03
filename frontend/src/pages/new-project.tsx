@@ -1302,16 +1302,13 @@ function StartBuildStep({
   onBack: () => void;
   onStarted: (id: string) => void;
 }) {
-  const queryClient = useQueryClient();
   const start = useMutation({
     mutationFn: () => buildApi.create(projectId),
     onSuccess: (build) => {
-      // Move to a URL bound to the created build first. The new journey query
-      // validates that project/build relationship before any build detail call.
+      // The URL transition mounts a distinct build-bound journey query. Do not
+      // refetch the old unbound query here: its canonicalization effect can win
+      // the navigation race and move the wizard back to the start-build step.
       onStarted(build.id);
-      void queryClient.invalidateQueries({
-        queryKey: ["projects", projectId, "journey"],
-      });
     },
   });
   return (

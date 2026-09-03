@@ -177,7 +177,7 @@ jobs:
       - name: Audit the locked Python dependency graph
         if: github.event.repository.private
         run: |
-          uv export --frozen --all-packages --no-dev --no-emit-workspace --output-file "$RUNNER_TEMP/mcplica-requirements.txt"
+          uv export --frozen --all-packages --all-extras --no-emit-workspace --output-file "$RUNNER_TEMP/mcplica-requirements.txt"
           uvx pip-audit --requirement "$RUNNER_TEMP/mcplica-requirements.txt"
 
   docker:
