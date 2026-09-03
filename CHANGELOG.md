@@ -20,6 +20,10 @@ version is not published until its immutable tag and release workflow complete.
 - Made each cleanup dispatch use one eligibility snapshot, preventing a failed target from
   consuming multiple retry attempts in the same worker cycle when its backoff is short or the
   database is under load.
+- Bound the post-build wizard transition directly to the created build so an obsolete unbound
+  journey refetch cannot race the URL back to the start-build step.
+- Made hosted Playwright retries diagnostic only: any flaky retry now fails CI, with regression
+  coverage that rejects post-build journey requests lacking the created build identity.
 
 ## [1.0.0] - 2026-09-02
 
