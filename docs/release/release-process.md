@@ -43,9 +43,14 @@ ordinary deployment startup or against retained development/production data.
 
 Before publication, verify `master` rules require pull requests, CODEOWNERS review for sensitive
 paths, conversation resolution, current CI/Security/CLA checks, force-push/deletion prevention, and
-administrator enforcement. Confirm Actions may issue OIDC tokens, write GHCR packages/attestations,
-and create releases; enable private vulnerability reporting; configure the founder-approved CLA
-service/context. These settings cannot be proven by committed files alone.
+administrator enforcement. Restrict Actions to the recursively audited direct and composite-action
+closure at full commit SHAs, keep the default workflow token read-only, and prevent workflows from
+approving pull requests. Enable Dependabot vulnerability alerts and automated security fixes, then
+resolve or explicitly disposition every open alert. Confirm Actions may issue OIDC tokens, write
+GHCR packages/attestations, and create releases; enable and test GitHub private vulnerability
+reporting, code scanning, and secret scanning; configure the founder-approved CLA service/context.
+These settings cannot be proven by committed files alone, so retain exact API/settings and hosted
+run evidence for the reviewed release commit.
 
 The repository-managed label catalog is `.github/labels.json`; its workflow updates catalogued
 labels on `master` without deleting extra project labels.

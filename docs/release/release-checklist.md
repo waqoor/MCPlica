@@ -12,20 +12,27 @@ audit](../evidence/v1.0.0-branch-and-gate-audit.md). The previously integrated `
 `b22ff7e` is superseded as release evidence because its nominally successful E2E job contained a
 WebKit failure that passed on retry. `fix/final-release-closure-20260903` contains the canonical
 navigation correction, request-level regression, and fail-closed flaky-test policy. Its hosted
-implementation head `71c09cf4` passed all ten hosted checks, including a clean no-flake browser
-matrix and complete disposable Docker acceptance; immutable results are in [PR
-#44](https://github.com/yazeedhasan97/MCPlica/pull/44#issuecomment-5518471695). The documentation
-evidence refresh must retain those checks on the current head. No independent review is currently
-requested: the only listed maintainer and CODEOWNER is the PR author, and another account's
-repository write access is not an explicit governance appointment. The founder must record an
-independent reviewer/maintainer appointment or scoped delegation before requesting approval, so the PR remains
-deliberately unmerged.
+pre-documentation repository-control head `ed5e7d2` passed all ten hosted checks under the final
+selected-action policy: CI attempt 2, Security attempt 3, and CLA attempt 2. Its replacement Docker
+artifact independently matched GitHub's digest and recorded all 13 required service states plus the
+complete workflow. Immutable results and the exact 20-reference execution closure are in [PR
+#44](https://github.com/yazeedhasan97/MCPlica/pull/44#issuecomment-5518862289). Embedding the current
+documentation commit hash here would change that hash; the exact final PR head and its checks must
+therefore be retained in PR evidence after this refresh.
 
-Repository Actions now requires full-SHA pins and all workflow actions comply. The private locked
-dependency graphs have no known vulnerability, and the CLA workflow is fail-closed for untrusted
-contributors. Branch protection/rulesets, independent review, founder-approved external CLA
-service, private security intake, target-host acceptance, backup/restore, and publication evidence
-remain unchecked operator gates. No tag or Release exists.
+No independent review is currently requested: the only listed maintainer and CODEOWNER is the PR
+author, and another account's repository write access is not an explicit governance appointment.
+The founder must record an independent reviewer/maintainer appointment or scoped delegation before
+requesting approval, so the PR remains deliberately unmerged.
+
+Repository Actions now permits only the recursively audited 20-reference full-SHA closure; broad
+GitHub-owned and verified-creator allowances are disabled. Workflow tokens default to read-only and
+cannot approve reviews. Dependabot vulnerability alerts and automated security fixes are enabled,
+with zero open alerts at the audit snapshot. The private locked dependency graphs have no known
+vulnerability, and the CLA workflow is fail-closed for untrusted contributors. Branch
+protection/rulesets, independent review, founder-approved external CLA service, GitHub private
+vulnerability reporting/code scanning/secret scanning, target-host acceptance, backup/restore, and
+publication evidence remain unchecked operator gates. No tag or Release exists.
 The owner-assigned external-action ledger is [issue
 #45](https://github.com/yazeedhasan97/MCPlica/issues/45).
 
@@ -44,14 +51,21 @@ The owner-assigned external-action ledger is [issue
 
 ## GitHub controls and governance
 
+- [x] Repository Actions permits only the recursively audited 20-reference full-SHA execution
+      closure; broad GitHub-owned/verified-creator allowances are disabled, workflow tokens default
+      to read-only, and workflows cannot approve reviews. The exact-policy CI/Security/CLA reruns
+      are recorded in [PR #44](https://github.com/yazeedhasan97/MCPlica/pull/44#issuecomment-5518862289).
+- [x] Dependabot vulnerability alerts and automated security fixes are enabled; the live audit
+      returned zero open Dependabot alerts. Recheck immediately before tagging.
 - [ ] `master` protection/rulesets require pull requests, sensitive CODEOWNERS review,
       conversation resolution, current CI/Security/CLA checks, and block force pushes/deletion with
       administrator enforcement.
 - [ ] Trusted repository actors are recognized from GitHub pull-request metadata, and the
       founder-approved CLA service plus `CLA_STATUS_CONTEXT` work for the exact head of every
       external contribution; no external contribution bypassed verification.
-- [ ] Private vulnerability reporting and the conduct-reporting channel work; maintainer access and
-      release/OIDC/GHCR permissions were reviewed.
+- [ ] GitHub private vulnerability reporting, code scanning, secret scanning, and the
+      conduct-reporting channel work; maintainer access and release/OIDC/GHCR permissions were
+      reviewed.
 - [ ] License, trademarks, maintainers, governance, support, sponsorship, generated-output,
       contribution, security, release, label, issue, and pull-request policies are current.
 
