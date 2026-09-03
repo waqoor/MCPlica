@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import pytest
-from mcp_contracts import MCPManifest
+from mcp_contracts import VERSION, MCPManifest
 from starlette.testclient import TestClient
 
 from app.validation_harness import inspect_runtime_candidate
@@ -97,7 +97,7 @@ def test_validator_http_boundary_is_bounded_and_returns_runtime_evidence() -> No
             headers={"Content-Type": "text/plain"},
         )
 
-    assert health.json()["runtime_version"] == "1.0.0"
+    assert health.json()["runtime_version"] == VERSION
     assert response.status_code == 200
     assert response.json()["request_mapping_count"] == 1
     assert wrong_type.status_code == 415

@@ -32,6 +32,7 @@ def test_initialization_creates_private_consistent_environment_without_overwrite
     assert settings.auth_signing_key is not None
     assert settings.refresh_token_pepper is not None
     assert settings.auth_signing_key != settings.refresh_token_pepper
+    assert str(settings.default_admin_email) == "admin@example.com"
     assert settings.default_admin_password is not None
     assert settings.default_admin_password.get_secret_value() not in result.stdout
     if os.name == "posix":

@@ -404,7 +404,7 @@ const MCPManifest: z.ZodTypeAny = z
     manifest_id: z.string().regex(/^[a-f0-9]{64}$/),
     project: ManifestProject,
     resources: z.array(MCPResource).optional(),
-    runtime_compatibility: z.string().optional().default(">=1.0,<2.0"),
+    runtime_compatibility: z.string().optional().default(">=1.0.0-rc.1,<2.0"),
     schema_version: z.string().optional().default("mcp-manifest/v1"),
     security: RuntimeSecurity,
     servers: z.array(ServerDefinition).min(1),

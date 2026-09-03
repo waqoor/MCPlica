@@ -12,12 +12,12 @@ def test_development_admin_credentials_come_from_settings() -> None:
     settings = Settings(
         _env_file=None,  # pyright: ignore[reportCallIssue]
         env="development",
-        default_admin_email="admin@admin.com",
+        default_admin_email="admin@example.com",
         default_admin_password=SecretStr("admin@321"),
     )
 
     assert _development_admin_credentials(settings) == (
-        "admin@admin.com",
+        "admin@example.com",
         "admin@321",
     )
 

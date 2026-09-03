@@ -1765,7 +1765,7 @@ If all migrations are authored before public release, squashing into a clean ini
 
 ## 5. Required implementation evidence
 
-The coding agent shall maintain objective evidence during implementation, ideally under `docs/evidence/` or linked PR/release reports:
+The coding agent shall maintain objective evidence in the protected implementation workspace or linked pull-request and release records:
 
 - command outputs/test summaries;
 - representative validation report;

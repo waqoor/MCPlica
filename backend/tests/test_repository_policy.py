@@ -73,6 +73,23 @@ def test_playwright_retries_cannot_mask_flaky_ci_results() -> None:
     assert "retries: process.env.CI ? 2 : 0" in config
 
 
+def test_playwright_ci_does_not_persist_browser_secrets() -> None:
+    root = Path(__file__).resolve().parents[2]
+    config = (root / "frontend/playwright.config.ts").read_text(encoding="utf-8")
+
+    assert 'reporter: process.env.CI ? "github" : "list"' in config
+    assert 'trace: process.env.CI ? "off" : "retain-on-failure"' in config
+    assert 'screenshot: process.env.CI ? "off" : "only-on-failure"' in config
+    assert 'video: process.env.CI ? "off" : "retain-on-failure"' in config
+
+
+def test_gitleaks_scans_every_reachable_ref() -> None:
+    root = Path(__file__).resolve().parents[2]
+    workflow = (root / ".github/workflows/security.yml").read_text(encoding="utf-8")
+
+    assert '--log-opts="--all --full-history"' in workflow
+
+
 def test_source_snapshot_checksum_manifest_is_complete_and_current() -> None:
     root = Path(__file__).resolve().parents[2]
     subprocess.run(

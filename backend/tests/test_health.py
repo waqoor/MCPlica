@@ -3,6 +3,7 @@ from typing import cast
 
 import pytest
 from fastapi import Request, Response
+from mcp_contracts import VERSION
 
 from app.api.health import health, ready
 
@@ -12,7 +13,7 @@ async def test_health_endpoint() -> None:
     assert (await health()).model_dump() == {
         "status": "ok",
         "service": "mcplica-api",
-        "version": "1.0.0",
+        "version": VERSION,
     }
 
 

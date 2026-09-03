@@ -1,58 +1,58 @@
 # MCPlica documentation
 
-## Authoritative product documents
+Start with the [user guide](user-guide.md) to run the product, or the
+[project overview](project-overview.md) to understand its scope and structure.
 
-These six documents define scope and implementation authority. Later explicit decisions override earlier conflicts.
+## Product and development
 
-1. `architecture.md` — boundaries and system architecture.
-2. `design_document.md` — technical design and contracts.
-3. `product_requirements.md` — product and acceptance behavior.
-4. `implementation_plan.md` — implementation phases and gates.
-5. `tech_stack.md` — technology and engineering standards.
-6. `open_source_and_sponsorship_model.md` — governance, CLA, ownership, and sustainability.
+- [Project overview](project-overview.md) — boundaries, implemented capabilities, sources of
+  truth, and repository map.
+- [User guide](user-guide.md) — roles, ten-step setup, workspaces, recovery, and accessibility.
+- [Development guide](development.md) — host-side development without the full Compose stack.
+- [Compatibility](compatibility.md) — supported platforms, dependency baseline, MCP clients, and
+  known limitations.
 
-## User and API
+## API and MCP clients
 
-- `user-guide.md` — roles, ten-step setup, workspaces, recovery, and accessibility.
-- `api.md` — authentication, requests, responses, pagination, async work, and contract changes.
-- `api-inventory-v1.md` — registered control-plane route/security inventory.
-- `mcp-client-connection.md` — static bearer/OIDC client connection and diagnosis.
-- `compatibility.md` — supported platforms, dependency baseline, client matrix, and limitations.
+- [API guide](api.md) — authentication, requests, responses, pagination, and contract changes.
+- [API inventory](api-inventory-v1.md) — registered control-plane route and security inventory.
+- [MCP client connection](mcp-client-connection.md) — bearer and OIDC connection guidance.
+
+## Architecture sources of truth
+
+These six documents define implementation authority. Later explicit decisions override earlier
+conflicts.
+
+1. [Architecture](architecture.md)
+2. [Design document](design_document.md)
+3. [Product requirements](product_requirements.md)
+4. [Implementation plan](implementation_plan.md)
+5. [Technology stack](tech_stack.md)
+6. [Open-source and sponsorship model](open_source_and_sponsorship_model.md)
 
 ## Operations and security
 
-- `operations/installation.md`
-- `operations/configuration.md`
-- `operations/docker-compose.md`
-- `operations/domain-tls.md`
-- `operations/backup-restore.md`
-- `operations/upgrade.md`
-- `operations/troubleshooting.md`
-- `operations/runbook.md`
-- `security/threat-model.md`
-- `security/hardening.md`
+- [Installation](operations/installation.md)
+- [Configuration](operations/configuration.md)
+- [Docker Compose](operations/docker-compose.md)
+- [Domain and TLS](operations/domain-tls.md)
+- [Backup and restore](operations/backup-restore.md)
+- [Upgrade](operations/upgrade.md)
+- [Troubleshooting](operations/troubleshooting.md)
+- [Operations runbook](operations/runbook.md)
+- [Threat model](security/threat-model.md)
+- [Security hardening](security/hardening.md)
 
-## Release evidence
+## Maintainers and releases
 
-- `../VERSION` — authoritative release version; generated copies are checked in CI.
-- `../CHANGELOG.md` — user/operator-visible history and changelog policy.
-- `releases/v1.0.0.md` — v1.0.0 release notes, migration guidance, limitations, and final commands.
-- `release/release-process.md`
-- `release/release-checklist.md`
-- `release/github-public-prerelease-settings.md` — exact organization, ruleset, vulnerability
-  reporting, code scanning, secret scanning, immutable-release, and public-prerelease settings that
-  the repository owner must configure and verify on GitHub.
-- `evidence/v1.0.0-branch-and-gate-audit.md` — current branch disposition, integrated hosted
-  evidence, corrective release head, repository controls, and exact external gates.
-- `evidence/v1.0.0-release-candidate.md` — historical release-preparation results and external gates.
-- `evidence/post-merge-validation-2026-09-01.md` — historical post-merge regression snapshot.
-- `evidence/compose-validation-2026-09-01.md` — historical Compose corrections, commit-bound CI results, and verification boundaries for its stated snapshot.
-- `evidence/final-integrated-validation.md` — historical traceability and local execution proof for its stated snapshots.
-- `evidence/issues-001-closure.md` — historical second-round status for 48 findings; the source register is not shipped, so this ledger is not current-release proof by itself.
-- `evidence/issues-002-closure.md` — verified disposition and implementation/runtime evidence for all 55 `issues_002.md` findings, including migrations `0021`–`0025`, PostgreSQL concurrency, Docker/Compose, contracts, frontend, and security boundaries.
-- `evidence/issues-002-foundation-closure.md` — focused reproduction, implementation, migration,
-  concurrency, runtime, and operational proof for `ISS-002-002` through `ISS-002-009`.
+- [`VERSION`](../VERSION) — authoritative release version.
+- [Changelog](../CHANGELOG.md) — user and operator-visible history.
+- [Release process](maintainers/releasing.md)
+- [Release checklist](maintainers/release-checklist.md)
+- [v1.0.0-rc.1 notes](releases/v1.0.0-rc.1.md)
 
-Root-level legal/community policy remains authoritative for contributors: `LICENSE`, `CLA.md`,
-`CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `GOVERNANCE.md`, `MAINTAINERS.md`, `SECURITY.md`,
-`SUPPORT.md`, `SPONSORSHIP.md`, `TRADEMARKS.md`, and `GENERATED_OUTPUTS.md`.
+Root-level community and legal policies remain authoritative: [license](../LICENSE),
+[contributing](../CONTRIBUTING.md), [CLA](../CLA.md), [code of conduct](../CODE_OF_CONDUCT.md),
+[governance](../GOVERNANCE.md), [maintainers](../MAINTAINERS.md), [security](../SECURITY.md),
+[support](../SUPPORT.md), [sponsorship](../SPONSORSHIP.md), [trademarks](../TRADEMARKS.md), and
+[generated outputs](../GENERATED_OUTPUTS.md).

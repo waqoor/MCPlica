@@ -8,7 +8,7 @@ Response body:
 ```json
 {
   "id": "76e1da4f-b2a7-49b3-883e-0033cc573b3a",
-  "email": "admin@admin.com",
+  "email": "admin@example.com",
   "display_name": "MCPlica Admin",
   "role": "admin",
   "is_active": true,
@@ -25,7 +25,7 @@ Relevant entry for the same `id`:
 ```json
 {
   "id": "76e1da4f-b2a7-49b3-883e-0033cc573b3a",
-  "email": "admin@admin.com",
+  "email": "admin@example.com",
   "display_name": "MCPlica Admin",
   "role": "admin",
   "is_active": true,

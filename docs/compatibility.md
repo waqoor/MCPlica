@@ -1,16 +1,17 @@
 # v1 compatibility and support matrix
 
-This document defines the tested and supported `1.0.x` release boundaries. A dependency appearing
+This document defines the tested `1.0.0-rc.1` candidate boundaries and planned `1.0.x` support
+line. A dependency appearing
 in a lockfile does not by itself prove every host/client/provider combination.
 
 ## Product and contract versions
 
-| Surface                     | v1.0.0 contract                                             | Compatibility rule                                                                                                               |
+| Surface                     | v1.0.0-rc.1 contract                                        | Compatibility rule                                                                                                               |
 | --------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Product/packages/API/images | `1.0.0` from root `VERSION`                                 | Release tag must be exactly `v1.0.0`; all copies are CI-checked                                                                  |
+| Product/packages/API/images | `1.0.0-rc.1` from root `VERSION`                            | Release tag must be exactly `v1.0.0-rc.1`; all copies are CI-checked                                                             |
 | Control-plane REST API      | `/api/v1`                                                   | Additive compatible changes stay in v1; breaking changes require a new major release                                             |
 | MCP manifest                | `mcp-manifest/v1`                                           | Schema identifier is independent of the product patch version                                                                    |
-| Generic runtime             | `1.0.0`                                                     | A build declares a PEP 440-compatible runtime range and deployment checks it before activation                                   |
+| Generic runtime             | `1.0.0-rc.1`                                                | A build declares a PEP 440-compatible runtime range and deployment checks it before activation                                   |
 | MCP transport/protocol      | Streamable HTTP at `/mcp`; validation revision `2026-07-28` | Client must negotiate a revision supported by the official SDK, the deployed JSON Schemas, and the configured bearer/OIDC header |
 | Database                    | Alembic `0025`                                              | One linear migration head; follow release-specific upgrade and downgrade constraints                                             |
 
@@ -21,9 +22,9 @@ in a lockfile does not by itself prove every host/client/provider combination.
 | Linux x86-64 production host                       | Supported topology               | Docker Engine, Docker Compose 2.24.4+, systemd/host operations, ports 80/443, writable Docker socket for deployment worker, and at least the configured Milvus/runtime capacity |
 | Linux x86-64 GitHub runner                         | CI target                        | Component, migration, browser, security, image, and disposable Compose gates run here after push/PR                                                                             |
 | Windows 10/11 with Docker Desktop Linux containers | Development and local acceptance | Use PowerShell-safe commands where documented; production promotion still requires a hardened Linux host                                                                        |
-| macOS with Docker Desktop                          | Not certified for v1.0.0         | Expected development path only; no release evidence currently proves the full dynamic-runtime workflow                                                                          |
-| Linux arm64                                        | Not certified for v1.0.0         | Upstream images may be multi-architecture, but the complete release candidate has no arm64 acceptance evidence                                                                  |
-| Kubernetes, Swarm, Podman, rootless Docker         | Not supported by v1.0.0          | No alternate deployment architecture or compatibility layer is shipped                                                                                                          |
+| macOS with Docker Desktop                          | Not certified for v1.0.0-rc.1    | Expected development path only; no release evidence currently proves the full dynamic-runtime workflow                                                                          |
+| Linux arm64                                        | Not certified for v1.0.0-rc.1    | Upstream images may be multi-architecture, but the complete release candidate has no arm64 acceptance evidence                                                                  |
+| Kubernetes, Swarm, Podman, rootless Docker         | Not supported by v1.0.0-rc.1     | No alternate deployment architecture or compatibility layer is shipped                                                                                                          |
 
 The default Milvus limit is 8 GiB. Size the host for PostgreSQL, Redis, etcd, MinIO, the control
 plane, build workers, and every concurrently active 512 MiB project runtime in addition to it.
@@ -40,7 +41,7 @@ plane, build workers, and every concurrently active 512 MiB project runtime in a
 | Redis              | Compose image 8.2 Alpine by immutable digest                                        |
 | Milvus             | Compose image 3.0.1 by immutable digest                                             |
 | Traefik            | Compose image 3.7.12 by immutable digest                                            |
-| NGINX unprivileged | Frontend runtime image 1.31.4 Alpine slim by immutable digest                       |
+| NGINX unprivileged | Frontend runtime image 1.31.5 Alpine slim by immutable digest                       |
 | MCP Python SDK     | Locked 2.1.1 in backend/runtime; candidate validation pins protocol `2026-07-28`    |
 
 Use the committed `uv.lock`, `frontend/pnpm-lock.yaml`, and digest-pinned Compose/base images.

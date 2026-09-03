@@ -2,7 +2,7 @@ from collections.abc import Iterable
 from typing import Protocol, cast
 from uuid import UUID, uuid4
 
-from mcp_contracts import MCPManifest
+from mcp_contracts import RUNTIME_COMPATIBILITY, MCPManifest
 from mcp_contracts.json_types import JsonObject
 from pydantic import TypeAdapter
 
@@ -58,7 +58,6 @@ from app.services.cleanup import CleanupService
 from app.services.settings import SettingsService
 
 PROMPT_BUNDLE_VERSION = "1.0.0"
-RUNTIME_COMPATIBILITY = ">=1.0,<2.0"
 _JSON_OBJECT: TypeAdapter[JsonObject] = TypeAdapter(JsonObject)
 
 

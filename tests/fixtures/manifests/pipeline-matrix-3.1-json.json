@@ -62,7 +62,7 @@
     "analysis_model": null,
     "build_id": "fixture-pipeline-matrix-3.1-json",
     "canonical_sha256": "727e301d49972eac4b2e72a8fe85201e091983808fa0e2a2540488f99faa7af6",
-    "compiler_version": "1.0.0",
+    "compiler_version": "1.0.0-rc.1",
     "created_at": "2026-08-27T00:00:00+00:00",
     "embedding_model": null,
     "prompt_bundle_version": null,
@@ -72,14 +72,14 @@
     ],
     "validation_model": null
   },
-  "manifest_id": "6e290f94da7e5f3012c7754906b04de7aa6b8e35897d1c9a693492da2af1caaa",
+  "manifest_id": "168e6726e82eda9bb01b450e11986895746d328d4ed33c99409fc6123a45c71e",
   "project": {
     "id": "00000000-0000-0000-0000-000000000001",
     "name": "MCPlica pipeline matrix",
     "slug": "pipeline-matrix-3.1-json"
   },
   "resources": [],
-  "runtime_compatibility": ">=1.0,<2.0",
+  "runtime_compatibility": ">=1.0.0-rc.1,<2.0",
   "schema_version": "mcp-manifest/v1",
   "security": {
     "allow_insecure_none_only_in_development": true,

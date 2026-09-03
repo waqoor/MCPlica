@@ -210,7 +210,7 @@ routine syntax checks.
 
 `MCPLICA_VERSION` is the only operator-visible Compose release version. Compose maps it to the
 backend/runtime compatibility setting and all local image build labels. Environments created
-before v1 must add `MCPLICA_VERSION=1.0.0` and remove a manually configured
+before v1 must add `MCPLICA_VERSION=1.0.0-rc.1` and remove a manually configured
 `MCP_RUNTIME_VERSION`; independent values can falsely advertise an incompatible runtime.
 
 The common control-plane environment is shared by migrations, API, builder worker,

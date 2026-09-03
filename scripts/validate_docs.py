@@ -47,6 +47,10 @@ DOCUMENTED_EXTERNAL_ENV = {
     "UV_PROJECT_ENVIRONMENT",
 }
 STALE_TRACKED_PATHS = {
+    "YAZEEDsTODO.md",
+    "implementation_plan.md",
+    "issues_002.md",
+    "plan/todo_features.md",
     "docs/AGENT1_HANDOFF.md",
     "docs/AGENT2_HANDOFF.md",
     "docs/AGENT3_HANDOFF.md",
@@ -54,6 +58,9 @@ STALE_TRACKED_PATHS = {
     "docs/evidence/agent1-backend-control-plane.md",
     "docs/evidence/agent2-runtime-deployment.md",
     "docs/evidence/agent3-requirement-traceability.md",
+    "docs/release/github-public-prerelease-settings.md",
+    "docs/release/release-checklist.md",
+    "docs/release/release-process.md",
 }
 
 
@@ -199,6 +206,16 @@ def validate_tracked_files() -> list[str]:
     output_paths = sorted(path for path in tracked if path.startswith("output/"))
     if output_paths:
         errors.append(f"disposable output is tracked ({len(output_paths)} files under output/)")
+    private_release_paths = sorted(
+        path
+        for path in tracked
+        if path.startswith("docs/evidence/") or path.startswith("docs/release/")
+    )
+    if private_release_paths:
+        errors.append(
+            "private release/evidence material is tracked "
+            f"({len(private_release_paths)} files under docs/evidence or docs/release)"
+        )
     runtime_paths = sorted(
         path
         for path in tracked

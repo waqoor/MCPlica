@@ -5,12 +5,12 @@ Upgrade only between verified releases and never by pulling mutable `latest` tag
 ## Preflight
 
 1. Read release notes, schema changes, security notes, and runtime compatibility declarations.
-2. Verify release checksums, SBOMs, signatures, and image digests using `../release/release-process.md`.
+2. Verify release checksums, SBOMs, signatures, and image digests using `../maintainers/releasing.md`.
 3. Complete a current backup and confirm the most recent restore drill remains applicable.
 4. Export the current Compose render, database revision, active deployment/image/manifest digests, and health evidence.
 5. Test the upgrade on a restored non-production copy, including login, source parsing, build validation, credential connection, deployment, MCP invocation, and rollback.
 
-For the first v1 upgrade, retain every existing secret and add `MCPLICA_VERSION=1.0.0` to the
+For the first v1 upgrade, retain every existing secret and add `MCPLICA_VERSION=1.0.0-rc.1` to the
 private environment. Remove an old operator-defined `MCP_RUNTIME_VERSION`; the canonical Compose
 topology now derives it from the product release version so API, validator, generated runtimes, and
 image metadata cannot drift independently.

@@ -1921,7 +1921,7 @@ export type components = {
       readonly resources?: readonly components["schemas"]["MCPResource"][];
       /**
        * Runtime Compatibility
-       * @default >=1.0,<2.0
+       * @default >=1.0.0-rc.1,<2.0
        */
       readonly runtime_compatibility: string;
       /**

@@ -13,6 +13,14 @@ backend/.venv/
 mcp_runtime/.venv/
 output/
 
+
+docs/evidence/
+docs/release/
+/YAZEEDsTODO.md
+/issues_002.md
+/implementation_plan.md
+/plan/todo_features.md
+
 # Node
 frontend/node_modules/
 frontend/dist/

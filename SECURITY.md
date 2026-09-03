@@ -4,9 +4,9 @@
 
 | Version | Support status |
 | --- | --- |
-| `1.0.x` | Supported after `v1.0.0` publication; fixes land on `master` and the latest compatible release line |
-| Release-candidate commits | Evaluation only; do not expose to untrusted networks without the full operator review |
-| `<1.0.0` snapshots | Unsupported; upgrade using the v1.0.0 migration guidance |
+| `1.0.0-rc.1` | Evaluation only; do not expose to untrusted networks without the full operator review |
+| `1.0.x` | Planned stable line after `v1.0.0` publication |
+| Earlier snapshots | Unsupported; upgrade using the current candidate migration guidance |
 
 Support status does not certify an individual deployment. Operators must verify target-host
 hardening, TLS, secrets, image signatures/digests, monitoring, and recovery.

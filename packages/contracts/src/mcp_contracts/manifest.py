@@ -6,6 +6,7 @@ from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, field_validator, 
 
 from .canonical import HttpMethod
 from .json_types import JsonObject, JsonValue
+from .version import RUNTIME_COMPATIBILITY
 
 _HEADER_NAME = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]+$")
 _FORBIDDEN_AUTH_HEADERS = {
@@ -264,7 +265,7 @@ class MCPManifest(BaseModel):
     schema_version: Literal["mcp-manifest/v1"] = "mcp-manifest/v1"
     manifest_id: str = Field(pattern=r"^[a-f0-9]{64}$")
     project: ManifestProject
-    runtime_compatibility: str = ">=1.0,<2.0"
+    runtime_compatibility: str = RUNTIME_COMPATIBILITY
     servers: list[ServerDefinition] = Field(min_length=1)
     auth_profiles: list[AuthProfile] = Field(default_factory=list[AuthProfile])
     tools: list[MCPTool]
