@@ -15,10 +15,14 @@ navigation correction, request-level regression, and fail-closed flaky-test poli
 repository-control and documentation heads passed all ten hosted checks under the final
 selected-action policy. Their replacement Docker artifacts independently matched GitHub's digest
 and recorded all 13 required service states plus the complete workflow. Immutable results and the
-exact 20-reference execution closure are in [PR
-#44](https://github.com/yazeedhasan97/MCPlica/pull/44#issuecomment-5519011375). Embedding the current
-candidate hash here would change that hash; the exact final PR head and its checks must therefore be
-retained in PR evidence after the dependency correction below.
+exact 20-reference execution closure are in [PR #44](https://github.com/yazeedhasan97/MCPlica/pull/44).
+Its dependency-remediation head `6d5abba` also passed all ten checks: CI
+[33705386979](https://github.com/yazeedhasan97/MCPlica/actions/runs/33705386979), Security
+[33705386981](https://github.com/yazeedhasan97/MCPlica/actions/runs/33705386981), and CLA
+[33705384466](https://github.com/yazeedhasan97/MCPlica/actions/runs/33705384466). Artifact
+`9875280973` independently matched GitHub's SHA-256 and recorded the same complete acceptance
+surface. Embedding the current candidate hash here would change that hash; the exact final PR head
+and its checks must therefore be retained in PR evidence after this refresh.
 
 No independent review is currently requested: the only listed maintainer and CODEOWNER is the PR
 author, and another account's repository write access is not an explicit governance appointment.
@@ -32,8 +36,10 @@ Their asynchronous first response of zero alerts was provisional: the completed 
 alert #1 for pytest GHSA-6w46-j5rx-g56g/CVE-2025-71176. The corrective branch now constrains both
 Python projects to the patched pytest line, locks 9.1.1, and makes both frozen advisory audits cover
 all optional development dependencies. Local Python 3.13 audit and compatibility evidence is clean;
-GitHub must automatically close the alert and the exact final hosted head must repeat the audits.
-The CLA workflow remains fail-closed for untrusted contributors. Branch
+the exact final hosted head must repeat the audits. Because Dependabot evaluates the default branch,
+alert #1 must remain open until the independently approved correction is merged; GitHub must then
+close it from the updated `master` graph before tagging. The CLA workflow remains fail-closed for
+untrusted contributors. Branch
 protection/rulesets, independent review, founder-approved external CLA service, GitHub private
 vulnerability reporting/code scanning/secret scanning, target-host acceptance, backup/restore, and
 publication evidence remain unchecked operator gates. No tag or Release exists.
@@ -62,9 +68,12 @@ The owner-assigned external-action ledger is [issue
 - [x] Dependabot vulnerability alerts and automated security fixes are enabled. The completed scan
       found alert #1 for pytest GHSA-6w46-j5rx-g56g/CVE-2025-71176; the corrective branch uses the
       patched 9.1.1 lock and audits all optional development dependencies.
-- [ ] GitHub has re-indexed the exact final candidate, automatically closed alert #1, and reports
-      zero open Dependabot alerts; both final hosted all-extras Python audits pass. Recheck again
-      immediately before tagging.
+- [x] Both hosted all-extras Python audits passed on dependency-remediation head `6d5abba`, each
+      showing pytest 9.1.1 in the export and no known vulnerabilities. The documentation-only final
+      head must repeat the same checks.
+- [ ] After an authorized merge, GitHub has re-indexed the reviewed default-branch lock,
+      automatically closed alert #1 as fixed, and reports zero open Dependabot alerts. Recheck
+      again immediately before tagging.
 - [ ] `master` protection/rulesets require pull requests, sensitive CODEOWNERS review,
       conversation resolution, current CI/Security/CLA checks, and block force pushes/deletion with
       administrator enforcement.
