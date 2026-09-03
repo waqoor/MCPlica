@@ -6,7 +6,12 @@ from app.domain.builds import BuildRecord, BuildStatus, BuildTrigger
 from app.domain.credentials import CredentialRecord, CredentialScheme
 from app.domain.indexing import IndexGenerationStatus
 from app.domain.sources import (
+    OperationSecurityRequirementRecord,
+    OperationServerRoutingRecord,
     ProjectSourceRecord,
+    SecuritySchemeDiscoveryRecord,
+    ServerCandidateRecord,
+    SourceConfigurationDiscoveryRecord,
     SourceIssueRecord,
     SourceKind,
     SourceOrigin,
@@ -16,7 +21,12 @@ from app.domain.sources import (
 from app.schemas.auth import UserRead
 from app.schemas.build import BuildRead
 from app.schemas.credential import CredentialRead
-from app.schemas.source import SourceRead, SourceVersionMetadataRead, SourceVersionRead
+from app.schemas.source import (
+    SourceConfigurationDiscoveryRead,
+    SourceRead,
+    SourceVersionMetadataRead,
+    SourceVersionRead,
+)
 
 
 def test_read_schemas_accept_domain_records_without_exposing_internal_fields() -> None:
@@ -137,3 +147,62 @@ def test_read_schemas_accept_domain_records_without_exposing_internal_fields() -
     assert build_read.canonical_snapshot_id is None
     assert "requested_by" not in build_read.model_dump()
     assert "manifest_storage_key" not in build_read.model_dump()
+
+
+def test_source_configuration_read_accepts_nested_domain_records() -> None:
+    source_version_id = uuid4()
+    discovery = SourceConfigurationDiscoveryRecord(
+        source_version_ids=[source_version_id],
+        configuration_sha256="a" * 64,
+        servers=[
+            ServerCandidateRecord(
+                ref="server:primary",
+                url="https://api.example.test",
+                description="Primary API",
+                scope="root",
+                source_pointer="#/servers/0",
+                applicable_operation_keys=["get_items"],
+            )
+        ],
+        operations=[
+            OperationServerRoutingRecord(
+                operation_key="get_items",
+                method="GET",
+                path="/items",
+                candidate_refs=["server:primary"],
+                selected_server_ref="server:primary",
+                configured_server_ref=None,
+                selection_required=False,
+                selection_error=None,
+            )
+        ],
+        security_schemes=[
+            SecuritySchemeDiscoveryRecord(
+                name="bearerAuth",
+                type="http_bearer",
+                location=None,
+                parameter_name=None,
+                token_url=None,
+                advertised_scopes=[],
+                applicable_operation_keys=["get_items"],
+                optional_for_all_operations=False,
+                source_pointer="#/components/securitySchemes/bearerAuth",
+            )
+        ],
+        security_requirements=[
+            OperationSecurityRequirementRecord(
+                operation_key="get_items",
+                alternatives=[{"bearerAuth": []}],
+                anonymous_allowed=False,
+            )
+        ],
+        routing_complete=True,
+    )
+
+    response = SourceConfigurationDiscoveryRead.model_validate(discovery)
+
+    assert response.source_version_ids == [source_version_id]
+    assert response.servers[0].ref == "server:primary"
+    assert response.operations[0].selected_server_ref == "server:primary"
+    assert response.security_schemes[0].name == "bearerAuth"
+    assert response.security_requirements[0].alternatives == [{"bearerAuth": []}]

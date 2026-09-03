@@ -53,3 +53,14 @@ async def me(principal: CurrentPrincipal) -> UserRead:
     )
 ```
 `UserRead` (`backend/app/schemas/auth.py:24-34`) declares `created_at`/`updated_at`/`last_login_at` as `datetime | None = None`. The `/me` handler constructs `UserRead` manually and never passes these three fields, so they silently default to `None` — Pydantic does not error because they're optional. `GET /users` (`backend/app/api/users.py`) evidently builds `UserRead` from the ORM object directly (`from_attributes=True`), which is why it returns the correct values for the identical row.
+
+## Resolution (2026-09-04 integration)
+
+The authenticated `UserIdentity` now retains `created_at`, `updated_at`, and
+`last_login_at` from the already-loaded `UserAccount`, without retaining the password
+hash. The `/me` handler validates `UserRead` directly from that safe identity, and an
+automated regression covers the complete `UserAccount` → `UserIdentity` → `/me` path.
+
+The original live responses above are intentionally preserved. A live Docker endpoint
+re-test is still required before changing the original `AUTH-007` execution result from
+FAIL to PASS.

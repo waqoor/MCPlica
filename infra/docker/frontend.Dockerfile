@@ -14,7 +14,7 @@ RUN pnpm build
 FROM nginxinc/nginx-unprivileged:1.31.5-alpine3.24-slim@sha256:7d289d4f8935051d213bc3ecee3b4fc2d52f97ea5a954273e031054b633e7934
 ARG VERSION
 ARG VCS_REF=local
-ARG SOURCE_URL=https://github.com/yazeedhasan97/MCPlica
+ARG SOURCE_URL=https://github.com/waqoor/MCPlica
 LABEL org.opencontainers.image.title="MCPlica frontend" \
       org.opencontainers.image.description="MCPlica administrative web interface" \
       org.opencontainers.image.version="${VERSION}" \

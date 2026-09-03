@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import cast
 from uuid import UUID
@@ -18,6 +19,8 @@ def _principal(role: UserRole) -> AuthPrincipal:
             display_name="Role matrix",
             role=role,
             is_active=True,
+            created_at=datetime(2026, 9, 4, tzinfo=UTC),
+            updated_at=datetime(2026, 9, 4, tzinfo=UTC),
         ),
         session_id=UUID(int=2),
         csrf_token="csrf",

@@ -31,6 +31,9 @@ def _identity(user: UserAccount) -> UserIdentity:
         display_name=user.display_name,
         role=user.role,
         is_active=user.is_active,
+        created_at=user.created_at,
+        updated_at=user.updated_at,
+        last_login_at=user.last_login_at,
     )
 
 

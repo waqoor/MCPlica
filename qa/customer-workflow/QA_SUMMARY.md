@@ -68,16 +68,19 @@ simply next in line.
 25 of 40 P0 cases are blocked by a single, clearly identified dependency
 (see below) — not by 25 separate problems.
 
-## Verified bugs found: 1
+## Verified bugs found: 1 (fixed in integration; live re-verification pending)
 
-| Bug ID | Title | Severity | Priority |
-|---|---|---|---|
-| `BUG-001` | `GET /api/v1/auth/me` returns `null` for `created_at`/`updated_at`/`last_login_at`, while `GET /api/v1/users` correctly returns real values for the identical account at the same instant | Low | P2 |
+| Bug ID | Title | Severity | Priority | Status |
+|---|---|---|---|---|
+| `BUG-001` | `GET /api/v1/auth/me` returns `null` for `created_at`/`updated_at`/`last_login_at`, while `GET /api/v1/users` correctly returns real values for the identical account at the same instant | Low | P2 | Fixed in integration; automated regression passed; live endpoint re-verification pending |
 
 Root cause located precisely: `backend/app/api/auth.py:128-137` constructs
 the response object manually and omits those three fields, which then
 silently default to `null` rather than erroring. Full reproduction and code
 citation in `BUGS_FOUND.csv` and `qa/customer-workflow/evidence/BUG-001-auth-me-null-timestamps.md`.
+The integration fix retains the three timestamps in the safe authenticated
+identity and validates the `/me` response from that identity. The original
+live result remains a FAIL until the Docker endpoint is explicitly re-run.
 
 **No other verified bugs were found.** Every other executed test — including
 CSRF enforcement, session revocation on logout, all three RBAC checks

@@ -50,7 +50,7 @@ def main() -> None:
         labels = cast(dict[str, str], config.get("Labels") or {})
         expected_labels = {
             "org.opencontainers.image.version": version,
-            "org.opencontainers.image.source": "https://github.com/yazeedhasan97/MCPlica",
+            "org.opencontainers.image.source": "https://github.com/waqoor/MCPlica",
             "org.opencontainers.image.licenses": "AGPL-3.0-only",
         }
         for key, expected in expected_labels.items():

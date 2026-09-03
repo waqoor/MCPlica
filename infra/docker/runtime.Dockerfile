@@ -16,7 +16,7 @@ RUN uv sync --frozen --package mcplica-runtime --no-dev --no-editable
 FROM ${PYTHON_BASE} AS runtime
 ARG VERSION
 ARG VCS_REF=local
-ARG SOURCE_URL=https://github.com/yazeedhasan97/MCPlica
+ARG SOURCE_URL=https://github.com/waqoor/MCPlica
 LABEL org.opencontainers.image.title="MCPlica generic MCP runtime" \
       org.opencontainers.image.description="Manifest-driven MCP Streamable HTTP runtime" \
       org.opencontainers.image.version="${VERSION}" \
