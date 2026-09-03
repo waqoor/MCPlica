@@ -1,0 +1,171 @@
+openapi: 3.0.3
+info:
+  title: QA Semantic Confusion API
+  version: "1.0.0"
+  description: >
+    Purpose-built to stress-test AI enrichment, not schema parsing. Every
+    operation here is valid, deterministic OpenAPI; the risk under test is
+    whether AI-generated titles/descriptions/keywords for one operation get
+    assigned to, or blended with, a different, semantically-adjacent
+    operation. Per architecture: AI may only write the "semantic" fields
+    (title/description/category/keywords) and can NEVER change method,
+    path, parameters, or body -- so even a fully "confused" AI response
+    must not alter executable behavior. The point of the fixtures/tests
+    that use this file is to verify that guarantee holds AND that the
+    semantic output, when present, is actually assigned to the correct
+    operation_key (backend/app/services/analysis/service.py validates
+    result.operation_key == operation.key and rejects mismatches).
+
+    Confusable pairs deliberately included:
+      1. cancelPayment vs refundPayment -- both described with overlapping
+         vocabulary ("reverse", "void", "cancel", "refund") but distinct
+         HTTP methods/paths/side effects.
+      2. getUser vs getUserProfile -- near-identical naming/shape on two
+         different resource families.
+      3. deleteOrder vs cancelOrder -- semantic near-synonyms mapped to
+         different HTTP methods (DELETE vs POST-action) on the same base
+         resource.
+servers:
+  - url: https://api.qa-confusion.example.com/v1
+security:
+  - bearerAuth: []
+paths:
+  /payments/{paymentId}/cancel:
+    post:
+      operationId: cancelPayment
+      summary: Cancel a pending payment before it settles
+      description: >
+        Voids an authorized-but-not-yet-settled payment. No money moves;
+        the authorization hold is released. This is NOT a refund.
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Payment cancelled (authorization released).
+  /payments/{paymentId}/refund:
+    post:
+      operationId: refundPayment
+      summary: Refund a settled payment
+      description: >
+        Reverses a settled payment by returning funds to the original
+        payment method. Requires the payment to have already settled; use
+        cancelPayment instead for a pending authorization.
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount]
+              properties:
+                amount:
+                  type: number
+                  minimum: 0.01
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: Refund issued.
+  /users/{userId}:
+    get:
+      operationId: getUser
+      summary: Get account user
+      description: Returns the core account/identity record for a user.
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The user account.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, email]
+                properties:
+                  id:
+                    type: string
+                  email:
+                    type: string
+  /user-profiles/{profileId}:
+    get:
+      operationId: getUserProfile
+      summary: Get user profile
+      description: >
+        Returns the public-facing display profile for a user (distinct
+        record from the account identity returned by getUser).
+      parameters:
+        - name: profileId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The user profile.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, displayName]
+                properties:
+                  id:
+                    type: string
+                  displayName:
+                    type: string
+  /orders/{orderId}:
+    delete:
+      operationId: deleteOrder
+      summary: Permanently delete an order record
+      description: >
+        Hard-deletes the order record. Irreversible. Different from
+        cancelOrder, which only changes status and preserves history.
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Order deleted.
+  /orders/{orderId}/cancel:
+    post:
+      operationId: cancelOrder
+      summary: Cancel an order
+      description: >
+        Marks the order as cancelled but preserves the record for history
+        and reporting. Different from deleteOrder, which removes it.
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Order cancelled (status changed, record retained).
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer

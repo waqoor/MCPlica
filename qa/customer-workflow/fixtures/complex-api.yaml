@@ -1,0 +1,248 @@
+openapi: 3.1.0
+info:
+  title: QA Complex Order Management API
+  version: "2.1.0"
+  description: >
+    Deliberately feature-rich fixture used to exercise the compiler/validator
+    transformation rules under real complexity: multiple servers, nested
+    request/response schemas, arrays, enums, path/query/header/cookie
+    parameters, and one operation with an unsupported request-body media
+    type. The last two operations are intentionally non-compliant with the
+    MCP-runtime-supported feature set (cookie parameter, PDF-only body) so
+    they can be used to verify the compiler's deterministic rejection /
+    operation-exclusion path once a build can reach the COMPILING stage.
+servers:
+  - url: https://api.qa-orders.example.com/v2
+    description: Primary (US) region
+  - url: https://eu.api.qa-orders.example.com/v2
+    description: EU region
+security:
+  - apiKeyAuth: []
+paths:
+  /orders:
+    get:
+      operationId: listOrders
+      summary: List orders
+      description: Returns orders matching the given filters.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, paid, shipped, cancelled]
+        - name: tags
+          in: query
+          required: false
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: string
+        - name: X-Request-Id
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: A list of orders.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Order"
+    post:
+      operationId: createOrder
+      summary: Create an order
+      description: Creates an order with a customer and one or more line items.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [customer, items]
+              properties:
+                customer:
+                  type: object
+                  required: [name, email]
+                  properties:
+                    name:
+                      type: string
+                    email:
+                      type: string
+                      format: email
+                items:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [sku, quantity, unitPrice]
+                    properties:
+                      sku:
+                        type: string
+                      quantity:
+                        type: integer
+                        minimum: 1
+                      unitPrice:
+                        type: number
+                        minimum: 0
+                notes:
+                  type: string
+      responses:
+        "201":
+          description: Order created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+  /orders/{orderId}:
+    get:
+      operationId: getOrder
+      summary: Get an order
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The requested order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "404":
+          description: Order not found.
+    delete:
+      operationId: deleteOrder
+      summary: Delete an order
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Order deleted.
+  /orders/{orderId}/status:
+    patch:
+      operationId: updateOrderStatus
+      summary: Update order status
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [pending, paid, shipped, cancelled]
+      responses:
+        "200":
+          description: Updated order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+  /orders/export:
+    get:
+      operationId: exportOrders
+      summary: Export orders (uses an unsupported cookie parameter)
+      description: >
+        Intentionally invalid per MCPlica's compiler rules: cookie
+        parameters are not representable in an MCP tool schema and must be
+        hard-rejected at compile time, not silently dropped.
+      parameters:
+        - name: sessionId
+          in: cookie
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: CSV export.
+          content:
+            text/csv:
+              schema:
+                type: string
+  /orders/{orderId}/label:
+    post:
+      operationId: generateShippingLabel
+      summary: Generate a shipping label (unsupported response-only media type)
+      description: >
+        Intentionally invalid per MCPlica's compiler rules: the only
+        request-body media type offered is application/pdf, which is
+        outside the supported set (json / form-urlencoded / multipart) and
+        must be hard-rejected, not silently skipped.
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/pdf:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: Label generated.
+components:
+  securitySchemes:
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+  schemas:
+    Order:
+      type: object
+      required: [id, status, customer, items]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, paid, shipped, cancelled]
+        customer:
+          type: object
+          required: [name, email]
+          properties:
+            name:
+              type: string
+            email:
+              type: string
+              format: email
+        items:
+          type: array
+          items:
+            type: object
+            required: [sku, quantity, unitPrice]
+            properties:
+              sku:
+                type: string
+              quantity:
+                type: integer
+              unitPrice:
+                type: number
