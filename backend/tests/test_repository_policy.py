@@ -39,8 +39,17 @@ def test_dependency_review_has_an_executable_private_repository_fallback() -> No
     assert "working-directory: frontend" in workflow
     assert "pnpm install --frozen-lockfile" in workflow
     assert "pnpm audit --audit-level high" in workflow
-    assert "uv export --frozen --all-packages --no-dev --no-emit-workspace" in workflow
+    assert "uv export --frozen --all-packages --all-extras --no-emit-workspace" in workflow
     assert "uvx pip-audit" in workflow
+
+
+def test_python_advisory_audits_include_optional_development_dependencies() -> None:
+    root = Path(__file__).resolve().parents[2]
+
+    for path in (".github/workflows/ci.yml", ".github/workflows/security.yml"):
+        workflow = (root / path).read_text(encoding="utf-8")
+        assert "uv export --frozen --all-packages --all-extras --no-emit-workspace" in workflow
+        assert "--no-dev" not in workflow
 
 
 def test_playwright_retries_cannot_mask_flaky_ci_results() -> None:

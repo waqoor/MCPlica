@@ -10,15 +10,15 @@ dc7deb222562f89c1f784f33ac4ddc120a93f1b187c78890e6222971772f18fa  ./.github/ISSU
 1b74b3c3ebe115d64f891b4a87b8e3e1950d54297e9d084a2618b211c9e00abd  ./.github/PULL_REQUEST_TEMPLATE.md
 9c37fd0a0b56ac61f527f34231612ebed67f6badd6250f194359ba6702bdf1ed  ./.github/dependabot.yml
 7253616122553fb19e66f9e6dbd0891ad33a77ca48a82833a9a1a14e1cc82516  ./.github/labels.json
-df75de350f3faf66795384deeaf57f9eda0869126885697fda6f587c8e0754ed  ./.github/workflows/ci.yml
+c9718763d3cc40d57151719e536b9d6206be3ea01fdf1c591d959ba8f516e29b  ./.github/workflows/ci.yml
 3bf2fc1df3e49d81495abe7668adf502052107ade4b53bb49dceb25ecc7e209b  ./.github/workflows/cla.yml
 a0c08bf86412f32bd177d7ed06c76f0ae62982dfad64e31c726389675c7a578d  ./.github/workflows/labels.yml
 c493c7afde424ea3ecd2f66820e2bdea75f06e676bf3f902d1d20c227edae56a  ./.github/workflows/release.yml
-984c925ebc332fcfc536adb85f2cf4851028008497607ae00573ecbfa2a013e6  ./.github/workflows/security.yml
+994d317829c09f072da7f238f2ba8d532238a941e0c0925998a21bc819887497  ./.github/workflows/security.yml
 f69aeaa9b65a3d99386c98289e5f5d9d5bebe75d37348910751c8cd2403e161c  ./.gitignore
 ca5ed42241ed10ec74f85b10c0e4bc663eed7a64795059c3267a26b1b30f5705  ./.gitleaks.toml
 2722b61f414f07f08be7f1f1316012813818f26f1c40d6a24a748686cec7d2ff  ./.node-version
-1725a3f96ba093b37a77f55aec2b750ef8b9f06bf41f4cae8c146d34c31c5df1  ./CHANGELOG.md
+64dd66f95cfac6f3d5db870355b618215e7fd8199fda3b2b1d67e2c7e5c93527  ./CHANGELOG.md
 0585e1c779a468e97d78777c4a9abf7dfa28beff282a3168fb68f1cfca79f02c  ./CLA.md
 92c932998038bbcd6bee7b9305b3ddc442b9a6c315c8e883174f64606c16b54c  ./CODE_OF_CONDUCT.md
 32ee273fa2c907888d14cc01d667f2be0311327a1e9dc7734e92644c479a1310  ./CONTRIBUTING.md
@@ -238,7 +238,7 @@ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./backend/app/
 e568fdeacecb8ec9370e248d4d7d2832a914cf62f13bf0dd839441a0d7005d7a  ./backend/benchmarks/milvus_scale.py
 811490aab2b4858cb1a1d5304955f0efecdbdaaec53bdf0e80aa760de04d6a41  ./backend/critical_coverage.json
 ff54c1ddcfef3667fdf86e4f83d69727b3e41cf94fd757b4096e5bf016f0b3f5  ./backend/generate_openapi.py
-b119e03bb4c0c1e91ad81ed07ac12beab20469d98982b0691d395a8e4562baa6  ./backend/pyproject.toml
+5df4c60c498c30de18227a28bd2542d1c88d0935a6de7ee5ce46f1d14947f513  ./backend/pyproject.toml
 da34db454abed756925bc6237ede742d7fb660f456110380780f00c245b4c4c0  ./backend/scripts/__init__.py
 14f7491e540cd68b77282d53df19460c4cc8e2deefdc3974f34d6060d27e6dbd  ./backend/scripts/check_critical_coverage.py
 e44094b3ad758e9c8487ce034b61c0abc4b02f046af04345db896fb15e0d679c  ./backend/scripts/generate_contract_matrix.py
@@ -305,7 +305,7 @@ b00e138039878b84acdde8281f179f5a700ca3d85a3545459f2c1bc97f23186e  ./backend/test
 a48b6196d1e31b61eca379328ed0e95bb5b1e5541dd3fa4d62faf29a1993c44d  ./backend/tests/test_operation_paging.py
 f63f4182525674737de4109cd5dd583011ad4d1e49cf4fea9dffe2b413e2ed49  ./backend/tests/test_queue_clients.py
 948f962fed59757de95ae817ea1e46216f54128d61d7a3678d90ba9ebf6dc64c  ./backend/tests/test_read_schema_boundaries.py
-216bec2a0e7e374140bb0ca5e3c6da3a6ab27b7b8b9aec69cc8a793eb3a7a91b  ./backend/tests/test_repository_policy.py
+ac88705520f7a16edd3b6a5c4a29ffbd62588a9568ab42fffb1b1465375bcca3  ./backend/tests/test_repository_policy.py
 1bdaff037e02dd103046386f67c66ba69d3e72dcfe593c0e07e22f8fed1673dd  ./backend/tests/test_request_limits.py
 8ee7868f480a71fcc6e2e9d59684463e9aba2ddc60d6c178c3a7fe47f984727b  ./backend/tests/test_runtime_command_lifecycle.py
 9e445e4c94d0d4f56e76151b48f5dca6666c67f9c6815ae2fb5035558579246c  ./backend/tests/test_runtime_deployment.py
@@ -340,8 +340,8 @@ dffd0e736e7c8be4aa7f00eafbe109b4745e643e1dcc87777f1ca8402940e52e  ./docs/evidenc
 fd237430a787e5058ba7533b8faef0071cabad1ba09d3bef9489b10c4b6ca55c  ./docs/evidence/post-merge-2026-09-01/validation-summary.json
 6dd33af3d14233bf43bf238a5be11b816d3c5c94d65e821c8db717a681fe8cce  ./docs/evidence/post-merge-2026-09-01/workflow.json
 62a789990a5e3cbed71d205e2b922af1ded6ed4465bb99f7462d22836fc1598e  ./docs/evidence/post-merge-validation-2026-09-01.md
-bd45e82919a7763df6fa35fb0535b8186f406f5f2c354d9741ef755c80cba374  ./docs/evidence/v1.0.0-branch-and-gate-audit.md
-9596014aa1df2692831f6da50e8e09fb7227d2f6d424e1e5e8f386a329db95de  ./docs/evidence/v1.0.0-release-candidate.md
+acfbe4488e3822a4968c280ef7e8617e334f50525ea2204637dabd5033df1449  ./docs/evidence/v1.0.0-branch-and-gate-audit.md
+2428ddf51651db2a091fb73c33654f095bd206fa0c953aa83e03bd9f5daa9b5d  ./docs/evidence/v1.0.0-release-candidate.md
 7c875393177732dfb11f916a57e3ac798939bf847298cd27d8233e4ae9407e9a  ./docs/implementation_plan.md
 88b1bf1cc1467d191bdbf9077a41fff1aa36093cba2974ba5aee230b405b5d37  ./docs/mcp-client-connection.md
 cc4a31395f46dc181699a163a2ac397bb042b42b5c88b01ea75d2a6c30be216a  ./docs/open_source_and_sponsorship_model.md
@@ -354,7 +354,7 @@ b2b50db7016179df69e4d10875d3ff09cbeb63c30bf9012bfb77dea0bf98a27b  ./docs/operati
 215b82eba9cc57f4b544fece0b50a9c7f765a7881d81310a9475fbb6f223daa8  ./docs/operations/troubleshooting.md
 2d2f7e556910770b8d31cfe6eb1ddbe3fa356af3f930111b1e9bf430f7172274  ./docs/operations/upgrade.md
 0e58d27e209116f1e9f0acb7988ef81d86c83ca01141a1d561db261f0549d4d3  ./docs/product_requirements.md
-7508ff5f68b5cc2c79a3f2d8825922f24b014b4ae6ef95c85bf68809185f5918  ./docs/release/release-checklist.md
+b46988732688783532323435f290eaa96a46cd916505efa602290c4074e02a64  ./docs/release/release-checklist.md
 84b69a9d2040bc1e134173116bdca38c20bea53230eb9d65d3ba891ad5d01c01  ./docs/release/release-process.md
 71651ffb4c8e791986b68a9053970e8ddda2386aefa9626f090f27a1b4648ed8  ./docs/releases/v1.0.0.md
 2d87fe8fd8a50ac3a7742488f7550c13713b549746da99c6f0ca55540f6147da  ./docs/security/hardening.md
@@ -559,7 +559,7 @@ d8a5085434f73c7280743a0d38ad1c46fbdf208b5da08695438ee37dcf3b9a91  ./mcp_runtime/
 7f07056bc9d6e954dd152cf51bb7123dc124becd723986de71df32447d3bd05d  ./mcp_runtime/app/server/tool_registry.py
 c669c121e61cee00d9b58f956da517787189615fa96dd35b91ab5c02d8fb16a6  ./mcp_runtime/app/validation_harness.py
 3b081eb1fe8bed18f13c6067b70c7c22435eedbd4911dec6f15eb47ae9c32ae0  ./mcp_runtime/app/validation_main.py
-711ecb8f03f6c182435fbeada1609bf0752b804526ef33c07b6415c538584149  ./mcp_runtime/pyproject.toml
+1653336028def0c10081be2eed40adf7b232323a08b3abc69470e9f3f7bb346d  ./mcp_runtime/pyproject.toml
 9d2baf927e20e4349e0761e8d7c39df23d96a66487fa9c8870211357ffec5df2  ./mcp_runtime/tests/test_api_client.py
 08772bb817d52c0176364f069a46f08b3e7a7954ab299ac18c497bcbc66dd3b3  ./mcp_runtime/tests/test_contract_fixture_matrix.py
 fcfd355135715628e401f584d803a5b04fb72db465dcf0267db7f3d884cbf03f  ./mcp_runtime/tests/test_executor_acceptance.py
@@ -657,4 +657,4 @@ ee28d8b7d476237ace905c2c19c8c1019f51af90cee1255b9c17c5506c8c97a3  ./tests/integr
 efd76c20ec5efa3e9287095da498c863af6c01e6b89691ffca3c2e76f6a44042  ./tests/integration/test_fixture_server.py
 2550f307ff3e3524362481e1883c778c47713f6df253b6047508103f38499541  ./tests/integration/vector_isolation_check.py
 faf87fe5e796bc1d7beb8ba74152f6f1891a4ea7634963b9f956eb29bd944b92  ./todo_features.md
-789eb44db82591ea0747fcef5f1cc4e76b82d1bb7d50cd9335abaec663ee0687  ./uv.lock
+154be9ef094bd655441d6fd4f26f78cef2cb420a45b0e52744a0b9ac4e1587f4  ./uv.lock

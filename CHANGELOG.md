@@ -27,6 +27,9 @@ version is not published until its immutable tag and release workflow complete.
 - Restricted repository Actions to the recursively audited full-SHA direct/transitive action
   closure, enabled Dependabot vulnerability alerts and automated fixes, and documented the exact
   unavailable private-platform security gates without treating local scans as substitutes.
+- Updated the backend and runtime development constraint to pytest 9.1.1 for
+  GHSA-6w46-j5rx-g56g/CVE-2025-71176, and expanded both frozen Python advisory audits to include
+  every optional development dependency rather than auditing only the production graph.
 
 ## [1.0.0] - 2026-09-02
 
