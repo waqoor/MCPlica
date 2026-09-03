@@ -12,13 +12,19 @@ audit](../evidence/v1.0.0-branch-and-gate-audit.md). The previously integrated `
 `b22ff7e` is superseded as release evidence because its nominally successful E2E job contained a
 WebKit failure that passed on retry. `fix/final-release-closure-20260903` contains the canonical
 navigation correction, request-level regression, and fail-closed flaky-test policy. Its hosted
-checks and independent approval are required before merge.
+implementation head `71c09cf4` passed all ten hosted checks, including a clean no-flake browser
+matrix and complete disposable Docker acceptance; immutable results are in [PR
+#44](https://github.com/yazeedhasan97/MCPlica/pull/44#issuecomment-5518471695). The documentation
+evidence refresh must retain those checks on the current head. Independent review is requested from
+`mohd-ghnm-X` but has not been submitted, so the PR remains deliberately unmerged.
 
 Repository Actions now requires full-SHA pins and all workflow actions comply. The private locked
 dependency graphs have no known vulnerability, and the CLA workflow is fail-closed for untrusted
 contributors. Branch protection/rulesets, independent review, founder-approved external CLA
 service, private security intake, target-host acceptance, backup/restore, and publication evidence
 remain unchecked operator gates. No tag or Release exists.
+The owner-assigned external-action ledger is [issue
+#45](https://github.com/yazeedhasan97/MCPlica/issues/45).
 
 ## Release identity and repository state
 
