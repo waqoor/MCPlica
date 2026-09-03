@@ -15,7 +15,7 @@ Last live audit: 2026-09-04, before the public-visibility change.
 | Organization ownership | `@yazeedhasan97` is the sole organization owner | Appoint a second trusted owner for continuity. |
 | Organization 2FA policy | Not required by the organization | Require 2FA and secure 2FA methods after checking every member, outside collaborator, bot, and recovery path. |
 | Repository collaborators | `@yazeedhasan97` admin; `@mohd-ghnm-X` direct write | Confirm the direct write grant is still required; prefer a least-privilege team. |
-| Actions | Enabled; selected actions only; all allowed action references are pinned to full SHAs; default token is read-only and cannot approve pull requests | Preserve this policy and recheck it after transfer/publication. |
+| Actions | Enabled; selected actions only; all allowed action references are pinned to full SHAs; default token is read-only and cannot approve pull requests | Preserve this policy and recheck it after transfer/publication. After the integration PR merges, remove the now-unused `gitleaks/gitleaks-action` allowlist entry. |
 | Branch protection / rulesets | Not active; the GitHub API reports that the current private repository needs a paid plan or public visibility | Configure the `master` and release-tag rulesets immediately after the repository becomes public. |
 | Dependabot alerts / fixes | Alerts and automated security fixes enabled; alert #1 was open at audit start while the patched dependency was not yet indexed on `master` | Confirm GitHub closes it as fixed after default-branch re-indexing; do not dismiss it. |
 | Private vulnerability reporting | Disabled/unavailable while private on the current plan | Enable immediately after public visibility and test the external report path. |
@@ -217,6 +217,10 @@ all branches. After changing visibility:
       do not broadly exempt all writers. Require an auditable reason and expiry for every bypass.
 - [ ] Keep the repository's pinned Gitleaks and Trivy workflows required. GitHub scanning is an
       additional independent control, not a replacement.
+- [ ] Do not add the former Gitleaks Action's license repository secret for this workflow. The
+      organization transfer exposed the Action's organization-license requirement, so the
+      repository now runs the open-source CLI from a digest-pinned container with networking
+      disabled instead.
 
 - <https://docs.github.com/en/code-security/concepts/secret-security/secret-scanning>
 - <https://docs.github.com/en/code-security/concepts/secret-security/push-protection>

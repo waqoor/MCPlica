@@ -173,6 +173,22 @@ def test_gitleaks_fixture_allowlist_is_rule_path_and_shape_scoped() -> None:
     assert allowlist["paths"] == [r"tests/fixtures/(canonical|manifests)/[^/]+\.json$"]
 
 
+def test_gitleaks_history_scan_is_digest_pinned_and_org_license_independent() -> None:
+    root = Path(__file__).resolve().parents[2]
+    workflow = (root / ".github/workflows/security.yml").read_text(encoding="utf-8")
+
+    assert "gitleaks/gitleaks-action@" not in workflow
+    assert "fetch-depth: 0" in workflow
+    assert "docker run --rm --network none" in workflow
+    assert (
+        "ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:"
+        "c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f" in workflow
+    )
+    assert "git /repo" in workflow
+    assert "--config /repo/.gitleaks.toml" in workflow
+    assert "--redact" in workflow
+
+
 def test_release_assets_are_attached_before_an_immutable_release_is_published() -> None:
     root = Path(__file__).resolve().parents[2]
     workflow = (root / ".github/workflows/release.yml").read_text(encoding="utf-8")

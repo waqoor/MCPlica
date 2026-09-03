@@ -15,6 +15,8 @@ version is not published until its immutable tag and release workflow complete.
   source-configuration response models validate domain records through Pydantic attribute access.
 - Preserved account timestamps in authenticated identities so `GET /api/v1/auth/me` returns the
   same `created_at`, `updated_at`, and `last_login_at` values as the user record.
+- Replaced the organization-license-dependent Gitleaks Action with an offline, digest-pinned
+  Gitleaks CLI history scan so the required `secrets` job remains executable after transfer.
 - Added an admin-only, route-backed **Settings > Providers** workspace for write-only encrypted
   OpenRouter key rotation, live connection testing, and distinct credential/reachability/build
   readiness states.
