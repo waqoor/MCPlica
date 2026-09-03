@@ -340,7 +340,7 @@ dffd0e736e7c8be4aa7f00eafbe109b4745e643e1dcc87777f1ca8402940e52e  ./docs/evidenc
 fd237430a787e5058ba7533b8faef0071cabad1ba09d3bef9489b10c4b6ca55c  ./docs/evidence/post-merge-2026-09-01/validation-summary.json
 6dd33af3d14233bf43bf238a5be11b816d3c5c94d65e821c8db717a681fe8cce  ./docs/evidence/post-merge-2026-09-01/workflow.json
 62a789990a5e3cbed71d205e2b922af1ded6ed4465bb99f7462d22836fc1598e  ./docs/evidence/post-merge-validation-2026-09-01.md
-5861333c03cf2c69c21b7c23503457b139ac1a5e991d9b80312728fc7af1abc6  ./docs/evidence/v1.0.0-branch-and-gate-audit.md
+6a4bdc0501ae954214251320c80def57e47d2878e643e6873e2e78ff98b0054a  ./docs/evidence/v1.0.0-branch-and-gate-audit.md
 13e47660a386a52e8070efe921db7dcf0ce76ba3a380b4ebb395fc3002d57a81  ./docs/evidence/v1.0.0-release-candidate.md
 7c875393177732dfb11f916a57e3ac798939bf847298cd27d8233e4ae9407e9a  ./docs/implementation_plan.md
 88b1bf1cc1467d191bdbf9077a41fff1aa36093cba2974ba5aee230b405b5d37  ./docs/mcp-client-connection.md
@@ -354,7 +354,7 @@ b2b50db7016179df69e4d10875d3ff09cbeb63c30bf9012bfb77dea0bf98a27b  ./docs/operati
 215b82eba9cc57f4b544fece0b50a9c7f765a7881d81310a9475fbb6f223daa8  ./docs/operations/troubleshooting.md
 2d2f7e556910770b8d31cfe6eb1ddbe3fa356af3f930111b1e9bf430f7172274  ./docs/operations/upgrade.md
 0e58d27e209116f1e9f0acb7988ef81d86c83ca01141a1d561db261f0549d4d3  ./docs/product_requirements.md
-a177a14e189d956cdcac2cc7d7a4664027c5b0589be5da39a5d13cbb14d1f9ec  ./docs/release/release-checklist.md
+a9bd13ec6c144041b13fa3f09321cff1cd2793e85c3bc47abe7cb837af85433f  ./docs/release/release-checklist.md
 536621baa4645196500e8722c06cf0cdee9996377606cd3f114ebed091e6a878  ./docs/release/release-process.md
 71651ffb4c8e791986b68a9053970e8ddda2386aefa9626f090f27a1b4648ed8  ./docs/releases/v1.0.0.md
 2d87fe8fd8a50ac3a7742488f7550c13713b549746da99c6f0ca55540f6147da  ./docs/security/hardening.md

@@ -15,8 +15,11 @@ navigation correction, request-level regression, and fail-closed flaky-test poli
 implementation head `71c09cf4` passed all ten hosted checks, including a clean no-flake browser
 matrix and complete disposable Docker acceptance; immutable results are in [PR
 #44](https://github.com/yazeedhasan97/MCPlica/pull/44#issuecomment-5518471695). The documentation
-evidence refresh must retain those checks on the current head. Independent review is requested from
-`mohd-ghnm-X` but has not been submitted, so the PR remains deliberately unmerged.
+evidence refresh must retain those checks on the current head. No independent review is currently
+requested: the only listed maintainer and CODEOWNER is the PR author, and another account's
+repository write access is not an explicit governance appointment. The founder must record an
+independent reviewer/maintainer appointment or scoped delegation before requesting approval, so the PR remains
+deliberately unmerged.
 
 Repository Actions now requires full-SHA pins and all workflow actions comply. The private locked
 dependency graphs have no known vulnerability, and the CLA workflow is fail-closed for untrusted
