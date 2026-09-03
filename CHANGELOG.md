@@ -20,6 +20,16 @@ version is not published until its immutable tag and release workflow complete.
 - Made each cleanup dispatch use one eligibility snapshot, preventing a failed target from
   consuming multiple retry attempts in the same worker cycle when its backoff is short or the
   database is under load.
+- Bound the post-build wizard transition directly to the created build so an obsolete unbound
+  journey refetch cannot race the URL back to the start-build step.
+- Made hosted Playwright retries diagnostic only: any flaky retry now fails CI, with regression
+  coverage that rejects post-build journey requests lacking the created build identity.
+- Restricted repository Actions to the recursively audited full-SHA direct/transitive action
+  closure, enabled Dependabot vulnerability alerts and automated fixes, and documented the exact
+  unavailable private-platform security gates without treating local scans as substitutes.
+- Updated the backend and runtime development constraint to pytest 9.1.1 for
+  GHSA-6w46-j5rx-g56g/CVE-2025-71176, and expanded both frozen Python advisory audits to include
+  every optional development dependency rather than auditing only the production graph.
 
 ## [1.0.0] - 2026-09-02
 

@@ -10,15 +10,15 @@ dc7deb222562f89c1f784f33ac4ddc120a93f1b187c78890e6222971772f18fa  ./.github/ISSU
 1b74b3c3ebe115d64f891b4a87b8e3e1950d54297e9d084a2618b211c9e00abd  ./.github/PULL_REQUEST_TEMPLATE.md
 9c37fd0a0b56ac61f527f34231612ebed67f6badd6250f194359ba6702bdf1ed  ./.github/dependabot.yml
 7253616122553fb19e66f9e6dbd0891ad33a77ca48a82833a9a1a14e1cc82516  ./.github/labels.json
-df75de350f3faf66795384deeaf57f9eda0869126885697fda6f587c8e0754ed  ./.github/workflows/ci.yml
+c9718763d3cc40d57151719e536b9d6206be3ea01fdf1c591d959ba8f516e29b  ./.github/workflows/ci.yml
 3bf2fc1df3e49d81495abe7668adf502052107ade4b53bb49dceb25ecc7e209b  ./.github/workflows/cla.yml
 a0c08bf86412f32bd177d7ed06c76f0ae62982dfad64e31c726389675c7a578d  ./.github/workflows/labels.yml
 c493c7afde424ea3ecd2f66820e2bdea75f06e676bf3f902d1d20c227edae56a  ./.github/workflows/release.yml
-984c925ebc332fcfc536adb85f2cf4851028008497607ae00573ecbfa2a013e6  ./.github/workflows/security.yml
+994d317829c09f072da7f238f2ba8d532238a941e0c0925998a21bc819887497  ./.github/workflows/security.yml
 f69aeaa9b65a3d99386c98289e5f5d9d5bebe75d37348910751c8cd2403e161c  ./.gitignore
 ca5ed42241ed10ec74f85b10c0e4bc663eed7a64795059c3267a26b1b30f5705  ./.gitleaks.toml
 2722b61f414f07f08be7f1f1316012813818f26f1c40d6a24a748686cec7d2ff  ./.node-version
-1e43dd77368cf48767255cd88e26eb5ef45ae6824a58912e8a84252486d847eb  ./CHANGELOG.md
+64dd66f95cfac6f3d5db870355b618215e7fd8199fda3b2b1d67e2c7e5c93527  ./CHANGELOG.md
 0585e1c779a468e97d78777c4a9abf7dfa28beff282a3168fb68f1cfca79f02c  ./CLA.md
 92c932998038bbcd6bee7b9305b3ddc442b9a6c315c8e883174f64606c16b54c  ./CODE_OF_CONDUCT.md
 32ee273fa2c907888d14cc01d667f2be0311327a1e9dc7734e92644c479a1310  ./CONTRIBUTING.md
@@ -27,8 +27,8 @@ ca5ed42241ed10ec74f85b10c0e4bc663eed7a64795059c3267a26b1b30f5705  ./.gitleaks.to
 b1e2de6a24d704320f17b92555c0ee445f2b2af16dabfac6ec26d3fdb38588d5  ./LICENSE
 1488d564cae29decceb10d7517b425029a3780e82ccf365d75145f95d19277cb  ./MAINTAINERS.md
 dd22de8b17a6c4c2997b77f3eab9d7bc943b6530fd0837461c0a0316da15652f  ./Makefile
-f1c3b16f588e27e9e148cf0d3edc668964eb711e0a370f3f0dcefc52db541c7f  ./README.md
-fd4313ca41b7a540a52692ca837f5c4138de7c54aae5b9e65d206f45a57c58fd  ./SECURITY.md
+e34f9be408157646d834d5f5c0a1071184e259c870548251c930b4e16f783726  ./README.md
+adf0f56176c0fa55b7cc0997a06f5fd05d0653659bd8cd9782ee5563c556a1b1  ./SECURITY.md
 fb80b0ff070a246e01b856bb3868b4239710b9ecad33653f47dc18dd4ecc487c  ./SPONSORS.md
 824f9aa8926e08a221ca6697a4d256b33f8d285f7853ebf6aeb424bd4b3bf723  ./SPONSORSHIP.md
 d355e1d8a0683ba2c178fe579f7b631087b9419ce98b84583a9e99e184212141  ./SUPPORT.md
@@ -238,7 +238,7 @@ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./backend/app/
 e568fdeacecb8ec9370e248d4d7d2832a914cf62f13bf0dd839441a0d7005d7a  ./backend/benchmarks/milvus_scale.py
 811490aab2b4858cb1a1d5304955f0efecdbdaaec53bdf0e80aa760de04d6a41  ./backend/critical_coverage.json
 ff54c1ddcfef3667fdf86e4f83d69727b3e41cf94fd757b4096e5bf016f0b3f5  ./backend/generate_openapi.py
-b119e03bb4c0c1e91ad81ed07ac12beab20469d98982b0691d395a8e4562baa6  ./backend/pyproject.toml
+5df4c60c498c30de18227a28bd2542d1c88d0935a6de7ee5ce46f1d14947f513  ./backend/pyproject.toml
 da34db454abed756925bc6237ede742d7fb660f456110380780f00c245b4c4c0  ./backend/scripts/__init__.py
 14f7491e540cd68b77282d53df19460c4cc8e2deefdc3974f34d6060d27e6dbd  ./backend/scripts/check_critical_coverage.py
 e44094b3ad758e9c8487ce034b61c0abc4b02f046af04345db896fb15e0d679c  ./backend/scripts/generate_contract_matrix.py
@@ -305,7 +305,7 @@ b00e138039878b84acdde8281f179f5a700ca3d85a3545459f2c1bc97f23186e  ./backend/test
 a48b6196d1e31b61eca379328ed0e95bb5b1e5541dd3fa4d62faf29a1993c44d  ./backend/tests/test_operation_paging.py
 f63f4182525674737de4109cd5dd583011ad4d1e49cf4fea9dffe2b413e2ed49  ./backend/tests/test_queue_clients.py
 948f962fed59757de95ae817ea1e46216f54128d61d7a3678d90ba9ebf6dc64c  ./backend/tests/test_read_schema_boundaries.py
-5cb4322f05c9db9aa78ae24e8d4ffbbc57ae9ee4976f73db0371549f888df7bb  ./backend/tests/test_repository_policy.py
+ac88705520f7a16edd3b6a5c4a29ffbd62588a9568ab42fffb1b1465375bcca3  ./backend/tests/test_repository_policy.py
 1bdaff037e02dd103046386f67c66ba69d3e72dcfe593c0e07e22f8fed1673dd  ./backend/tests/test_request_limits.py
 8ee7868f480a71fcc6e2e9d59684463e9aba2ddc60d6c178c3a7fe47f984727b  ./backend/tests/test_runtime_command_lifecycle.py
 9e445e4c94d0d4f56e76151b48f5dca6666c67f9c6815ae2fb5035558579246c  ./backend/tests/test_runtime_deployment.py
@@ -322,7 +322,7 @@ fc2c23ca0ae22baff15e16409232f022ac2ab409a8cc8f86391118b4e9304a75  ./backend/test
 f466a95f545512752269ac8259333e5085025a26888b23660dc65c1dcc03b069  ./backend/tests/test_storage.py
 a0e47e6ff0aafb4449a7986e958a68d7be81351c700ade71549b3701a342f135  ./backend/tests/test_vector_client.py
 4a809f1c732321f62ea915e9c95d833a9d570e662b145f1bfc829de998fdc0e8  ./backend/tests/test_vector_store.py
-6a35c7a6cec5f7e69b0b17af2c85afc684d3d69d391315d8ad412b6c2b1ef276  ./docs/README.md
+f4bcaa9814d5c3c0c9c49575243b7b394ed37efbcdba392c1d694e3b641573b8  ./docs/README.md
 52318c2e7bb34eeb998737356a4c61db2b43842ea11a6775c3c327fb9fe98ef1  ./docs/api-inventory-v1.md
 00a74abab51fd3627c6c6b3fadcbae84cf43d01fd323e63dbf1d995958064e3a  ./docs/api.md
 ed75afd7904249be40dbbb33c554fb72627e76ffc7de879d6d036c7e8603ee0d  ./docs/architecture.md
@@ -340,7 +340,8 @@ dffd0e736e7c8be4aa7f00eafbe109b4745e643e1dcc87777f1ca8402940e52e  ./docs/evidenc
 fd237430a787e5058ba7533b8faef0071cabad1ba09d3bef9489b10c4b6ca55c  ./docs/evidence/post-merge-2026-09-01/validation-summary.json
 6dd33af3d14233bf43bf238a5be11b816d3c5c94d65e821c8db717a681fe8cce  ./docs/evidence/post-merge-2026-09-01/workflow.json
 62a789990a5e3cbed71d205e2b922af1ded6ed4465bb99f7462d22836fc1598e  ./docs/evidence/post-merge-validation-2026-09-01.md
-d2ebe8cd279b256880d70cce6d9b1930391b23b651d1f99d37c6afca5c6fcb5d  ./docs/evidence/v1.0.0-release-candidate.md
+3e81cd56b3a3356ab86b690acbb1eb4fe07c3bb69fb79b5c7d7552a38b8b3685  ./docs/evidence/v1.0.0-branch-and-gate-audit.md
+2428ddf51651db2a091fb73c33654f095bd206fa0c953aa83e03bd9f5daa9b5d  ./docs/evidence/v1.0.0-release-candidate.md
 7c875393177732dfb11f916a57e3ac798939bf847298cd27d8233e4ae9407e9a  ./docs/implementation_plan.md
 88b1bf1cc1467d191bdbf9077a41fff1aa36093cba2974ba5aee230b405b5d37  ./docs/mcp-client-connection.md
 cc4a31395f46dc181699a163a2ac397bb042b42b5c88b01ea75d2a6c30be216a  ./docs/open_source_and_sponsorship_model.md
@@ -353,8 +354,8 @@ b2b50db7016179df69e4d10875d3ff09cbeb63c30bf9012bfb77dea0bf98a27b  ./docs/operati
 215b82eba9cc57f4b544fece0b50a9c7f765a7881d81310a9475fbb6f223daa8  ./docs/operations/troubleshooting.md
 2d2f7e556910770b8d31cfe6eb1ddbe3fa356af3f930111b1e9bf430f7172274  ./docs/operations/upgrade.md
 0e58d27e209116f1e9f0acb7988ef81d86c83ca01141a1d561db261f0549d4d3  ./docs/product_requirements.md
-3068edd2f8575baf7955c883627d81bcdffb979bd748dd9e2514935a4555efe4  ./docs/release/release-checklist.md
-536621baa4645196500e8722c06cf0cdee9996377606cd3f114ebed091e6a878  ./docs/release/release-process.md
+9f555a322e08af97381c23e875c3755eba849cff53c382d49b93d86278733250  ./docs/release/release-checklist.md
+84b69a9d2040bc1e134173116bdca38c20bea53230eb9d65d3ba891ad5d01c01  ./docs/release/release-process.md
 71651ffb4c8e791986b68a9053970e8ddda2386aefa9626f090f27a1b4648ed8  ./docs/releases/v1.0.0.md
 2d87fe8fd8a50ac3a7742488f7550c13713b549746da99c6f0ca55540f6147da  ./docs/security/hardening.md
 3fc6e1a72ed7c6f8fa85ed441b29a3868b288f456b6cfd0a0f5f3e59dc799052  ./docs/security/threat-model.md
@@ -362,13 +363,13 @@ b2b50db7016179df69e4d10875d3ff09cbeb63c30bf9012bfb77dea0bf98a27b  ./docs/operati
 c8ae9749b175b172b89e43eb5d559e04c796d77384b4221309d7d88f407cca06  ./docs/user-guide.md
 0bb3f59f28c0dca2bf45c5afa59d1cce9a0670ffe2f3d2b6a3ecfc523cc49699  ./frontend/.prettierignore
 e4c6d67d458abff6f71fb1c8ab7df963be99e6125cbbc0cf1d696b7bafad92ce  ./frontend/e2e/accessibility-security.spec.ts
-b4296409e27a1d34597bc0a26829a40b3bc0a8f80588afe6871e03baf0534e20  ./frontend/e2e/core-journey.spec.ts
+e6b2a51702aaac4d64e85d68d6de5f1871e0dd7574c4e5035b8a61af36b18286  ./frontend/e2e/core-journey.spec.ts
 dc1bbb3194a9b2280cbfdfab4dd06332ba25859e1c524ec04797092a6e931848  ./frontend/e2e/live-stack.spec.ts
 21d530ddf58b370892307912dde326ed85c5fb0387d492b2ceb5dbc527d6d7e0  ./frontend/e2e/mock-api.ts
 8f595cd312894708fe0fb67a160cc7aec4e957113303ce722ff74bf2e0f25ca0  ./frontend/eslint.config.js
 8ffa3736447e4d7bf699155c9de840855803691ad747751a88f47ac9864d36b9  ./frontend/index.html
 7e4b81cf6c6597b10bb86015e3761070d1357164396f48c6c60a1200812a6d14  ./frontend/package.json
-ff3c03466413d2ea154b2d11ab50e3236ddfa2850787b37724cc6545120a0d11  ./frontend/playwright.config.ts
+ae717f6a9af71e0913801f911d05e4163314071e601df12eca8966565c95ec9e  ./frontend/playwright.config.ts
 30c72df81fa74afaa3c9c9071c9856e77b48bc0b601d6524bc18a86e26fa6334  ./frontend/pnpm-lock.yaml
 cfac9342c294a1b892645452c7f0c13c86919e6ed9525d8b03f4ffcbd3d7dada  ./frontend/scripts/check-asset-budget.mjs
 e4623ff4216a18f1c1a452f36784ff3e4f782c2eb3dd4b2c096d2ec278e3bd98  ./frontend/scripts/generate-api-contracts.mjs
@@ -481,7 +482,7 @@ cd77bdd326f3c33682cd397670cef9a65d2c11def9c066ce0989e4166fa49a25  ./frontend/src
 0a7d1b116e678ac419d586bdb21b530dc2cfebebc8e8765ade174e1ae716dce0  ./frontend/src/pages/login.tsx
 939d1dc66006e5b6d35a519b6ab5440c3c86d45e259aa65478ff31a3081f314d  ./frontend/src/pages/model-settings.test.tsx
 db3c03358f75e44b688234d284b1c5e79f07c8e7d92af224a3e2d6f62c4ef5ef  ./frontend/src/pages/model-settings.tsx
-05b1d8cb202a0aa41b6da9e399e2659d84d5f3d8326675a44a1e185096360ddf  ./frontend/src/pages/new-project.tsx
+fdf0f58439e5307f494f1ccba550a999e39c775901e9f5f1f319c34c593d352c  ./frontend/src/pages/new-project.tsx
 887c4fc1c86f8c959f7b410931a782210c5ba7b5c22cf206de6f4cd25fe752fd  ./frontend/src/pages/not-found.tsx
 abd8d6a95595110b47f4636d44fff1a3148123ab186a87d5f35544ed62054f73  ./frontend/src/pages/project-builds.test.tsx
 088b74f8030963c02a2022f5001a00a285fcc6b933a1e29f6c458f7f8640f7ca  ./frontend/src/pages/project-builds.tsx
@@ -558,7 +559,7 @@ d8a5085434f73c7280743a0d38ad1c46fbdf208b5da08695438ee37dcf3b9a91  ./mcp_runtime/
 7f07056bc9d6e954dd152cf51bb7123dc124becd723986de71df32447d3bd05d  ./mcp_runtime/app/server/tool_registry.py
 c669c121e61cee00d9b58f956da517787189615fa96dd35b91ab5c02d8fb16a6  ./mcp_runtime/app/validation_harness.py
 3b081eb1fe8bed18f13c6067b70c7c22435eedbd4911dec6f15eb47ae9c32ae0  ./mcp_runtime/app/validation_main.py
-711ecb8f03f6c182435fbeada1609bf0752b804526ef33c07b6415c538584149  ./mcp_runtime/pyproject.toml
+1653336028def0c10081be2eed40adf7b232323a08b3abc69470e9f3f7bb346d  ./mcp_runtime/pyproject.toml
 9d2baf927e20e4349e0761e8d7c39df23d96a66487fa9c8870211357ffec5df2  ./mcp_runtime/tests/test_api_client.py
 08772bb817d52c0176364f069a46f08b3e7a7954ab299ac18c497bcbc66dd3b3  ./mcp_runtime/tests/test_contract_fixture_matrix.py
 fcfd355135715628e401f584d803a5b04fb72db465dcf0267db7f3d884cbf03f  ./mcp_runtime/tests/test_executor_acceptance.py
@@ -656,4 +657,4 @@ ee28d8b7d476237ace905c2c19c8c1019f51af90cee1255b9c17c5506c8c97a3  ./tests/integr
 efd76c20ec5efa3e9287095da498c863af6c01e6b89691ffca3c2e76f6a44042  ./tests/integration/test_fixture_server.py
 2550f307ff3e3524362481e1883c778c47713f6df253b6047508103f38499541  ./tests/integration/vector_isolation_check.py
 faf87fe5e796bc1d7beb8ba74152f6f1891a4ea7634963b9f956eb29bd944b92  ./todo_features.md
-789eb44db82591ea0747fcef5f1cc4e76b82d1bb7d50cd9335abaec663ee0687  ./uv.lock
+154be9ef094bd655441d6fd4f26f78cef2cb420a45b0e52744a0b9ac4e1587f4  ./uv.lock

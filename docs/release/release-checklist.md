@@ -4,6 +4,48 @@ Every checked item needs an exact URL, workflow run, command output, or stored e
 the release commit. “Not applicable” needs a written reason. An unchecked/unknown item means the
 release is not ready; local evidence cannot satisfy a hosted or production-host gate.
 
+## Current v1.0.0 disposition (2026-09-03)
+
+The exact branch, pull-request, dependency, hosted-log, repository-control, and external-gate
+inventory is in the [current branch and release-gate
+audit](../evidence/v1.0.0-branch-and-gate-audit.md). The previously integrated `master` head
+`b22ff7e` is superseded as release evidence because its nominally successful E2E job contained a
+WebKit failure that passed on retry. `fix/final-release-closure-20260903` contains the canonical
+navigation correction, request-level regression, and fail-closed flaky-test policy. Its hosted
+repository-control and documentation heads passed all ten hosted checks under the final
+selected-action policy. Their replacement Docker artifacts independently matched GitHub's digest
+and recorded all 13 required service states plus the complete workflow. Immutable results and the
+exact 20-reference execution closure are in [PR #44](https://github.com/yazeedhasan97/MCPlica/pull/44).
+Its dependency-remediation head `6d5abba` also passed all ten checks: CI
+[33705386979](https://github.com/yazeedhasan97/MCPlica/actions/runs/33705386979), Security
+[33705386981](https://github.com/yazeedhasan97/MCPlica/actions/runs/33705386981), and CLA
+[33705384466](https://github.com/yazeedhasan97/MCPlica/actions/runs/33705384466). Artifact
+`9875280973` independently matched GitHub's SHA-256 and recorded the same complete acceptance
+surface. Embedding the current candidate hash here would change that hash; the exact final PR head
+and its checks must therefore be retained in PR evidence after this refresh.
+
+No independent review is currently requested: the only listed maintainer and CODEOWNER is the PR
+author, and another account's repository write access is not an explicit governance appointment.
+The founder must record an independent reviewer/maintainer appointment or scoped delegation before
+requesting approval, so the PR remains deliberately unmerged.
+
+Repository Actions now permits only the recursively audited 20-reference full-SHA closure; broad
+GitHub-owned and verified-creator allowances are disabled. Workflow tokens default to read-only and
+cannot approve reviews. Dependabot vulnerability alerts and automated security fixes are enabled.
+Their asynchronous first response of zero alerts was provisional: the completed scan then opened
+alert #1 for pytest GHSA-6w46-j5rx-g56g/CVE-2025-71176. The corrective branch now constrains both
+Python projects to the patched pytest line, locks 9.1.1, and makes both frozen advisory audits cover
+all optional development dependencies. Local Python 3.13 audit and compatibility evidence is clean;
+the exact final hosted head must repeat the audits. Because Dependabot evaluates the default branch,
+alert #1 must remain open until the independently approved correction is merged; GitHub must then
+close it from the updated `master` graph before tagging. The CLA workflow remains fail-closed for
+untrusted contributors. Branch
+protection/rulesets, independent review, founder-approved external CLA service, GitHub private
+vulnerability reporting/code scanning/secret scanning, target-host acceptance, backup/restore, and
+publication evidence remain unchecked operator gates. No tag or Release exists.
+The owner-assigned external-action ledger is [issue
+#45](https://github.com/yazeedhasan97/MCPlica/issues/45).
+
 ## Release identity and repository state
 
 - [ ] `VERSION`, all package/lock/runtime/frontend/API/image consumers, `CHANGELOG.md`, and
@@ -19,14 +61,28 @@ release is not ready; local evidence cannot satisfy a hosted or production-host 
 
 ## GitHub controls and governance
 
+- [x] Repository Actions permits only the recursively audited 20-reference full-SHA execution
+      closure; broad GitHub-owned/verified-creator allowances are disabled, workflow tokens default
+      to read-only, and workflows cannot approve reviews. The exact-policy CI/Security/CLA reruns
+      are recorded in [PR #44](https://github.com/yazeedhasan97/MCPlica/pull/44#issuecomment-5518862289).
+- [x] Dependabot vulnerability alerts and automated security fixes are enabled. The completed scan
+      found alert #1 for pytest GHSA-6w46-j5rx-g56g/CVE-2025-71176; the corrective branch uses the
+      patched 9.1.1 lock and audits all optional development dependencies.
+- [x] Both hosted all-extras Python audits passed on dependency-remediation head `6d5abba`, each
+      showing pytest 9.1.1 in the export and no known vulnerabilities. The documentation-only final
+      head must repeat the same checks.
+- [ ] After an authorized merge, GitHub has re-indexed the reviewed default-branch lock,
+      automatically closed alert #1 as fixed, and reports zero open Dependabot alerts. Recheck
+      again immediately before tagging.
 - [ ] `master` protection/rulesets require pull requests, sensitive CODEOWNERS review,
       conversation resolution, current CI/Security/CLA checks, and block force pushes/deletion with
       administrator enforcement.
 - [ ] Trusted repository actors are recognized from GitHub pull-request metadata, and the
       founder-approved CLA service plus `CLA_STATUS_CONTEXT` work for the exact head of every
       external contribution; no external contribution bypassed verification.
-- [ ] Private vulnerability reporting and the conduct-reporting channel work; maintainer access and
-      release/OIDC/GHCR permissions were reviewed.
+- [ ] GitHub private vulnerability reporting, code scanning, secret scanning, and the
+      conduct-reporting channel work; maintainer access and release/OIDC/GHCR permissions were
+      reviewed.
 - [ ] License, trademarks, maintainers, governance, support, sponsorship, generated-output,
       contribution, security, release, label, issue, and pull-request policies are current.
 
