@@ -12,11 +12,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION_FILE = ROOT / "VERSION"
-SEMVER = re.compile(
-    r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
-    r"(?:-((?:0|[1-9][0-9]*|[0-9A-Za-z-][0-9A-Za-z-]*)"
-    r"(?:\.(?:0|[1-9][0-9]*|[0-9A-Za-z-][0-9A-Za-z-]*))*))?$"
-)
 PROJECT_FILES = (
     Path("pyproject.toml"),
     Path("backend/pyproject.toml"),
@@ -31,24 +26,67 @@ WORKSPACE_PACKAGES = {
 }
 
 
+def _is_canonical_numeric_identifier(value: str) -> bool:
+    return (
+        bool(value)
+        and all("0" <= char <= "9" for char in value)
+        and (value == "0" or not value.startswith("0"))
+    )
+
+
+def _parse_semver(value: str) -> tuple[int, int, int, str | None]:
+    """Parse the supported SemVer subset without backtracking regular expressions."""
+    if not value or "+" in value:
+        raise ValueError("build metadata and empty versions are not supported")
+
+    core, separator, prerelease = value.partition("-")
+    core_identifiers = core.split(".")
+    if len(core_identifiers) != 3 or not all(
+        _is_canonical_numeric_identifier(identifier) for identifier in core_identifiers
+    ):
+        raise ValueError("the core version must contain three canonical numeric identifiers")
+
+    if separator:
+        prerelease_identifiers = prerelease.split(".")
+        if any(
+            not identifier
+            or any(
+                not ("0" <= char <= "9" or "A" <= char <= "Z" or "a" <= char <= "z" or char == "-")
+                for char in identifier
+            )
+            or (
+                all("0" <= char <= "9" for char in identifier)
+                and not _is_canonical_numeric_identifier(identifier)
+            )
+            for identifier in prerelease_identifiers
+        ):
+            raise ValueError("the prerelease contains an invalid identifier")
+    else:
+        prerelease = None
+
+    major, minor, patch = (int(identifier) for identifier in core_identifiers)
+    return major, minor, patch, prerelease
+
+
 def authoritative_version() -> str:
     if not VERSION_FILE.is_file():
         raise ValueError("VERSION is missing")
     value = VERSION_FILE.read_text(encoding="utf-8").strip()
-    if not SEMVER.fullmatch(value):
+    try:
+        _parse_semver(value)
+    except ValueError as exc:
         raise ValueError(
             "VERSION must be SemVer without a leading v or build metadata "
             "(for example 1.2.3 or 1.2.3-rc.1)"
-        )
+        ) from exc
     return value
 
 
 def runtime_compatibility(version: str) -> str:
-    match = SEMVER.fullmatch(version)
-    if match is None:
-        raise ValueError("cannot derive runtime compatibility from an invalid version")
-    major = int(match.group(1))
-    prerelease = match.group(4)
+    try:
+        major, _, _, prerelease = _parse_semver(version)
+    except ValueError as exc:
+        raise ValueError("cannot derive runtime compatibility from an invalid version") from exc
     lower_bound = version if prerelease is not None else f"{major}.0"
     return f">={lower_bound},<{major + 1}.0"
 

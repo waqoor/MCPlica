@@ -3,6 +3,7 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
+from urllib.parse import urlsplit
 from uuid import UUID
 
 import pytest
@@ -684,7 +685,9 @@ def test_ambiguous_servers_require_applicable_operation_mapping() -> None:
         )
 
     staging = next(
-        server.key for server in unresolved.servers if "staging.example.com" in str(server.url)
+        server.key
+        for server in unresolved.servers
+        if urlsplit(str(server.url)).hostname == "staging.example.com"
     )
     assert (
         _inherited_active_server_ref(
