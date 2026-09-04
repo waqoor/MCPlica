@@ -6,11 +6,16 @@ version is not published until its immutable tag and release workflow complete.
 
 ## [Unreleased]
 
+## [1.0.0-rc.1] - 2026-09-04
+
 ### Changed
 
 - Moved canonical repository and OCI source metadata to the `waqoor/MCPlica` organization
   namespace, added the owner-operated public-prerelease security/settings ledger, and made release
   asset publication compatible with GitHub immutable releases.
+- Recorded the current single-maintainer governance exception: exact automated release gates remain
+  mandatory, while an explicitly authorized founder self-merge is reported truthfully instead of
+  being labeled as independent review.
 - Updated the unprivileged Nginx image to `1.31.5-alpine3.24-slim` and made nested
   source-configuration response models validate domain records through Pydantic attribute access.
 - Preserved account timestamps in authenticated identities so `GET /api/v1/auth/me` returns the
@@ -43,8 +48,6 @@ version is not published until its immutable tag and release workflow complete.
   GHSA-6w46-j5rx-g56g/CVE-2025-71176, and expanded both frozen Python advisory audits to include
   every optional development dependency rather than auditing only the production graph.
 
-## [1.0.0] - 2026-09-02
-
 ### Added
 
 - Self-hosted FastAPI control plane, React administration UI, PostgreSQL persistence, Redis/RQ
@@ -71,7 +74,7 @@ version is not published until its immutable tag and release workflow complete.
 
 ### Changed
 
-- Established root `VERSION` as the `1.0.0` authority and synchronized package, API, frontend,
+- Established root `VERSION` as the `1.0.0-rc.1` authority and synchronized package, API, frontend,
   runtime, Compose, image-label, generated-contract, fixture, lockfile, and release metadata.
 - Advanced the single Alembic migration line through `0025`, including legacy constraint
   normalization, current-source/build identity, runtime/cleanup execution fencing, deployment
@@ -84,8 +87,8 @@ version is not published until its immutable tag and release workflow complete.
   are not included.
 - OpenRouter availability/model access, public DNS/TLS, host hardening, external OIDC providers,
   registry permissions, and backup/restore RPO/RTO remain operator-owned production checks.
-- See [the v1.0.0 release notes](docs/releases/v1.0.0.md) for the complete compatibility,
+- See [the v1.0.0-rc.1 release notes](docs/releases/v1.0.0-rc.1.md) for the complete compatibility,
   migration, and evidence boundary.
 
-[Unreleased]: https://github.com/waqoor/MCPlica/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/waqoor/MCPlica/releases/tag/v1.0.0
+[Unreleased]: https://github.com/waqoor/MCPlica/compare/v1.0.0-rc.1...HEAD
+[1.0.0-rc.1]: https://github.com/waqoor/MCPlica/releases/tag/v1.0.0-rc.1

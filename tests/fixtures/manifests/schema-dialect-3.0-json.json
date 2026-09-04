@@ -4,7 +4,7 @@
     "analysis_model": null,
     "build_id": "fixture-schema-dialect-3.0-json",
     "canonical_sha256": "08a518e9525028d89caadea53aa14905085a1f07b3c3d87a765f4b50e03345fa",
-    "compiler_version": "1.0.0",
+    "compiler_version": "1.0.0-rc.1",
     "created_at": "2026-08-27T00:00:00+00:00",
     "embedding_model": null,
     "prompt_bundle_version": null,
@@ -14,14 +14,14 @@
     ],
     "validation_model": null
   },
-  "manifest_id": "ccb4bc215fdd0ab314aba9c682311997914f55de719865af524a448a25e89271",
+  "manifest_id": "452713345dd6da582b2efcaf86bd866f3245c44f7a0214e0889f2b670002dc22",
   "project": {
     "id": "00000000-0000-0000-0000-000000000001",
     "name": "Schema dialect matrix",
     "slug": "schema-dialect-3.0-json"
   },
   "resources": [],
-  "runtime_compatibility": ">=1.0,<2.0",
+  "runtime_compatibility": ">=1.0.0-rc.1,<2.0",
   "schema_version": "mcp-manifest/v1",
   "security": {
     "allow_insecure_none_only_in_development": true,

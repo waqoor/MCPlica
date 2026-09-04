@@ -2600,7 +2600,7 @@
             "type": "array"
           },
           "runtime_compatibility": {
-            "default": ">=1.0,<2.0",
+            "default": ">=1.0.0-rc.1,<2.0",
             "title": "Runtime Compatibility",
             "type": "string"
           },
@@ -6335,7 +6335,7 @@
   "info": {
     "description": "Self-hosted API-to-MCP builder/control plane",
     "title": "MCPlica API",
-    "version": "1.0.0"
+    "version": "1.0.0-rc.1"
   },
   "openapi": "3.1.0",
   "paths": {

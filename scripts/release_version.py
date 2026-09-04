@@ -43,6 +43,16 @@ def authoritative_version() -> str:
     return value
 
 
+def runtime_compatibility(version: str) -> str:
+    match = SEMVER.fullmatch(version)
+    if match is None:
+        raise ValueError("cannot derive runtime compatibility from an invalid version")
+    major = int(match.group(1))
+    prerelease = match.group(4)
+    lower_bound = version if prerelease is not None else f"{major}.0"
+    return f">={lower_bound},<{major + 1}.0"
+
+
 def _replace_once(path: Path, pattern: str, replacement: str) -> None:
     target = ROOT / path
     value = target.read_text(encoding="utf-8")
@@ -53,6 +63,7 @@ def _replace_once(path: Path, pattern: str, replacement: str) -> None:
 
 
 def synchronize(version: str) -> None:
+    compatibility = runtime_compatibility(version)
     for path in PROJECT_FILES:
         _replace_once(path, r'^version = "[^"]+"$', f'version = "{version}"')
 
@@ -65,6 +76,16 @@ def synchronize(version: str) -> None:
         Path("packages/contracts/src/mcp_contracts/version.py"),
         r'^VERSION = "[^"]+"$',
         f'VERSION = "{version}"',
+    )
+    _replace_once(
+        Path("packages/contracts/src/mcp_contracts/version.py"),
+        r'^RUNTIME_COMPATIBILITY = "[^"]+"$',
+        f'RUNTIME_COMPATIBILITY = "{compatibility}"',
+    )
+    _replace_once(
+        Path("tests/fixtures/manifests/petstore.json"),
+        r'^  "runtime_compatibility": "[^"]+",$',
+        f'  "runtime_compatibility": "{compatibility}",',
     )
     _replace_once(
         Path("tests/fixtures/manifests/petstore.json"),
@@ -113,6 +134,7 @@ def _value_after_equals(path: Path, key: str) -> str | None:
 
 def verify(version: str, *, tag: str | None = None) -> list[str]:
     errors: list[str] = []
+    compatibility = runtime_compatibility(version)
     for path in PROJECT_FILES:
         value = tomllib.loads((ROOT / path).read_text(encoding="utf-8"))["project"]["version"]
         if value != version:
@@ -127,12 +149,17 @@ def verify(version: str, *, tag: str | None = None) -> list[str]:
     )
     if f'VERSION = "{version}"' not in version_module:
         errors.append("shared-contract product version does not match VERSION")
+    if f'RUNTIME_COMPATIBILITY = "{compatibility}"' not in version_module:
+        errors.append("shared-contract runtime compatibility does not match VERSION")
 
-    fixture = json.loads(
-        (ROOT / "tests/fixtures/manifests/petstore.json").read_text(encoding="utf-8")
-    )
-    if fixture.get("build", {}).get("compiler_version") != version:
-        errors.append("the runtime acceptance manifest compiler version does not match VERSION")
+    manifest_fixture_root = ROOT / "tests/fixtures/manifests"
+    for fixture_path in sorted(manifest_fixture_root.glob("*.json")):
+        fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+        relative_path = fixture_path.relative_to(ROOT).as_posix()
+        if fixture.get("build", {}).get("compiler_version") != version:
+            errors.append(f"{relative_path} compiler version does not match VERSION")
+        if fixture.get("runtime_compatibility") != compatibility:
+            errors.append(f"{relative_path} runtime compatibility does not match VERSION")
 
     if _value_after_equals(Path(".env.example"), "MCPLICA_VERSION") != version:
         errors.append(".env.example MCPLICA_VERSION does not match VERSION")
@@ -155,6 +182,27 @@ def verify(version: str, *, tag: str | None = None) -> list[str]:
     openapi = json.loads((ROOT / "openapi.json").read_text(encoding="utf-8"))
     if openapi.get("info", {}).get("version") != version:
         errors.append("openapi.json info.version does not match VERSION")
+    openapi_compatibility = (
+        openapi.get("components", {})
+        .get("schemas", {})
+        .get("MCPManifest", {})
+        .get("properties", {})
+        .get("runtime_compatibility", {})
+        .get("default")
+    )
+    if openapi_compatibility != compatibility:
+        errors.append("openapi.json runtime compatibility does not match VERSION")
+
+    manifest_schema = json.loads(
+        (ROOT / "packages/contracts/schemas/mcp-manifest-v1.schema.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    schema_compatibility = (
+        manifest_schema.get("properties", {}).get("runtime_compatibility", {}).get("default")
+    )
+    if schema_compatibility != compatibility:
+        errors.append("manifest JSON Schema runtime compatibility does not match VERSION")
 
     changelog = ROOT / "CHANGELOG.md"
     if not changelog.is_file() or f"## [{version}] - " not in changelog.read_text(encoding="utf-8"):

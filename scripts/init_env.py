@@ -41,7 +41,7 @@ def create_environment(output: Path, *, production: bool = False) -> None:
         "REFRESH_TOKEN_PEPPER": secrets.token_urlsafe(64),
         "BOOTSTRAP_SECRET": secrets.token_urlsafe(48),
         "METRICS_BEARER_TOKEN": secrets.token_urlsafe(48),
-        "DEFAULT_ADMIN_EMAIL": "" if production else "admin@admin.com",
+        "DEFAULT_ADMIN_EMAIL": "" if production else "admin@example.com",
         "DEFAULT_ADMIN_PASSWORD": "" if production else secrets.token_urlsafe(24),
         "RUNTIME_HOST_ROOT": str(resolved_output.parent / ".runtime"),
     }

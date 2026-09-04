@@ -112,9 +112,11 @@ Do not present the mocked suite alone as proof of backend integration.
 
 ## Evidence and cleanup
 
-CI preserves `workflow.json`, final `services.json`, bounded/redacted `compose.log`,
-and browser diagnostics in the `compose-validation` artifact associated with the
-workflow's exact commit. Both one-shot services must exit 0 and all 11 long-running
+CI preserves `workflow.json`, final `services.json`, and bounded/redacted `compose.log` in the
+`compose-validation` artifact associated with the workflow's exact commit. Browser traces,
+screenshots, and videos are deliberately disabled in public CI because they can capture session
+cookies, form values, response bodies, or ephemeral credentials. Both one-shot services must exit
+0 and all 11 long-running
 services must be healthy before and after acceptance. Inspect failures rather than
 removing checks or marking skipped steps passed.
 

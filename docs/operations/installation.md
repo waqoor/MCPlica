@@ -35,7 +35,7 @@ key with your encrypted backups, separately from the database, and never commit
 The development seed creates only a missing account and never changes its password.
 
 For an existing pre-v1 private environment, do not regenerate secrets. Add
-`MCPLICA_VERSION=1.0.0`, remove the obsolete operator-set `MCP_RUNTIME_VERSION`, and follow the
+`MCPLICA_VERSION=1.0.0-rc.1`, remove the obsolete operator-set `MCP_RUNTIME_VERSION`, and follow the
 release-specific migration guidance before recreating containers.
 
 Set a real `OPENROUTER_API_KEY` and available analysis, validation, and embedding
@@ -116,7 +116,7 @@ seed or destructive acceptance harness against production.
 
 Configuration checks with synthetic domains/digests do not prove image availability,
 DNS, ACME issuance, external API behavior, host capacity, or backup restoration.
-Complete the live checks in `domain-tls.md` and `../release/release-checklist.md`.
+Complete the live checks in `domain-tls.md` and `../maintainers/release-checklist.md`.
 
 ## Host development
 

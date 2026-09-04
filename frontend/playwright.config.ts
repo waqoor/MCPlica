@@ -21,12 +21,15 @@ export default defineConfig({
   // fully parallel Firefox start. Keep assertions deterministic without
   // relaxing the independent navigation and test timeouts.
   expect: { timeout: 10_000 },
-  reporter: process.env.CI ? [["html", { open: "never" }], ["github"]] : "list",
+  reporter: process.env.CI ? "github" : "list",
   use: {
     baseURL: liveBaseUrl ?? "http://127.0.0.1:4173",
-    trace: "retain-on-failure",
-    screenshot: "only-on-failure",
-    video: "retain-on-failure",
+    // Browser traces, screenshots, and videos can contain session cookies, form
+    // values, response bodies, and ephemeral credentials. Public CI reports only
+    // structured test results; developers can retain diagnostics locally.
+    trace: process.env.CI ? "off" : "retain-on-failure",
+    screenshot: process.env.CI ? "off" : "only-on-failure",
+    video: process.env.CI ? "off" : "retain-on-failure",
   },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },

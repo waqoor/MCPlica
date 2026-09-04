@@ -57,7 +57,7 @@ from .validation import (
     validate_operation_path,
     validate_runtime_compatibility,
 )
-from .version import VERSION
+from .version import RUNTIME_COMPATIBILITY, VERSION
 
 __all__ = [
     "AuthProfile",
@@ -97,6 +97,7 @@ __all__ = [
     "RequestMapping",
     "RuntimeSecurity",
     "RuntimeNetworkPolicy",
+    "RUNTIME_COMPATIBILITY",
     "RuntimeSecretBundle",
     "SchemaDialectProvenance",
     "SchemaTransformationProvenance",

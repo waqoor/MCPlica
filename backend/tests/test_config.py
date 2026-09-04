@@ -21,7 +21,7 @@ def test_default_admin_credentials_must_be_configured_as_a_pair() -> None:
         Settings(
             _env_file=None,  # pyright: ignore[reportCallIssue]
             env="development",
-            default_admin_email="admin@admin.com",
+            default_admin_email="admin@example.com",
             default_admin_password=None,
         )
 
@@ -30,7 +30,7 @@ def test_default_admin_credentials_are_development_only_and_masked() -> None:
     settings = Settings(
         _env_file=None,  # pyright: ignore[reportCallIssue]
         env="development",
-        default_admin_email="admin@admin.com",
+        default_admin_email="admin@example.com",
         default_admin_password=SecretStr("admin@321"),
     )
     assert "admin@321" not in repr(settings)
@@ -39,7 +39,7 @@ def test_default_admin_credentials_are_development_only_and_masked() -> None:
         Settings(
             _env_file=None,  # pyright: ignore[reportCallIssue]
             env="production",
-            default_admin_email="admin@admin.com",
+            default_admin_email="admin@example.com",
             default_admin_password=SecretStr("admin@321"),
         )
 

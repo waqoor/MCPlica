@@ -2,7 +2,7 @@
   "schema_version": "mcp-manifest/v1",
   "manifest_id": "1111111111111111111111111111111111111111111111111111111111111111",
   "project": {"id": "fixture-project", "name": "Pet Store", "slug": "petstore"},
-  "runtime_compatibility": ">=1.0,<2.0",
+  "runtime_compatibility": ">=1.0.0-rc.1,<2.0",
   "servers": [{"id": "main", "url": "https://petstore.example.com/api", "description": "Fixture upstream"}],
   "auth_profiles": [{"id": "bearer", "type": "bearer", "credential_ref": "bearer"}],
   "tools": [
@@ -69,6 +69,6 @@
     "source_digest": "2222222222222222222222222222222222222222222222222222222222222222",
     "canonical_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
     "created_at": "2026-08-24T00:00:00+00:00",
-    "compiler_version": "1.0.0"
+    "compiler_version": "1.0.0-rc.1"
   }
 }

@@ -1017,7 +1017,7 @@ Conceptual root:
     "name": "Inventory",
     "slug": "inventory"
   },
-  "runtime_compatibility": ">=1.0,<2.0",
+  "runtime_compatibility": ">=1.0.0-rc.1,<2.0",
   "servers": [...],
   "auth_profiles": [...],
   "tools": [...],

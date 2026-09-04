@@ -5,6 +5,8 @@ import sys
 import tomllib
 from pathlib import Path
 
+import yaml
+
 
 def test_cla_workflow_consumes_configured_external_status_without_pr_checkout() -> None:
     root = Path(__file__).resolve().parents[2]
@@ -71,6 +73,23 @@ def test_playwright_retries_cannot_mask_flaky_ci_results() -> None:
 
     assert "failOnFlakyTests: Boolean(process.env.CI)" in config
     assert "retries: process.env.CI ? 2 : 0" in config
+
+
+def test_playwright_ci_does_not_persist_browser_secrets() -> None:
+    root = Path(__file__).resolve().parents[2]
+    config = (root / "frontend/playwright.config.ts").read_text(encoding="utf-8")
+
+    assert 'reporter: process.env.CI ? "github" : "list"' in config
+    assert 'trace: process.env.CI ? "off" : "retain-on-failure"' in config
+    assert 'screenshot: process.env.CI ? "off" : "only-on-failure"' in config
+    assert 'video: process.env.CI ? "off" : "retain-on-failure"' in config
+
+
+def test_gitleaks_scans_every_reachable_ref() -> None:
+    root = Path(__file__).resolve().parents[2]
+    workflow = (root / ".github/workflows/security.yml").read_text(encoding="utf-8")
+
+    assert '--log-opts="--all --full-history"' in workflow
 
 
 def test_source_snapshot_checksum_manifest_is_complete_and_current() -> None:
@@ -211,3 +230,26 @@ def test_release_assets_are_attached_before_an_immutable_release_is_published() 
     assert "--verify-tag" in workflow
     assert 'if [[ "${GITHUB_REF_NAME}" == *-* ]]' in workflow
     assert "prerelease+=(--prerelease)" in workflow
+
+
+def test_release_write_permissions_are_scoped_to_the_jobs_that_need_them() -> None:
+    root = Path(__file__).resolve().parents[2]
+    workflow = yaml.safe_load((root / ".github/workflows/release.yml").read_text(encoding="utf-8"))
+
+    assert workflow["permissions"] == {}
+    jobs = workflow["jobs"]
+    assert jobs["verify"]["permissions"] == {
+        "actions": "read",
+        "contents": "read",
+    }
+    assert jobs["publish-images"]["permissions"] == {
+        "attestations": "write",
+        "contents": "read",
+        "id-token": "write",
+        "packages": "write",
+    }
+    assert jobs["github-release"]["permissions"] == {
+        "actions": "read",
+        "contents": "write",
+        "id-token": "write",
+    }

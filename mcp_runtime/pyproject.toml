@@ -1,6 +1,6 @@
 [project]
 name = "mcplica-runtime"
-version = "1.0.0"
+version = "1.0.0-rc.1"
 description = "Manifest-driven generic MCP runtime for MCPlica"
 requires-python = ">=3.13,<3.14"
 dependencies = [

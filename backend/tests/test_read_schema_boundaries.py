@@ -71,7 +71,7 @@ def test_read_schemas_accept_domain_records_without_exposing_internal_fields() -
     )
     user = UserAccount(
         id=user_id,
-        email="admin@admin.com",
+        email="admin@example.com",
         display_name="Admin",
         password_hash="internal-password-hash",
         role=UserRole.ADMIN,

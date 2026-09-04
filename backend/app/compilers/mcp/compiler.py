@@ -6,6 +6,7 @@ from typing import Literal, cast
 from urllib.parse import urlsplit
 
 from mcp_contracts import (
+    RUNTIME_COMPATIBILITY,
     VERSION,
     AuthProfile,
     BuildMetadata,
@@ -499,7 +500,7 @@ def compile_manifest(
     source_digest: str | None = None,
     canonical_digest: str | None = None,
     compiler_version: str = COMPILER_VERSION,
-    runtime_compatibility: str = ">=1.0,<2.0",
+    runtime_compatibility: str = RUNTIME_COMPATIBILITY,
     prompt_bundle_version: str | None = None,
     analysis_model: str | None = None,
     validation_model: str | None = None,
