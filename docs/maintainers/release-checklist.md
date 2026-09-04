@@ -16,14 +16,17 @@ repository or production-host gate.
 
 ## Repository controls
 
-- [ ] `master` and release-tag rules require pull requests where applicable, independent review,
-      conversation resolution, exact CI and security checks, and block force pushes and deletion.
+- [ ] `master` and release-tag rules require pull requests where applicable, conversation
+      resolution, exact CI and security checks, and block force pushes and deletion. Independent
+      review is required when an eligible independent maintainer exists; the current
+      single-maintainer exception is recorded without mislabeling it as independent review.
 - [ ] Actions are limited to the reviewed, immutable action closure; workflow tokens are read-only
       by default and cannot approve pull requests.
 - [ ] Dependabot, private vulnerability reporting, code scanning, secret scanning, push protection,
       and a private security-reporting route are enabled and tested.
 - [ ] Maintainer, collaborator, OIDC, registry, release, and organization recovery access is
-      reviewed; at least two trusted organization owners use strong 2FA.
+      reviewed. The current sole-owner continuity risk and recovery controls are recorded; if a
+      second trusted owner is appointed later, both owners use strong 2FA.
 - [ ] The approved CLA service is tested on a real external-contributor pull request.
 
 ## Product and supply chain
@@ -38,8 +41,9 @@ repository or production-host gate.
 
 ## Publication and operations
 
-- [ ] The annotated `v<VERSION>` tag points to the independently reviewed `master` commit, and no
-      matching Release or registry tag already exists.
+- [ ] The annotated `v<VERSION>` tag points to the accepted `master` commit, with either an eligible
+      independent approval or an explicit owner-authorized single-maintainer record, and no matching
+      Release or registry tag already exists.
 - [ ] Source and image SBOMs, checksums, signatures, immutable digests, and provenance attestations
       are published and independently verified.
 - [ ] Production host hardening, DNS/TLS, provider access, monitoring, encrypted backup and isolated

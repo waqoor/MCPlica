@@ -26,10 +26,12 @@ Release preparation moves them to a dated version section and creates matching n
    manifest: `python scripts/checksum_manifest.py --write`.
 4. Run the repository, API contract, lint, type, test, migration, browser, Compose, dependency,
    secret, and candidate-image gates.
-5. Open a pull request. Require an independent approval and all required checks on its exact head;
-   do not bypass an unavailable or failed control.
-6. Merge, wait for default-branch security indexing, and verify the reviewed commit is still the
-   exact `master` head.
+5. Open a pull request and require all checks on its exact head. Obtain an independent approval
+   when an eligible independent maintainer exists. While the project has only one maintainer, an
+   owner-authorized self-merge must be recorded explicitly and must not be presented as independent
+   review; an unavailable or failed automated control is never waived.
+6. Merge, wait for default-branch security indexing, and verify the accepted commit is contained in
+   the exact `master` head.
 
 The acceptance harness is destructive to its disposable installation. Never run it against
 retained development or production data.

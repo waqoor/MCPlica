@@ -13,6 +13,9 @@ version is not published until its immutable tag and release workflow complete.
 - Moved canonical repository and OCI source metadata to the `waqoor/MCPlica` organization
   namespace, added the owner-operated public-prerelease security/settings ledger, and made release
   asset publication compatible with GitHub immutable releases.
+- Recorded the current single-maintainer governance exception: exact automated release gates remain
+  mandatory, while an explicitly authorized founder self-merge is reported truthfully instead of
+  being labeled as independent review.
 - Updated the unprivileged Nginx image to `1.31.5-alpine3.24-slim` and made nested
   source-configuration response models validate domain records through Pydantic attribute access.
 - Preserved account timestamps in authenticated identities so `GET /api/v1/auth/me` returns the

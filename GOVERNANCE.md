@@ -11,6 +11,20 @@ Roles progress from contributor to reviewer/maintainer only through sustained te
 - Maintainers listed in `MAINTAINERS.md` may merge and operate releases within their assigned responsibility.
 - The founder resolves disputes and makes final decisions on cross-cutting architecture, scope, security disclosure, release acceptance, governance, licensing direction, and trademarks.
 
+## Current single-maintainer operation
+
+MCPlica currently has one organization owner and one maintainer, `@yazeedhasan97`. Until another
+eligible maintainer is explicitly appointed, the founder may author and merge a change after every
+required automated check passes on the exact pull-request head and all review conversations are
+resolved. The pull request or release record must state that this is an owner-authorized
+single-maintainer merge; it must not describe the decision as independent review.
+
+This operating model does not waive a failed deterministic, authentication, secret, migration,
+image-integrity, dependency, or runtime-health gate. It also leaves an acknowledged continuity and
+review-independence risk. When an eligible independent maintainer is appointed, protected or
+release-boundary changes should require that maintainer's approval unless a documented emergency
+process applies.
+
 Routine changes are decided through pull-request review against the authoritative documents and passing required checks. Material changes to contracts, security boundaries, persistence, deployment, governance, or licensing require an explicit written decision and migration/rollback analysis. Security incidents may be handled privately until coordinated disclosure.
 
 Releases follow Semantic Versioning and the repository release process. The founder or an
