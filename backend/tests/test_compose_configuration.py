@@ -54,6 +54,11 @@ def test_workers_consume_the_same_queues_as_the_control_plane() -> None:
         ("deployment-worker", "DEPLOYMENT_QUEUE_NAME"),
     ):
         assert services[service]["command"][-1] == services["api"]["environment"][queue]
+        command = services[service]["command"]
+        assert command[command.index("--worker-class") + 1] == (
+            "app.jobs.rq_worker.RegistrationRecoveringWorker"
+        )
+        assert "--with-scheduler" in command
     assert services["deployment-worker"]["command"][:3] == [
         "python",
         "-m",
