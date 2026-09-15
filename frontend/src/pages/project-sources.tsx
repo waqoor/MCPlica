@@ -164,6 +164,7 @@ function SourceCard({
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const metadata = useQuery({
     queryKey: ["source-versions", source.latest_version?.id, "metadata"],
     queryFn: ({ signal }) =>
@@ -185,7 +186,10 @@ function SourceCard({
   });
   const remove = useMutation({
     mutationFn: () => sourceApi.remove(projectId, source.id),
-    onSuccess: onVersionAdded,
+    onSuccess: () => {
+      setDeleteOpen(false);
+      onVersionAdded();
+    },
   });
   const latest = metadata.data ?? source.latest_version;
   return (
@@ -249,14 +253,7 @@ function SourceCard({
             )}
           <Button
             disabled={remove.isPending}
-            onClick={() => {
-              if (
-                window.confirm(
-                  "Delete this source? Sources referenced by an immutable build are protected.",
-                )
-              )
-                remove.mutate();
-            }}
+            onClick={() => setDeleteOpen(true)}
             size="sm"
             variant="ghost"
           >
@@ -265,9 +262,29 @@ function SourceCard({
           </Button>
         </div>
       </CardHeader>
-      {(promote.error || remove.error) && (
-        <MutationError error={promote.error ?? remove.error} />
-      )}
+      {promote.error && <MutationError error={promote.error} />}
+      <Dialog
+        description="Sources referenced by an immutable build are protected and cannot be deleted."
+        onClose={() => setDeleteOpen(false)}
+        open={deleteOpen}
+        title={`Delete ${source.name}?`}
+      >
+        <div className="space-y-3">
+          {remove.error && <MutationError error={remove.error} />}
+          <div className="flex justify-end gap-2">
+            <Button onClick={() => setDeleteOpen(false)} variant="outline">
+              Cancel
+            </Button>
+            <Button
+              disabled={remove.isPending}
+              onClick={() => remove.mutate()}
+              variant="destructive"
+            >
+              Delete
+            </Button>
+          </div>
+        </div>
+      </Dialog>
       {latest ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Fact
