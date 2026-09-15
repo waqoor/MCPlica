@@ -77,6 +77,7 @@ class SourceSummaryRecord(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     source: ProjectSourceRecord
+    is_latest: bool = True
     latest_version: SourceVersionRecord | None = None
     version_count: int = Field(ge=0)
     health: Literal["missing", "pending", "valid", "invalid"]
