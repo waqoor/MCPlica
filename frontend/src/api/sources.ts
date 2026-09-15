@@ -86,12 +86,17 @@ export const sourceApi = {
     ),
   listPage: (
     projectId: string,
-    filters: { page?: number; page_size?: number } = {},
+    filters: {
+      page?: number;
+      page_size?: number;
+      include_superseded?: boolean;
+    } = {},
     signal?: AbortSignal,
   ) => {
     const params = new URLSearchParams();
     if (filters.page) params.set("page", String(filters.page));
     if (filters.page_size) params.set("page_size", String(filters.page_size));
+    if (filters.include_superseded) params.set("include_superseded", "true");
     const suffix = params.size ? `?${params.toString()}` : "";
     return api<Page<ProjectSource>>(
       `/api/v1/projects/${projectId}/sources${suffix}`,

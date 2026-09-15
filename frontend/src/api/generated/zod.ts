@@ -960,6 +960,7 @@ const SourceSummaryRead: z.ZodTypeAny = z
     current_version_selected_at: z.union([z.string(), z.null()]),
     health: z.enum(["missing", "pending", "valid", "invalid"]),
     id: z.string().uuid(),
+    is_latest: z.boolean(),
     is_primary: z.boolean(),
     kind: SourceKind,
     last_observed_at: z.union([z.string(), z.null()]),

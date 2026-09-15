@@ -2740,6 +2740,8 @@ export type components = {
        * Format: uuid
        */
       readonly id: string;
+      /** Is Latest */
+      readonly is_latest: boolean;
       /** Is Primary */
       readonly is_primary: boolean;
       readonly kind: components["schemas"]["SourceKind"];
@@ -4805,6 +4807,7 @@ export interface operations {
   readonly list_sources_api_v1_projects__project_id__sources_get: {
     readonly parameters: {
       readonly query?: {
+        readonly include_superseded?: boolean;
         readonly page?: number;
         readonly page_size?: number;
       };
