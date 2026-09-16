@@ -56,6 +56,18 @@ class Settings(BaseSettings):
 
     env: Literal["development", "test", "production"] = "development"
     log_level: str = "INFO"
+    log_directory: str = "/var/log/mcplica"
+    log_max_file_bytes: int = Field(default=10485760, ge=1024, le=1073741824)
+    log_retention_days: int = Field(default=30, ge=1, le=3650)
+
+    @field_validator("log_directory")
+    @classmethod
+    def validate_log_directory(cls, value: str) -> str:
+        path = PurePosixPath(value)
+        if not path.is_absolute() or len(path.parts) < 2 or ".." in path.parts:
+            raise ValueError("LOG_DIRECTORY must be an absolute non-root Linux path")
+        return value
+
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     api_domain: str = "api.localhost"

@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import json
+import logging
 import time
 from typing import cast
 from uuid import UUID
@@ -12,6 +13,7 @@ from app.clients.database import DatabaseClient
 from app.compilers.mcp.compiler import compile_manifest
 from app.core.canonical_json import canonical_sha256
 from app.core.exceptions import InvalidStateError, MCPlicaError, NotFoundError, SourceParseError
+from app.core.logging import log_context
 from app.core.redaction import redact
 from app.domain.analysis import EnrichmentSnapshot, OperationEnrichment
 from app.domain.builds import (
@@ -45,6 +47,8 @@ from app.services.builds.credential_mapping import map_credentials
 from app.services.canonicalization import CanonicalizationService
 from app.services.indexing import IndexingService
 from app.services.validation import ValidationService
+
+logger = logging.getLogger("mcplica.build.pipeline")
 
 
 class BuildCancellationRequested(Exception):
@@ -88,10 +92,19 @@ class BuildPipeline:
         self._cancellations = BuildCancellationService(builds, cleanup, audit)
 
     async def run(self, build_id: UUID, admission_token: UUID) -> BuildRecord:
+        build = await self._get(build_id)
+        with log_context(project_id=build.project_id, build_id=build.id):
+            if build.status not in TERMINAL_STATUSES:
+                logger.info("build.started", extra={"stage": build.status.value})
+            result = await self._run(build_id, admission_token)
+            return result
+
+    async def _run(self, build_id: UUID, admission_token: UUID) -> BuildRecord:
         while True:
             build = await self._get(build_id)
             if build.status in TERMINAL_STATUSES:
                 return build
+            logger.info("build.stage_changed", extra={"stage": build.status.value})
             started = time.perf_counter()
             stage_outcome = "failed"
             try:
@@ -225,7 +238,13 @@ class BuildPipeline:
                 )
             failed = await self._builds.get(session, build_id)
             assert failed is not None
-            return failed
+        if build.status not in TERMINAL_STATUSES:
+            with log_context(project_id=build.project_id, build_id=build.id):
+                logger.error(
+                    "build.failed",
+                    extra={"stage": build.status.value, "error_code": code, "outcome": "failed"},
+                )
+        return failed
 
     async def fail_from_exception(
         self,
@@ -641,7 +660,9 @@ class BuildPipeline:
                     "artifact_sha256": build.artifact_sha256,
                 },
             )
-            return build
+        with log_context(project_id=build.project_id, build_id=build.id):
+            logger.info("build.ready", extra={"stage": build.status.value, "outcome": "succeeded"})
+        return build
 
     async def _get(self, build_id: UUID) -> BuildRecord:
         async with self._database.session_scope() as session:

@@ -12,6 +12,9 @@ x-control-plane-environment: &control-plane-environment
   MULTIPART_SPOOL_CAPACITY_BYTES: ${MULTIPART_SPOOL_CAPACITY_BYTES:-220000000}
   MILVUS_URI: http://milvus:19530
   ARTIFACT_ROOT: /data/artifacts
+  LOG_DIRECTORY: ${LOG_DIRECTORY:-/var/log/mcplica}
+  LOG_MAX_FILE_BYTES: ${LOG_MAX_FILE_BYTES:-10485760}
+  LOG_RETENTION_DAYS: ${LOG_RETENTION_DAYS:-30}
   API_DOMAIN: ${API_DOMAIN:-api.localhost}
   FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:8080}
   BUILD_QUEUE_NAME: ${BUILD_QUEUE_NAME:-mcplica-builds}
@@ -48,6 +51,24 @@ x-logging: &bounded-logging
     max-file: "${DOCKER_LOG_MAX_FILES:-3}"
 
 services:
+  log-init:
+    <<: *backend
+    env_file: []
+    user: "0:0"
+    environment:
+      LOG_DIRECTORY: ${LOG_DIRECTORY:-/var/log/mcplica}
+    entrypoint: ["python", "-c"]
+    command:
+      - "import os; p = os.environ['LOG_DIRECTORY']; os.chown(p, 10001, 10001); os.chmod(p, 0o700)"
+    volumes:
+      - application-logs:${LOG_DIRECTORY:-/var/log/mcplica}
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, FOWNER]
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"
+
   postgres:
     logging: *bounded-logging
     restart: unless-stopped
@@ -168,6 +189,7 @@ services:
     <<: *backend
     volumes:
       - artifacts:/data/artifacts
+      - application-logs:${LOG_DIRECTORY:-/var/log/mcplica}
     ports:
       - "127.0.0.1:${API_PORT:-8000}:8000"
     read_only: true
@@ -191,6 +213,8 @@ services:
       timeout: 5s
       retries: 12
     depends_on:
+      log-init:
+        condition: service_completed_successfully
       migrate:
         condition: service_completed_successfully
       postgres:
@@ -260,8 +284,10 @@ services:
     <<: *backend
     command:
       [
-        "rq",
-        "worker",
+        "python",
+        "-m",
+        "app.jobs.worker_logging",
+        "mcplica-builder",
         "--with-scheduler",
         "--url",
         "redis://redis:6379/0",
@@ -269,6 +295,7 @@ services:
       ]
     volumes:
       - artifacts:/data/artifacts
+      - application-logs:${LOG_DIRECTORY:-/var/log/mcplica}
     read_only: true
     tmpfs:
       - /tmp:size=128m,mode=1777
@@ -291,6 +318,8 @@ services:
       start_period: 15s
       retries: 12
     depends_on:
+      log-init:
+        condition: service_completed_successfully
       migrate:
         condition: service_completed_successfully
       postgres:
@@ -351,6 +380,7 @@ services:
       ]
     volumes:
       - artifacts:/data/artifacts
+      - application-logs:${LOG_DIRECTORY:-/var/log/mcplica}
       # Docker socket belongs only on the deployment worker, not the public API container.
       - /var/run/docker.sock:/var/run/docker.sock
       # Write through a private worker path; Docker receives the daemon-visible source path.
@@ -381,6 +411,8 @@ services:
       start_period: 15s
       retries: 12
     depends_on:
+      log-init:
+        condition: service_completed_successfully
       migrate:
         condition: service_completed_successfully
       postgres:
@@ -480,3 +512,4 @@ volumes:
   minio-data:
   milvus-data:
   artifacts:
+  application-logs:

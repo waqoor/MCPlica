@@ -81,7 +81,9 @@ async def _stop_worker(
 
 async def _supervise_worker(settings: Settings, worker_args: list[str]) -> int:
     _log_reconciliation(await _reconcile(settings))
-    worker = await asyncio.create_subprocess_exec("rq", "worker", *worker_args)
+    worker = await asyncio.create_subprocess_exec(
+        sys.executable, "-m", "app.jobs.worker_logging", "mcplica-deployment", *worker_args
+    )
     stopping = asyncio.Event()
     loop = asyncio.get_running_loop()
     registered_signals: list[signal.Signals] = []
@@ -121,7 +123,13 @@ async def _supervise_worker(settings: Settings, worker_args: list[str]) -> int:
 
 def main() -> None:
     settings = get_settings()
-    configure_logging(settings.log_level, json_logs=settings.is_production)
+    configure_logging(
+        settings.log_level,
+        json_logs=settings.is_production,
+        service="mcplica-deployment",
+        directory=settings.log_directory,
+        max_bytes=settings.log_max_file_bytes,
+    )
     try:
         return_code = asyncio.run(_supervise_worker(settings, sys.argv[1:]))
     except Exception:

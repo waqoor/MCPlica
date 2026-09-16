@@ -11,6 +11,7 @@ from app.clients.runtime_files import RuntimeFilesClient
 from app.clients.storage import FilesystemStorageClient
 from app.core.config import Settings, get_settings
 from app.core.crypto import configured_secret_cipher
+from app.core.logging import configure_logging, log_context
 from app.providers.storage import FilesystemArtifactStorage
 from app.repositories.audit import AuditRepository
 from app.repositories.credentials import CredentialRepository
@@ -160,7 +161,15 @@ async def _close_resources(*resources: _AsyncClosable | None) -> None:
 
 
 async def _run(command_id: UUID, execution_token: UUID) -> None:
-    executor, database, storage, runtime_files, docker, queue = await _runner(get_settings())
+    settings = get_settings()
+    configure_logging(
+        settings.log_level,
+        json_logs=settings.is_production,
+        service="mcplica-deployment",
+        directory=settings.log_directory,
+        max_bytes=settings.log_max_file_bytes,
+    )
+    executor, database, storage, runtime_files, docker, queue = await _runner(settings)
     try:
         await executor.run(command_id, execution_token)
     finally:
@@ -168,4 +177,5 @@ async def _run(command_id: UUID, execution_token: UUID) -> None:
 
 
 def run_runtime_command_job(command_id: str, execution_token: str) -> None:
-    asyncio.run(_run(UUID(command_id), UUID(execution_token)))
+    with log_context(correlation_id=command_id):
+        asyncio.run(_run(UUID(command_id), UUID(execution_token)))

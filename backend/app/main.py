@@ -5,8 +5,9 @@ import time
 from collections.abc import AsyncGenerator
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
+from pathlib import Path
 from urllib.parse import urlsplit
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -31,7 +32,8 @@ from app.core.config import Settings, get_settings
 from app.core.crypto import AesGcmSecretCipher, configured_secret_cipher
 from app.core.exceptions import AuthenticationError, MCPlicaError
 from app.core.lifecycle import DispatcherGroup, register_bounded_close
-from app.core.logging import configure_logging
+from app.core.log_archive import run_retention
+from app.core.logging import configure_logging, log_context
 from app.core.network_policy import UrlPolicy
 from app.core.request_limits import MultipartSpoolLimitMiddleware
 from app.observability import observe_http_request, render_metrics
@@ -218,7 +220,13 @@ async def _create_app_clients(config: Settings) -> _AppClients:
 def create_app(settings_override: Settings | None = None) -> FastAPI:
     config = settings_override or get_settings()
     _validate_api_security(config)
-    configure_logging(config.log_level, json_logs=config.is_production)
+    configure_logging(
+        config.log_level,
+        json_logs=config.is_production,
+        service="mcplica-api",
+        directory=config.log_directory,
+        max_bytes=config.log_max_file_bytes,
+    )
     request_logger = logging.getLogger("mcplica.api")
 
     @asynccontextmanager
@@ -496,6 +504,15 @@ def create_app(settings_override: Settings | None = None) -> FastAPI:
             wake=build_admission.wake,
         )
         build_admission.wake()
+        log_stop = asyncio.Event()
+        dispatchers.add(
+            name="log-retention",
+            task=asyncio.create_task(
+                run_retention(Path(config.log_directory), config.log_retention_days, log_stop)
+            ),
+            stop_event=log_stop,
+            wake=log_stop.set,
+        )
         try:
             yield
         finally:
@@ -537,42 +554,47 @@ def create_app(settings_override: Settings | None = None) -> FastAPI:
         call_next: RequestResponseEndpoint,
     ) -> Response:
         started = time.perf_counter()
-        request_id = request.headers.get("X-Request-ID") or str(uuid4())
-        request.state.request_id = request_id[:120]
-        status_code = 500
+        # Only accept UUID correlation IDs; arbitrary header values can be credentials.
         try:
-            response = await call_next(request)
-            status_code = response.status_code
-            response.headers["X-Request-ID"] = request.state.request_id
-            response.headers["X-Content-Type-Options"] = "nosniff"
-            response.headers["X-Frame-Options"] = "DENY"
-            response.headers["Referrer-Policy"] = "same-origin"
-            response.headers["Content-Security-Policy"] = (
-                "default-src 'none'; frame-ancestors 'none'"
-            )
-            return response
-        finally:
-            duration = time.perf_counter() - started
-            route_object = request.scope.get("route")
-            route = getattr(route_object, "path", "unmatched")
-            if not isinstance(route, str):
-                route = "unmatched"
-            observe_http_request(request.method, route, status_code, duration)
-            principal = getattr(request.state, "principal", None)
-            actor_id = str(principal.user.id) if principal is not None else None
-            request_logger.info(
-                "request.completed",
-                extra={
-                    "service": "mcplica-api",
-                    "component": "http",
-                    "request_id": request.state.request_id,
-                    "actor_id": actor_id,
-                    "method": request.method,
-                    "route": route,
-                    "status_code": status_code,
-                    "duration_ms": round(duration * 1_000, 3),
-                },
-            )
+            request_id = str(UUID(request.headers.get("X-Request-ID", "")))
+        except ValueError:
+            request_id = str(uuid4())
+        request.state.request_id = request_id[:120]
+        with log_context(request_id=request.state.request_id):
+            status_code = 500
+            try:
+                response = await call_next(request)
+                status_code = response.status_code
+                response.headers["X-Request-ID"] = request.state.request_id
+                response.headers["X-Content-Type-Options"] = "nosniff"
+                response.headers["X-Frame-Options"] = "DENY"
+                response.headers["Referrer-Policy"] = "same-origin"
+                response.headers["Content-Security-Policy"] = (
+                    "default-src 'none'; frame-ancestors 'none'"
+                )
+                return response
+            finally:
+                duration = time.perf_counter() - started
+                route_object = request.scope.get("route")
+                route = getattr(route_object, "path", "unmatched")
+                if not isinstance(route, str):
+                    route = "unmatched"
+                observe_http_request(request.method, route, status_code, duration)
+                principal = getattr(request.state, "principal", None)
+                actor_id = str(principal.user.id) if principal is not None else None
+                request_logger.info(
+                    "request.completed",
+                    extra={
+                        "service": "mcplica-api",
+                        "component": "http",
+                        "request_id": request.state.request_id,
+                        "actor_id": actor_id,
+                        "method": request.method,
+                        "route": route,
+                        "status_code": status_code,
+                        "duration_ms": round(duration * 1_000, 3),
+                    },
+                )
 
     app.middleware("http")(request_context_middleware)
 
