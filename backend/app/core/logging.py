@@ -16,17 +16,64 @@ def _safe_event_name(record: logging.LogRecord) -> str:
     return "log.message_omitted"
 
 
+def _safe_pg_diag(current: BaseException) -> dict[str, object]:
+    orig = getattr(current, "orig", None)
+    diag = getattr(orig, "diag", None)
+    constraint_name = getattr(diag, "constraint_name", None)
+    if not constraint_name:
+        return {}
+    detail: dict[str, object] = {"pg_constraint": constraint_name}
+    message_detail = getattr(diag, "message_detail", None)
+    if isinstance(message_detail, str):
+        detail["pg_detail"] = message_detail.replace("\r", " ").replace("\n", " ")[:512]
+    return detail
+
+
 def _safe_exception(
     exc_info: tuple[type[BaseException] | None, BaseException | None, object],
 ) -> dict[str, object]:
     current: BaseException | None = exc_info[1]
     chain: list[str] = []
     seen: set[int] = set()
+    diag: dict[str, object] = {}
     while current is not None and id(current) not in seen and len(chain) < 8:
         seen.add(id(current))
         chain.append(type(current).__name__)
+        if not diag:
+            diag = _safe_pg_diag(current)
         current = current.__cause__ or current.__context__
-    return {"type": chain[0], "chain": chain} if chain else {"type": "Exception"}
+    if not chain:
+        return {"type": "Exception"}
+    return {"type": chain[0], "chain": chain, **diag}
+
+
+_CONTEXT_FIELDS: tuple[str, ...] = (
+    "service",
+    "component",
+    "request_id",
+    "job_id",
+    "actor_id",
+    "project_id",
+    "build_id",
+    "deployment_id",
+    "error_code",
+    "method",
+    "route",
+    "status_code",
+    "duration_ms",
+    "attempt_number",
+    "admission_attempt",
+    "cleanup_job_id",
+    "cleanup_target_id",
+    "runtime_command_id",
+    "retryable",
+    "run_key",
+    "op",
+    "existing_status",
+    "new_status",
+    "response_json_is_none",
+    "response_sha256_is_none",
+)
 
 
 def _safe_context_value(field: str, value: object) -> str | int | float | bool | None:
@@ -47,27 +94,7 @@ def _safe_context_value(field: str, value: object) -> str | int | float | bool |
 class JsonLogFormatter(logging.Formatter):
     """Small stdlib formatter so every process emits the same safe JSON envelope."""
 
-    context_fields: ClassVar[tuple[str, ...]] = (
-        "service",
-        "component",
-        "request_id",
-        "job_id",
-        "actor_id",
-        "project_id",
-        "build_id",
-        "deployment_id",
-        "error_code",
-        "method",
-        "route",
-        "status_code",
-        "duration_ms",
-        "attempt_number",
-        "admission_attempt",
-        "cleanup_job_id",
-        "cleanup_target_id",
-        "runtime_command_id",
-        "retryable",
-    )
+    context_fields: ClassVar[tuple[str, ...]] = _CONTEXT_FIELDS
 
     def format(self, record: logging.LogRecord) -> str:
         payload: dict[str, object] = {
@@ -91,9 +118,18 @@ class SafeTextLogFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         timestamp = datetime.fromtimestamp(record.created, UTC).isoformat()
         rendered = f"{timestamp} {record.levelname} {record.name} {_safe_event_name(record)}"
+        for field in _CONTEXT_FIELDS:
+            value = getattr(record, field, None)
+            safe_value = _safe_context_value(field, value)
+            if safe_value is not None:
+                rendered += f" {field}={safe_value}"
         if record.exc_info:
             exception = _safe_exception(record.exc_info)
             rendered += f" exception_type={exception['type']}"
+            if "pg_constraint" in exception:
+                rendered += f" pg_constraint={exception['pg_constraint']}"
+            if "pg_detail" in exception:
+                rendered += f" pg_detail={exception['pg_detail']}"
         return rendered
 
 

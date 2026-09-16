@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import UUID
@@ -832,12 +833,26 @@ class BuildAIRunRepository:
             "status": status,
             "error_code": error_code,
         }
+        existing_status = model_record.status if model_record is not None else None
         if model_record is None:
             model_record = BuildAIRun(build_id=build_id, run_key=run_key, **values)
             session.add(model_record)
         else:
             for name, value in values.items():
                 setattr(model_record, name, value)
+        logging.getLogger("mcplica.builder").info(
+            "build_ai_run.write",
+            extra={
+                "build_id": str(build_id),
+                "run_key": run_key,
+                "op": "insert" if existing_status is None else "update",
+                "existing_status": existing_status,
+                "new_status": status,
+                "response_json_is_none": response_json is None,
+                "response_sha256_is_none": response_sha256 is None,
+                "error_code": error_code,
+            },
+        )
         await session.flush()
         await session.refresh(model_record)
         return _ai_to_domain(model_record)
