@@ -317,9 +317,15 @@ class BuildAIRun(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     retrieved_chunk_ids: Mapped[list[str]] = mapped_column(JSONB(), nullable=False)
     response_schema_id: Mapped[str] = mapped_column(String(160), nullable=False)
     response_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    response_json: Mapped[dict[str, object] | None] = mapped_column(JSONB(), nullable=True)
-    usage_json: Mapped[dict[str, object] | None] = mapped_column(JSONB(), nullable=True)
-    cost_json: Mapped[dict[str, object] | None] = mapped_column(JSONB(), nullable=True)
+    response_json: Mapped[dict[str, object] | None] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
+    )
+    usage_json: Mapped[dict[str, object] | None] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
+    )
+    cost_json: Mapped[dict[str, object] | None] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
+    )
     latency_ms: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     status: Mapped[str] = mapped_column(String(40), nullable=False)
     error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
