@@ -11,7 +11,13 @@ from mcp_contracts.json_types import JsonObject
 from app.clients.database import DatabaseClient
 from app.compilers.mcp.compiler import compile_manifest
 from app.core.canonical_json import canonical_sha256
-from app.core.exceptions import InvalidStateError, MCPlicaError, NotFoundError, SourceParseError
+from app.core.exceptions import (
+    ExecutionOwnershipError,
+    InvalidStateError,
+    MCPlicaError,
+    NotFoundError,
+    SourceParseError,
+)
 from app.core.redaction import redact
 from app.domain.analysis import EnrichmentSnapshot, OperationEnrichment
 from app.domain.builds import (
@@ -259,12 +265,20 @@ class BuildPipeline:
     ) -> None:
         error_code = exc.code if isinstance(exc, MCPlicaError) else "UNEXPECTED_BUILD_ERROR"
         async with self._database.session_scope() as session:
-            await require_build_execution_owner(
-                session,
-                build_id=build_id,
-                admission_token=admission_token,
-                allow_cancellation=True,
-            )
+            try:
+                await require_build_execution_owner(
+                    session,
+                    build_id=build_id,
+                    admission_token=admission_token,
+                    allow_cancellation=True,
+                )
+            except ExecutionOwnershipError:
+                if isinstance(exc, ExecutionOwnershipError):
+                    # The failure being recorded IS the lease loss itself —
+                    # re-checking ownership will fail identically every time.
+                    # Skip the audit entry rather than losing the real error.
+                    return
+                raise
             build = await self._builds.get(session, build_id)
             if build is None:
                 raise NotFoundError("Build was not found")
