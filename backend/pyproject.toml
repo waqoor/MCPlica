@@ -4,7 +4,7 @@ version = "1.0.0-rc.1"
 description = "MCPlica builder/control plane"
 requires-python = ">=3.13,<3.14"
 dependencies = [
-  "alembic>=1.16,<2",
+  "alembic>=1.20.0,<2",
   "beautifulsoup4>=4.13,<5",
   "cryptography>=50.0.1,<51",
   "docker>=7.1,<8",
