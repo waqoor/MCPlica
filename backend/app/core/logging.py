@@ -36,15 +36,20 @@ def _safe_exception(
     chain: list[str] = []
     seen: set[int] = set()
     diag: dict[str, object] = {}
+    root_message: str | None = None
     while current is not None and id(current) not in seen and len(chain) < 8:
         seen.add(id(current))
         chain.append(type(current).__name__)
         if not diag:
             diag = _safe_pg_diag(current)
+        root_message = str(current).replace("\r", " ").replace("\n", " ")[:512]
         current = current.__cause__ or current.__context__
     if not chain:
         return {"type": "Exception"}
-    return {"type": chain[0], "chain": chain, **diag}
+    result: dict[str, object] = {"type": chain[0], "chain": chain, **diag}
+    if root_message and len(chain) > 1:
+        result["root_message"] = root_message
+    return result
 
 
 _CONTEXT_FIELDS: tuple[str, ...] = (
@@ -126,6 +131,11 @@ class SafeTextLogFormatter(logging.Formatter):
         if record.exc_info:
             exception = _safe_exception(record.exc_info)
             rendered += f" exception_type={exception['type']}"
+            chain = exception.get("chain")
+            if isinstance(chain, list) and len(chain) > 1:
+                rendered += f" exception_chain={'<-'.join(chain)}"
+            if "root_message" in exception:
+                rendered += f" root_message={exception['root_message']!r}"
             if "pg_constraint" in exception:
                 rendered += f" pg_constraint={exception['pg_constraint']}"
             if "pg_detail" in exception:
