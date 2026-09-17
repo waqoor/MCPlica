@@ -1356,6 +1356,20 @@ def parse_openapi(
             "Configured server mappings reference unknown OpenAPI operations",
             details={"operation_keys": sorted(unknown_mapping_keys)},
         )
+    unknown_scheme_refs = sorted(
+        {
+            scheme_name
+            for operation in operations
+            for requirement in operation.security
+            for scheme_name in requirement.scheme_scopes
+            if scheme_name not in security_schemes
+        }
+    )
+    if unknown_scheme_refs:
+        raise SourceParseError(
+            "Operation security requirements reference undefined security schemes",
+            details={"security_scheme_names": unknown_scheme_refs},
+        )
     active_ref = active_server_ref
     if active_ref is None and len(servers) == 1:
         active_ref = next(iter(servers))

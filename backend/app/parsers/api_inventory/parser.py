@@ -453,6 +453,20 @@ def parse_api_inventory(
             "Configured server mappings reference unknown API Inventory operations",
             details={"operation_keys": sorted(unknown_mapping_keys)},
         )
+    unknown_scheme_refs = sorted(
+        {
+            scheme_name
+            for operation in operations
+            for requirement in operation.security
+            for scheme_name in requirement.scheme_scopes
+            if scheme_name not in security_schemes
+        }
+    )
+    if unknown_scheme_refs:
+        raise SourceParseError(
+            "Operation security requirements reference undefined security schemes",
+            details={"security_scheme_names": unknown_scheme_refs},
+        )
     return CanonicalApi(
         project_id=project_id,
         source_format="api-inventory/v1",
