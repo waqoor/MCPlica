@@ -362,17 +362,31 @@ export function NewProjectPage() {
         />
       )}
       {step === 6 && (
-        <StartBuildStep
-          existingBuildId={
-            journey.data?.build_status &&
-            !["FAILED", "CANCELLED"].includes(journey.data.build_status)
-              ? buildId
-              : null
-          }
-          onBack={() => go(5)}
-          onStarted={(id) => go(7, { build: id })}
-          projectId={projectId!}
-        />
+        <>
+          {journey.data?.build_status === "FAILED" && buildId && (
+            <Alert className="mb-5" title="Build failed" tone="danger">
+              The previous build could not be completed. Inspect the failed
+              build for details before starting another attempt.{" "}
+              <Link
+                className="font-medium underline"
+                to={`/projects/${projectId}/builds/${buildId}`}
+              >
+                Inspect failed build
+              </Link>
+            </Alert>
+          )}
+          <StartBuildStep
+            existingBuildId={
+              journey.data?.build_status &&
+              !["FAILED", "CANCELLED"].includes(journey.data.build_status)
+                ? buildId
+                : null
+            }
+            onBack={() => go(5)}
+            onStarted={(id) => go(7, { build: id })}
+            projectId={projectId!}
+          />
+        </>
       )}
       {step === 7 && (
         <BuildProgressStep
