@@ -199,6 +199,16 @@ class BuildAIRunRecord(BaseModel):
     created_at: datetime
 
 
+class ModelUsageRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    model: str
+    call_count: int
+    total_tokens: int
+    total_cost: float
+    is_attributable: bool = True
+
+
 class OperationChange(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 

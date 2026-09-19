@@ -124,6 +124,7 @@ export type Readiness = {
 export type SystemSettings = Schema<"SystemSettingsRead">;
 export type ModelSettings = Schema<"ModelSettingsRead">;
 export type ModelCatalogItem = Schema<"ModelCatalogItem">;
+export type ModelUsage = Schema<"ModelUsageRead">;
 
 export type Page<T> = {
   readonly items: readonly T[];

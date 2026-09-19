@@ -72,6 +72,7 @@ from app.services.mcp_access import MCPAccessService
 from app.services.projects import ProjectService
 from app.services.settings import SettingsService
 from app.services.sources import SourceService
+from app.services.usage import UsageService
 from app.services.users import UserService
 
 
@@ -458,6 +459,7 @@ def create_app(settings_override: Settings | None = None) -> FastAPI:
                 build_admission,
             ),
             cleanup=cleanup_service,
+            usage=UsageService(database, ai_runs),
         )
         dispatchers = DispatcherGroup(timeout_seconds=config.shutdown_timeout_seconds)
         runtime_command_stop = asyncio.Event()

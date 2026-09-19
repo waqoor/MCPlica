@@ -4,7 +4,8 @@ from uuid import UUID
 
 from mcp_contracts.json_types import JsonObject
 from pydantic import TypeAdapter
-from sqlalchemy import CursorResult, delete, func, select, update
+from sqlalchemy import CursorResult, Numeric, delete, func, select, update
+from sqlalchemy import cast as sql_cast
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
@@ -16,6 +17,7 @@ from app.domain.builds import (
     BuildRecord,
     BuildStatus,
     BuildTrigger,
+    ModelUsageRecord,
     next_status,
 )
 from app.domain.sources import BoundSourceVersionRecord, ProjectSourceRecord, SourceVersionRecord
@@ -720,6 +722,113 @@ class BuildAIRunRepository:
             )
         )
         return _ai_to_domain(model) if model else None
+
+    EMBEDDING_BUCKET_LABEL = (
+        "Retrieval embedding (bundled in analysis calls — model not recorded per call)"
+    )
+
+    async def usage_by_model(
+        self,
+        session: AsyncSession,
+        *,
+        since: datetime | None = None,
+        until: datetime | None = None,
+    ) -> list[ModelUsageRecord]:
+        generation_tokens = func.coalesce(
+            sql_cast(
+                BuildAIRun.usage_json["structured_generation"]["total_tokens"].astext,
+                Numeric,
+            ),
+            sql_cast(BuildAIRun.usage_json["total_tokens"].astext, Numeric),
+            0,
+        )
+        generation_cost = func.coalesce(sql_cast(BuildAIRun.cost_json["cost"].astext, Numeric), 0)
+        embedding_tokens = sql_cast(
+            BuildAIRun.usage_json["retrieval_embedding"]["total_tokens"].astext,
+            Numeric,
+        )
+        embedding_cost = sql_cast(
+            BuildAIRun.usage_json["retrieval_embedding"]["cost"].astext,
+            Numeric,
+        )
+        predicates = []
+        if since is not None:
+            predicates.append(BuildAIRun.created_at >= since)
+        if until is not None:
+            predicates.append(BuildAIRun.created_at < until)
+        generation_rows = (
+            await session.execute(
+                select(
+                    BuildAIRun.model,
+                    func.count().label("call_count"),
+                    func.sum(generation_tokens).label("total_tokens"),
+                    func.sum(generation_cost).label("total_cost"),
+                )
+                .where(*predicates)
+                .group_by(BuildAIRun.model)
+                .order_by(BuildAIRun.model)
+            )
+        ).all()
+        embedding_row = (
+            await session.execute(
+                select(
+                    func.count().label("call_count"),
+                    func.sum(embedding_tokens).label("total_tokens"),
+                    func.sum(embedding_cost).label("total_cost"),
+                ).where(*predicates, BuildAIRun.usage_json.has_key("retrieval_embedding"))
+            )
+        ).one()
+        records = [
+            ModelUsageRecord(
+                model=row.model,
+                call_count=row.call_count,
+                total_tokens=int(row.total_tokens or 0),
+                total_cost=float(row.total_cost or 0),
+            )
+            for row in generation_rows
+        ]
+        if embedding_row.call_count:
+            records.append(
+                ModelUsageRecord(
+                    model=self.EMBEDDING_BUCKET_LABEL,
+                    call_count=embedding_row.call_count,
+                    total_tokens=int(embedding_row.total_tokens or 0),
+                    total_cost=float(embedding_row.total_cost or 0),
+                    is_attributable=False,
+                )
+            )
+        return records
+
+    async def list_by_model(
+        self,
+        session: AsyncSession,
+        *,
+        model: str,
+        since: datetime | None = None,
+        until: datetime | None = None,
+        page: int,
+        page_size: int,
+    ) -> tuple[list[BuildAIRunRecord], int]:
+        predicates = [BuildAIRun.model == model]
+        if since is not None:
+            predicates.append(BuildAIRun.created_at >= since)
+        if until is not None:
+            predicates.append(BuildAIRun.created_at < until)
+        total = int(
+            await session.scalar(
+                select(func.count()).select_from(BuildAIRun).where(*predicates)
+            )
+            or 0
+        )
+        result = await session.scalars(
+            select(BuildAIRun)
+            .options(defer(BuildAIRun.response_json, raiseload=True))
+            .where(*predicates)
+            .order_by(BuildAIRun.created_at.desc(), BuildAIRun.id.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        return [_ai_to_domain(model, include_response=False) for model in result], total
 
     async def list_page_for_build(
         self,
