@@ -3,7 +3,7 @@ from typing import cast
 from uuid import UUID
 
 from mcp_contracts.json_types import JsonObject
-from sqlalchemy import and_, delete, exists, func, or_, select, update
+from sqlalchemy import and_, delete, exists, func, or_, select, tuple_, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -245,22 +245,39 @@ class SourceRepository:
                 ),
             )
         )
-        filters = [ProjectSource.project_id == project_id]
-        if not include_superseded:
-            filters.append(~is_superseded)
-
-        total = int(await session.scalar(select(func.count(ProjectSource.id)).where(*filters)) or 0)
-        source_models = list(
+        # Page over latest sources only, so `total`/`page_size` count distinct
+        # sources rather than raw version rows.
+        latest_filters = [ProjectSource.project_id == project_id, ~is_superseded]
+        total_query = select(func.count(ProjectSource.id)).where(*latest_filters)
+        total = int(await session.scalar(total_query) or 0)
+        latest_models = list(
             await session.scalars(
                 select(ProjectSource)
-                .where(*filters)
+                .where(*latest_filters)
                 .order_by(ProjectSource.created_at.asc(), ProjectSource.id.asc())
                 .limit(limit)
                 .offset(offset)
             )
         )
-        if not source_models:
+        if not latest_models:
             return [], total
+
+        if include_superseded:
+            # Pull every sibling version of each latest source on this page, so a
+            # supersession group is never split across a page boundary.
+            group_keys = {(model.name, model.kind) for model in latest_models}
+            source_models = list(
+                await session.scalars(
+                    select(ProjectSource)
+                    .where(
+                        ProjectSource.project_id == project_id,
+                        tuple_(ProjectSource.name, ProjectSource.kind).in_(group_keys),
+                    )
+                    .order_by(ProjectSource.created_at.asc(), ProjectSource.id.asc())
+                )
+            )
+        else:
+            source_models = latest_models
 
         source_ids = [model.id for model in source_models]
         is_latest_by_id = {
