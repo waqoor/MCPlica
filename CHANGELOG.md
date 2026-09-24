@@ -6,6 +6,12 @@ version is not published until its immutable tag and release workflow complete.
 
 ## [Unreleased]
 
+### Changed
+
+- Paged the sources list over distinct sources rather than raw version rows, so a superseded source
+  version can no longer land on a different page than its latest version and render as an orphaned
+  top-level entry.
+
 ## [1.0.0-rc.1] - 2026-09-04
 
 ### Changed
