@@ -6,6 +6,11 @@ version is not published until its immutable tag and release workflow complete.
 
 ## [Unreleased]
 
+### Changed
+
+- Replaced the native `window.confirm()` prompt on the Sources tab with the same in-app dialog
+  already used for project deletion, so source deletion confirmation is consistent across the site.
+
 ## [1.0.0-rc.1] - 2026-09-04
 
 ### Changed
