@@ -6,6 +6,11 @@ version is not published until its immutable tag and release workflow complete.
 
 ## [Unreleased]
 
+### Added
+
+- Added a per-model AI usage and cost counter under **Settings > Usage**, showing call count, total
+  tokens, and total cost per model from the build AI-run history.
+
 ## [1.0.0-rc.1] - 2026-09-04
 
 ### Changed
