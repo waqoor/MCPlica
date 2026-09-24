@@ -6,6 +6,11 @@ version is not published until its immutable tag and release workflow complete.
 
 ## [Unreleased]
 
+### Changed
+
+- Rejected OpenAPI and API Inventory documents whose operations reference an undefined security
+  scheme at parse time instead of admitting them silently.
+
 ## [1.0.0-rc.1] - 2026-09-04
 
 ### Changed
