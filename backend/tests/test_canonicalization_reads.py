@@ -1,3 +1,4 @@
+import asyncio
 import json
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -6,6 +7,8 @@ from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock
 from uuid import UUID
+
+import pytest
 
 from app.domain.sources import (
     BoundSourceVersionRecord,
@@ -90,6 +93,55 @@ async def test_canonicalization_never_reads_documentation_payloads() -> None:
     assert result.provenance.source_version_ids == [binding.version.id for binding in bindings]
     storage.get.assert_awaited_once()
     live_source_lookup.assert_not_awaited()
+
+
+async def test_follower_retries_instead_of_failing_when_leader_is_cancelled() -> None:
+    root = _binding(50, SourceKind.OPENAPI, primary=True)
+    source = {
+        "openapi": "3.1.0",
+        "info": {"title": "Example", "version": "1"},
+        "servers": [{"url": "https://api.example.com"}],
+        "paths": {"/records": {"get": {"responses": {"200": {"description": "OK"}}}}},
+    }
+    started = asyncio.Event()
+    release = asyncio.Event()
+    call_count = 0
+
+    async def read(key: str, *, max_bytes: int) -> bytes:
+        nonlocal call_count
+        call_count += 1
+        started.set()
+        await release.wait()
+        return json.dumps(source).encode()
+
+    storage = SimpleNamespace(get=AsyncMock(side_effect=read))
+    project = SimpleNamespace(default_base_url=None, active_server_ref=None, server_mappings={})
+    service = CanonicalizationService(
+        cast(Any, _Database()),
+        cast(Any, SimpleNamespace(get=AsyncMock(return_value=project))),
+        cast(Any, SimpleNamespace(list_bound_versions=AsyncMock())),
+        cast(Any, object()),
+        cast(Any, storage),
+    )
+
+    leader = asyncio.ensure_future(
+        service.canonicalize(UUID(int=1), [root], max_source_bytes=10_000)
+    )
+    await started.wait()
+    follower = asyncio.ensure_future(
+        service.canonicalize(UUID(int=1), [root], max_source_bytes=10_000)
+    )
+    await asyncio.sleep(0)
+
+    leader.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await leader
+
+    release.set()
+    result = await follower
+
+    assert call_count == 2
+    assert len(result.operations) == 1
 
 
 def test_configuration_fingerprint_includes_frozen_role_name_and_aliases() -> None:

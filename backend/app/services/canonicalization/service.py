@@ -37,6 +37,8 @@ def _attribute_source_error(
 
 _FAILURE_COOLDOWN_SECONDS = 15.0
 
+_CacheKey = tuple[UUID, str, str | None, str | None, tuple[tuple[str, str], ...]]
+
 
 def _source_fingerprint(bindings: list[BoundSourceVersionRecord]) -> str:
     digest = hashlib.sha256()
@@ -63,17 +65,11 @@ class CanonicalizationService:
         self._snapshots = snapshots
         self._storage = storage
         # Avoids re-validating unchanged input on every 2s /journey poll.
-        self._cache: dict[tuple[UUID, str, str | None, str | None, tuple[tuple[str, str], ...]], CanonicalApi] = {}
+        self._cache: dict[_CacheKey, CanonicalApi] = {}
         # Holds a failed attempt's error briefly so it isn't retried instantly.
-        self._failures: dict[
-            tuple[UUID, str, str | None, str | None, tuple[tuple[str, str], ...]],
-            tuple[float, BaseException],
-        ] = {}
+        self._failures: dict[_CacheKey, tuple[float, BaseException]] = {}
         # Coalesces concurrent retries for the same input onto one computation.
-        self._inflight: dict[
-            tuple[UUID, str, str | None, str | None, tuple[tuple[str, str], ...]],
-            asyncio.Future[CanonicalApi],
-        ] = {}
+        self._inflight: dict[_CacheKey, asyncio.Future[CanonicalApi]] = {}
 
     async def current_source_versions(self, project_id: UUID) -> list[UUID]:
         return [binding.version.id for binding in await self.current_source_bindings(project_id)]
@@ -132,7 +128,18 @@ class CanonicalizationService:
             del self._failures[cache_key]
         existing = self._inflight.get(cache_key)
         if existing is not None:
-            return await existing
+            try:
+                return await existing
+            except asyncio.CancelledError:
+                if asyncio.current_task().cancelling():
+                    raise
+                # The in-flight leader was cancelled, not us; retry as the new leader.
+                return await self.canonicalize(
+                    project_id,
+                    bindings,
+                    max_source_bytes=max_source_bytes,
+                    routing=routing,
+                )
         future: asyncio.Future[CanonicalApi] = asyncio.get_running_loop().create_future()
         self._inflight[cache_key] = future
         try:
@@ -148,9 +155,8 @@ class CanonicalizationService:
             if isinstance(exc, Exception):
                 self._failures[cache_key] = (time.monotonic(), exc)
                 future.set_exception(exc)
-                future.exception()  # mark retrieved so asyncio doesn't warn if nobody else awaited it
+                future.exception()  # mark retrieved so asyncio doesn't warn if nobody awaits it
             else:
-                # Not a real validation failure — release waiters without the cooldown.
                 future.cancel()
             raise
         self._failures.pop(cache_key, None)
@@ -176,9 +182,7 @@ class CanonicalizationService:
         ]
         if len(primary) != 1:
             raise SourceParseError("A build requires exactly one primary executable source")
-        # Documentation contributes immutable metadata here; its payload belongs
-        # exclusively to the bounded indexing parser. Read executable dependencies
-        # one at a time instead of retaining every source's raw bytes concurrently.
+        # Reads one dependency at a time to avoid holding every source's bytes in memory.
         root = primary[0]
         root_payload = await self._storage.get(root.version.storage_key, max_bytes=max_source_bytes)
         try:
