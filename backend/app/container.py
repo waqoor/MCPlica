@@ -13,6 +13,7 @@ from app.services.mcp_access import MCPAccessService
 from app.services.projects import ProjectService
 from app.services.settings import SettingsService
 from app.services.sources import SourceService
+from app.services.usage import UsageService
 from app.services.users import UserService
 
 
@@ -32,3 +33,4 @@ class ServiceContainer:
     build_admission: BuildAdmissionDispatcher
     builds: BuildService
     cleanup: CleanupService
+    usage: UsageService

@@ -1184,6 +1184,15 @@ const SourceVersionMetadataRead: z.ZodTypeAny = z
     spec_version: z.union([z.string(), z.null()]),
   })
   .strict();
+const ModelUsageRead: z.ZodTypeAny = z
+  .object({
+    call_count: z.number().int(),
+    is_attributable: z.boolean(),
+    model: z.string(),
+    total_cost: z.number(),
+    total_tokens: z.number().int(),
+  })
+  .strict();
 const Page_UserRead_: z.ZodTypeAny = z
   .object({
     items: z.array(UserRead),
@@ -1328,6 +1337,7 @@ export const schemas = {
   SourceIssueRead,
   IndexGenerationStatus,
   SourceVersionMetadataRead,
+  ModelUsageRead,
   Page_UserRead_,
   UserCreate,
   UserUpdate,
@@ -1419,6 +1429,8 @@ export const endpointResponses = {
   "put /api/v1/settings/openrouter": ModelSettingsRead,
   "post /api/v1/settings/openrouter/test": OpenRouterTestResult,
   "get /api/v1/source-versions/:version_id/metadata": SourceVersionMetadataRead,
+  "get /api/v1/usage/by-model": z.array(ModelUsageRead),
+  "get /api/v1/usage/logs": Page_BuildAIRunRead_,
   "get /api/v1/users": Page_UserRead_,
   "post /api/v1/users": UserRead,
   "patch /api/v1/users/:user_id": UserRead,

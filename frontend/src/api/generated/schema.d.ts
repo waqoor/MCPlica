@@ -1002,6 +1002,40 @@ export type paths = {
     readonly patch?: never;
     readonly trace?: never;
   };
+  readonly "/api/v1/usage/by-model": {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: never;
+      readonly path?: never;
+      readonly cookie?: never;
+    };
+    /** Usage By Model */
+    readonly get: operations["usage_by_model_api_v1_usage_by_model_get"];
+    readonly put?: never;
+    readonly post?: never;
+    readonly delete?: never;
+    readonly options?: never;
+    readonly head?: never;
+    readonly patch?: never;
+    readonly trace?: never;
+  };
+  readonly "/api/v1/usage/logs": {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: never;
+      readonly path?: never;
+      readonly cookie?: never;
+    };
+    /** Usage Logs */
+    readonly get: operations["usage_logs_api_v1_usage_logs_get"];
+    readonly put?: never;
+    readonly post?: never;
+    readonly delete?: never;
+    readonly options?: never;
+    readonly head?: never;
+    readonly patch?: never;
+    readonly trace?: never;
+  };
   readonly "/api/v1/users": {
     readonly parameters: {
       readonly query?: never;
@@ -2041,6 +2075,19 @@ export type components = {
       readonly include_documentation_in_analysis: boolean;
       /** Validation Model */
       readonly validation_model?: string | null;
+    };
+    /** ModelUsageRead */
+    readonly ModelUsageRead: {
+      /** Call Count */
+      readonly call_count: number;
+      /** Is Attributable */
+      readonly is_attributable: boolean;
+      /** Model */
+      readonly model: string;
+      /** Total Cost */
+      readonly total_cost: number;
+      /** Total Tokens */
+      readonly total_tokens: number;
     };
     /** MultipartFileMapping */
     readonly MultipartFileMapping: {
@@ -5332,6 +5379,73 @@ export interface operations {
         };
         content: {
           readonly "application/json": components["schemas"]["SourceVersionMetadataRead"];
+        };
+      };
+      /** @description Validation Error */
+      readonly 422: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  readonly usage_by_model_api_v1_usage_by_model_get: {
+    readonly parameters: {
+      readonly query?: {
+        readonly from?: string | null;
+        readonly to?: string | null;
+      };
+      readonly header?: never;
+      readonly path?: never;
+      readonly cookie?: never;
+    };
+    readonly requestBody?: never;
+    readonly responses: {
+      /** @description Successful Response */
+      readonly 200: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly "application/json": readonly components["schemas"]["ModelUsageRead"][];
+        };
+      };
+      /** @description Validation Error */
+      readonly 422: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  readonly usage_logs_api_v1_usage_logs_get: {
+    readonly parameters: {
+      readonly query: {
+        readonly from?: string | null;
+        readonly model: string;
+        readonly page?: number;
+        readonly page_size?: number;
+        readonly to?: string | null;
+      };
+      readonly header?: never;
+      readonly path?: never;
+      readonly cookie?: never;
+    };
+    readonly requestBody?: never;
+    readonly responses: {
+      /** @description Successful Response */
+      readonly 200: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly "application/json": components["schemas"]["Page_BuildAIRunRead_"];
         };
       };
       /** @description Validation Error */

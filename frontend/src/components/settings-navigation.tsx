@@ -10,6 +10,7 @@ const sections = [
     adminOnly: true,
   },
   { label: "Models", to: "/settings/models", end: false, adminOnly: true },
+  { label: "Usage", to: "/settings/usage", end: false, adminOnly: true },
   { label: "Users", to: "/settings/users", end: false, adminOnly: true },
 ];
 
