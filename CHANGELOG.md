@@ -8,5 +8,9 @@ version is not published until its immutable tag and release workflow complete.
 
 ### Changed
 
-- Rejected OpenAPI and API Inventory documents whose operations reference an undefined security
-  scheme at parse time instead of admitting them silently.
+- Persisted the configured embedding model on a document index generation instead of the model name
+  a provider's response happened to echo back, so a completed generation's `embedding_model` matches
+  what was actually requested.
+
+## [1.0.0-rc.1] - 2026-09-04
+

@@ -365,7 +365,7 @@ class IndexingService:
                     await cancellation_check()
             return await self._complete(
                 generation.id,
-                model=actual_model,
+                model=embedding_model,
                 dimensions=dimension,
                 collection=collection,
                 chunk_count=len(chunks),

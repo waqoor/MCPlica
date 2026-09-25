@@ -5,11 +5,28 @@ from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import UUID, uuid4
 
+import pytest
+
+from app.clients.storage import StoredObject
 from app.domain.builds import BuildConfiguration
-from app.domain.indexing import CachedEmbeddingRecord
+from app.domain.indexing import (
+    CachedEmbeddingRecord,
+    DocumentIndexGenerationRecord,
+    IndexGenerationStatus,
+)
+from app.domain.sources import (
+    BoundSourceVersionRecord,
+    ProjectSourceRecord,
+    SourceKind,
+    SourceOrigin,
+    SourceVersionRecord,
+)
 from app.parsers.documentation import DocumentChunk
+from app.parsers.openapi.parser import parse_openapi
 from app.providers.ai.base import AIProvider, EmbeddingBatch
+from app.providers.vector import VectorStore
 from app.repositories.indexing import IndexGenerationRepository
+from app.services.indexing import service as indexing_service_module
 from app.services.indexing.service import IndexingService
 
 
@@ -260,3 +277,221 @@ async def test_embedding_cache_refreshes_all_vectors_when_resolved_model_drifts(
         for key, record in repository.values.items()
         if key[0] == project_id and key[1] == "embed/alias"
     } == {"embed/alias:replacement"}
+
+
+class _GenerationRepository(_CacheRepository):
+    def __init__(self) -> None:
+        super().__init__()
+        self.completed_embedding_models: list[str | None] = []
+
+    async def prepare(
+        self,
+        _session: object,
+        *,
+        generation_id: UUID,
+        project_id: UUID,
+        build_id: UUID,
+        embedding_model: str | None,
+        generation_key: str,
+        source_fingerprint: str,
+        admission_token: UUID,
+    ) -> DocumentIndexGenerationRecord:
+        return DocumentIndexGenerationRecord(
+            id=generation_id,
+            project_id=project_id,
+            build_id=build_id,
+            embedding_model=embedding_model,
+            dimensions=None,
+            collection_name=None,
+            generation_key=generation_key,
+            chunk_count=0,
+            chunk_manifest_storage_key=None,
+            chunk_manifest_sha256=None,
+            source_fingerprint=source_fingerprint,
+            status=IndexGenerationStatus.BUILDING,
+            error_summary=None,
+            created_at=datetime.now(UTC),
+            completed_at=None,
+        )
+
+    async def complete(
+        self,
+        _session: object,
+        generation_id: UUID,
+        *,
+        embedding_model: str | None,
+        dimensions: int,
+        collection_name: str | None,
+        chunk_count: int,
+        chunk_manifest_storage_key: str | None,
+        chunk_manifest_sha256: str | None,
+        build_id: UUID,
+        admission_token: UUID,
+    ) -> DocumentIndexGenerationRecord:
+        self.completed_embedding_models.append(embedding_model)
+        return DocumentIndexGenerationRecord(
+            id=generation_id,
+            project_id=UUID(int=0),
+            build_id=build_id,
+            embedding_model=embedding_model,
+            dimensions=dimensions,
+            collection_name=collection_name,
+            generation_key="unused",
+            chunk_count=chunk_count,
+            chunk_manifest_storage_key=chunk_manifest_storage_key,
+            chunk_manifest_sha256=chunk_manifest_sha256,
+            source_fingerprint="a" * 64,
+            status=IndexGenerationStatus.READY,
+            error_summary=None,
+            created_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
+        )
+
+
+class _Storage:
+    async def put_bytes(self, _namespace: str, value: bytes, *, max_bytes: int) -> StoredObject:
+        return StoredObject(
+            storage_key="build-index-chunks/stub",
+            content_sha256=hashlib.sha256(value).hexdigest(),
+            byte_size=len(value),
+            created=True,
+        )
+
+
+class _VectorStore(VectorStore):
+    def collection_name(self, dimensions: int) -> str:
+        return f"collection_{dimensions}"
+
+    async def ensure_index(self, *, collection: str, dimensions: int) -> None:
+        return None
+
+    async def upsert_chunks(
+        self,
+        *,
+        collection: str,
+        chunks: list[DocumentChunk],
+        vectors: list[list[float]],
+        execution_token: UUID,
+    ) -> None:
+        return None
+
+    async def search(
+        self,
+        *,
+        collection: str,
+        project_id: UUID,
+        generation_id: UUID,
+        execution_token: UUID | None = None,
+        vector: list[float],
+        limit: int,
+        include_documentation: bool = True,
+    ) -> list[Any]:
+        return []
+
+    async def delete_generation(
+        self,
+        *,
+        collection: str,
+        project_id: UUID,
+        generation_id: UUID,
+        execution_token: UUID | None = None,
+    ) -> None:
+        return None
+
+
+def _openapi_canonical(source_version_id: UUID, project_id: UUID) -> Any:
+    document = {
+        "openapi": "3.0.3",
+        "info": {"title": "Widgets", "version": "1"},
+        "servers": [{"url": "https://widgets.example.com"}],
+        "paths": {
+            "/widgets": {
+                "get": {
+                    "operationId": "listWidgets",
+                    "responses": {"200": {"description": "ok"}},
+                }
+            }
+        },
+    }
+    return parse_openapi(
+        document,
+        project_id=project_id,
+        source_version_id=source_version_id,
+        content_sha256=hashlib.sha256(b"widgets").hexdigest(),
+    )
+
+
+async def test_index_persists_the_configured_embedding_model_not_the_provider_alias(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        indexing_service_module,
+        "require_build_execution_owner",
+        _no_op_require_build_execution_owner,
+    )
+    project_id = uuid4()
+    build_id = uuid4()
+    source_id = uuid4()
+    source_version_id = uuid4()
+    canonical = _openapi_canonical(source_version_id, project_id)
+    source_bindings = [
+        BoundSourceVersionRecord(
+            source=ProjectSourceRecord(
+                id=source_id,
+                project_id=project_id,
+                kind=SourceKind.OPENAPI,
+                name="Primary API specification",
+                origin_type=SourceOrigin.UPLOAD,
+                source_url=None,
+                is_primary=True,
+                created_at=datetime.now(UTC),
+                current_version_id=source_version_id,
+            ),
+            version=SourceVersionRecord(
+                id=source_version_id,
+                source_id=source_id,
+                content_sha256=hashlib.sha256(b"widgets").hexdigest(),
+                media_type="application/json",
+                storage_key="sources/widgets.json",
+                byte_size=100,
+                detected_format="openapi-3.0",
+                source_etag=None,
+                source_last_modified=None,
+                created_by=uuid4(),
+                created_at=datetime.now(UTC),
+            ),
+        )
+    ]
+    repository = _GenerationRepository()
+    ai = _AI()
+    service = IndexingService(
+        cast(Any, _Database()),
+        cast(Any, object()),
+        cast(IndexGenerationRepository, repository),
+        cast(Any, _Storage()),
+        ai,
+        cast(Any, _VectorStore()),
+    )
+
+    result = await service.index(
+        project_id=project_id,
+        build_id=build_id,
+        source_bindings=source_bindings,
+        canonical=canonical,
+        embedding_model="nvidia/nemotron-3-embed-1b:free",
+        config=_config(),
+        admission_token=uuid4(),
+    )
+
+    assert any(call[0] == "nvidia/nemotron-3-embed-1b:free" for call in ai.calls)
+    assert repository.completed_embedding_models == ["nvidia/nemotron-3-embed-1b:free"]
+    assert result.embedding_model == "nvidia/nemotron-3-embed-1b:free"
+
+
+async def _no_op_require_build_execution_owner(
+    _session: object,
+    *,
+    build_id: UUID,
+    admission_token: UUID,
+) -> None:
+    return None
