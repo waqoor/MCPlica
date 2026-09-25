@@ -2,7 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowRight, LockKeyhole } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { z } from "@/lib/schemas";
 import { useAuth } from "@/auth/use-auth";
 import { BrandLogo } from "@/components/brand-logo";
@@ -19,16 +19,42 @@ const loginSchema = z.object({
 
 type LoginValues = z.infer<typeof loginSchema>;
 
+function loginDestination(state: unknown): string {
+  const from =
+    typeof state === "object" && state !== null && "from" in state
+      ? state.from
+      : undefined;
+  if (
+    typeof from !== "string" ||
+    !from.startsWith("/") ||
+    from.startsWith("//") ||
+    from.includes("\\")
+  ) {
+    return "/";
+  }
+  try {
+    const destination = new URL(from, window.location.origin);
+    if (
+      destination.origin !== window.location.origin ||
+      destination.pathname === "/login"
+    ) {
+      return "/";
+    }
+    return destination.pathname + destination.search + destination.hash;
+  } catch {
+    return "/";
+  }
+}
+
 export function LoginPage() {
   const { user, login } = useAuth();
-  const navigate = useNavigate();
   const location = useLocation();
   const [submitError, setSubmitError] = useState<unknown>(null);
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
   });
-  const destination = (location.state as { from?: string } | null)?.from ?? "/";
+  const destination = loginDestination(location.state);
 
   useEffect(() => {
     document.title = "Sign in · MCPlica";
@@ -37,15 +63,12 @@ export function LoginPage() {
     };
   }, []);
 
-  if (user) return <Navigate replace to="/" />;
+  if (user) return <Navigate replace to={destination} />;
 
   async function submit(values: LoginValues) {
     setSubmitError(null);
     try {
       await login(values);
-      navigate(destination.startsWith("/") ? destination : "/", {
-        replace: true,
-      });
     } catch (error) {
       setSubmitError(error);
     }

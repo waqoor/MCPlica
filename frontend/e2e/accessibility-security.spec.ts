@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
+  adminUser,
   builderUser,
   errorEnvelope,
   installCsrfCookie,
@@ -11,6 +12,7 @@ import type { BuildMetrics, BuildPage } from "../src/api/contracts";
 async function installShellApi(
   page: Parameters<typeof installCsrfCookie>[0],
   authenticated = true,
+  user: typeof adminUser | typeof builderUser = builderUser,
 ) {
   let signedIn = authenticated;
   await page.route("**/api/v1/**", async (route) => {
@@ -18,7 +20,7 @@ async function installShellApi(
     const path = new URL(request.url()).pathname;
     if (path === "/api/v1/auth/me") {
       return signedIn
-        ? json(route, builderUser)
+        ? json(route, user)
         : json(
             route,
             errorEnvelope("Authentication is required", "AUTH_REQUIRED"),
@@ -28,7 +30,7 @@ async function installShellApi(
     if (path === "/api/v1/auth/login") {
       signedIn = true;
       return json(route, {
-        user: builderUser,
+        user,
         access_expires_at: "2026-08-26T09:00:00Z",
       });
     }
@@ -51,6 +53,27 @@ async function installShellApi(
     }
     if (path === "/api/v1/ready") return json(route, readyResponse);
     return json(route, errorEnvelope("Unexpected E2E request"), 404);
+  });
+}
+
+for (const user of [adminUser, builderUser]) {
+  test(`restores the full protected deep link after ${user.role} login`, async ({
+    page,
+    baseURL,
+  }) => {
+    if (!baseURL) throw new Error("Playwright baseURL is required");
+    await installCsrfCookie(page);
+    await installShellApi(page, false, user);
+    const destination = "/projects?phase2=deep-link#project-list";
+    await page.goto(destination);
+    await expect(page).toHaveURL(new URL("/login", baseURL).href);
+    await page.getByLabel("Email").fill(user.email);
+    await page.getByLabel("Password").fill("test-only-password");
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await expect(page).toHaveURL(new URL(destination, baseURL).href);
+    await expect(
+      page.getByRole("heading", { name: "Projects", exact: true }),
+    ).toBeVisible();
   });
 }
 
