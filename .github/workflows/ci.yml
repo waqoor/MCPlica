@@ -202,7 +202,7 @@ jobs:
       - name: Verify Docker excludes private runtime and environment files
         run: python tests/integration/docker_context_check.py
       - name: Build canonical application images
-        run: docker compose --env-file .env -f infra/compose.yaml build api runtime-validator frontend
+        run: docker compose --env-file .env -f infra/compose.yaml build api runtime-validator frontend minio
       - name: Verify image versions, OCI metadata, and runtime users
         run: python tests/integration/image_metadata_check.py
       - name: Scan backend candidate image

@@ -8,6 +8,14 @@ version is not published until its immutable tag and release workflow complete.
 
 ### Changed
 
+- Integrated structured, rotating application logs, worker registration recovery, protected login
+  destinations, and asynchronous build failure feedback.
+- Preserved canonicalization isolation across cancelled requests, mutable source roles, byte limits,
+  and callers; bounded cached results and retained safe database diagnostics without private rows.
+- Excluded absent retrieval embeddings from AI usage counts and verified failed-run SQL NULL storage.
+- Updated the container and application dependencies, explicitly installed Corepack for Node 26,
+  and rebuilt the existing MinIO release from verified official source after registry removal.
+
 - Added top margin to the project setup wizard's inline error alerts so they no longer visually
   merge with the content above them, most noticeably the info cards on the **Start build** step.
 
@@ -29,7 +37,7 @@ version is not published until its immutable tag and release workflow complete.
 - Declared `JSONB(none_as_null=True)` on the AI run's response/usage/cost columns so a `None` value
   is stored as true SQL `NULL`, fixing an intermittent `IntegrityError` on
   `ck_build_ai_runs_outcome` when an AI operation genuinely failed, and expanded diagnostic logging
-  to surface the full exception chain and root cause instead of only the outermost exception type.
+  to surface exception types and safe constraint identifiers without exposing private row values.
 
 - Resolved path-level OpenAPI servers before checking whether the document has a usable server URL,
   so a spec declaring servers only under a path item (valid per OpenAPI 3.1) no longer fails at

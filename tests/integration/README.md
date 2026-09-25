@@ -72,7 +72,7 @@ point the helper or harness at retained volumes or a production environment.
 ```bash
 docker compose --env-file .env -f infra/compose.yaml config --quiet
 PYTHONPATH=backend uv run --project backend --frozen --extra dev python tests/integration/production_config_check.py
-docker compose --env-file .env -f infra/compose.yaml build api runtime-validator frontend
+docker compose --env-file .env -f infra/compose.yaml build api runtime-validator frontend minio
 docker compose --env-file .env -f infra/compose.yaml up --no-build --detach --wait --wait-timeout 300
 python tests/integration/compose_evidence.py --check
 docker compose --env-file .env -f infra/compose.yaml exec -T api python -m app.cli.ensure_development_admin

@@ -777,7 +777,7 @@ class BuildAIRunRepository:
                     func.count().label("call_count"),
                     func.sum(embedding_tokens).label("total_tokens"),
                     func.sum(embedding_cost).label("total_cost"),
-                ).where(*predicates, BuildAIRun.usage_json.has_key("retrieval_embedding"))
+                ).where(*predicates, BuildAIRun.usage_json["retrieval_embedding"].astext.is_not(None))
             )
         ).one()
         records = [
