@@ -1,4 +1,6 @@
+import asyncio
 import hashlib
+import time
 from uuid import UUID
 
 from mcp_contracts import CanonicalApi, DocumentationRef
@@ -33,6 +35,11 @@ def _attribute_source_error(
         exc.details["source_pointer"] = pointer
 
 
+_FAILURE_COOLDOWN_SECONDS = 15.0
+
+_CacheKey = tuple[UUID, str, str | None, str | None, tuple[tuple[str, str], ...]]
+
+
 def _source_fingerprint(bindings: list[BoundSourceVersionRecord]) -> str:
     digest = hashlib.sha256()
     for binding in sorted(bindings, key=lambda item: str(item.version.id)):
@@ -57,6 +64,12 @@ class CanonicalizationService:
         self._sources = sources
         self._snapshots = snapshots
         self._storage = storage
+        # Avoids re-validating unchanged input on every 2s /journey poll.
+        self._cache: dict[_CacheKey, CanonicalApi] = {}
+        # Holds a failed attempt's error briefly so it isn't retried instantly.
+        self._failures: dict[_CacheKey, tuple[float, BaseException]] = {}
+        # Coalesces concurrent retries for the same input onto one computation.
+        self._inflight: dict[_CacheKey, asyncio.Future[CanonicalApi]] = {}
 
     async def current_source_versions(self, project_id: UUID) -> list[UUID]:
         return [binding.version.id for binding in await self.current_source_bindings(project_id)]
@@ -97,6 +110,70 @@ class CanonicalizationService:
             active_server_ref=project.active_server_ref,
             server_mappings=project.server_mappings,
         )
+        cache_key = (
+            project_id,
+            _source_fingerprint(bindings),
+            effective_routing.default_base_url,
+            effective_routing.active_server_ref,
+            tuple(sorted(effective_routing.server_mappings.items())),
+        )
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
+        pending_failure = self._failures.get(cache_key)
+        if pending_failure is not None:
+            failed_at, exc = pending_failure
+            if time.monotonic() - failed_at < _FAILURE_COOLDOWN_SECONDS:
+                raise exc
+            del self._failures[cache_key]
+        existing = self._inflight.get(cache_key)
+        if existing is not None:
+            try:
+                return await existing
+            except asyncio.CancelledError:
+                if asyncio.current_task().cancelling():
+                    raise
+                # The in-flight leader was cancelled, not us; retry as the new leader.
+                return await self.canonicalize(
+                    project_id,
+                    bindings,
+                    max_source_bytes=max_source_bytes,
+                    routing=routing,
+                )
+        future: asyncio.Future[CanonicalApi] = asyncio.get_running_loop().create_future()
+        self._inflight[cache_key] = future
+        try:
+            result = await self._canonicalize_uncached(
+                project_id,
+                bindings,
+                source_version_ids=source_version_ids,
+                effective_routing=effective_routing,
+                max_source_bytes=max_source_bytes,
+            )
+        except BaseException as exc:
+            del self._inflight[cache_key]
+            if isinstance(exc, Exception):
+                self._failures[cache_key] = (time.monotonic(), exc)
+                future.set_exception(exc)
+                future.exception()  # mark retrieved so asyncio doesn't warn if nobody awaits it
+            else:
+                future.cancel()
+            raise
+        self._failures.pop(cache_key, None)
+        self._cache[cache_key] = result
+        future.set_result(result)
+        del self._inflight[cache_key]
+        return result
+
+    async def _canonicalize_uncached(
+        self,
+        project_id: UUID,
+        bindings: list[BoundSourceVersionRecord],
+        *,
+        source_version_ids: list[UUID],
+        effective_routing: ProjectRoutingConfiguration,
+        max_source_bytes: int,
+    ) -> CanonicalApi:
         primary = [
             item
             for item in bindings
@@ -105,13 +182,12 @@ class CanonicalizationService:
         ]
         if len(primary) != 1:
             raise SourceParseError("A build requires exactly one primary executable source")
-        # Documentation contributes immutable metadata here; its payload belongs
-        # exclusively to the bounded indexing parser. Read executable dependencies
-        # one at a time instead of retaining every source's raw bytes concurrently.
+        # Reads one dependency at a time to avoid holding every source's bytes in memory.
         root = primary[0]
         root_payload = await self._storage.get(root.version.storage_key, max_bytes=max_source_bytes)
         try:
-            _, document = parse_json_or_yaml(root_payload)
+            # CPU-bound; run off the event loop so it can't block other requests.
+            _, document = await asyncio.to_thread(parse_json_or_yaml, root_payload)
             del root_payload
         except SourceParseError as exc:
             _attribute_source_error(exc, root.version.id, pointer="#")
@@ -128,7 +204,7 @@ class CanonicalizationService:
                     binding.version.storage_key, max_bytes=max_source_bytes
                 )
                 try:
-                    _, external = parse_json_or_yaml(dependency_payload)
+                    _, external = await asyncio.to_thread(parse_json_or_yaml, dependency_payload)
                     del dependency_payload
                 except SourceParseError as exc:
                     _attribute_source_error(exc, binding.version.id, pointer="#")
@@ -145,7 +221,8 @@ class CanonicalizationService:
                         )
                     external_documents[key] = captured
             try:
-                canonical = parse_openapi(
+                canonical = await asyncio.to_thread(
+                    parse_openapi,
                     document,
                     project_id=project_id,
                     source_version_id=root.version.id,
@@ -160,7 +237,8 @@ class CanonicalizationService:
                 raise
         else:
             try:
-                canonical = parse_api_inventory(
+                canonical = await asyncio.to_thread(
+                    parse_api_inventory,
                     document,
                     project_id=project_id,
                     source_version_id=root.version.id,

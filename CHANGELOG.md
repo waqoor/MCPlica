@@ -8,6 +8,9 @@ version is not published until its immutable tag and release workflow complete.
 
 ### Changed
 
-- Paged the sources list over distinct sources rather than raw version rows, so a superseded source
-  version can no longer land on a different page than its latest version and render as an orphaned
-  top-level entry.
+- Retried a canonicalization request as the new leader instead of failing it when the concurrent
+  in-flight request it was coalesced onto was cancelled by an unrelated caller, preventing one
+  cancelled poll from failing every other request waiting on the same result.
+
+## [1.0.0-rc.1] - 2026-09-04
+
