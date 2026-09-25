@@ -370,8 +370,8 @@ dc1bbb3194a9b2280cbfdfab4dd06332ba25859e1c524ec04797092a6e931848  ./frontend/e2e
 8ffa3736447e4d7bf699155c9de840855803691ad747751a88f47ac9864d36b9  ./frontend/index.html
 0b46a9f8b98e725e589577331c7adbd5fd7469fb055c235b9c341e24dda0a298  ./frontend/package.json
 ba53908797ab2b5068eefbbe06724f172716c386d5b4dd860c3f43205a91117d  ./frontend/playwright.config.ts
-b735b8fcc23b1be32d565617c02a9e2d633f4c0868694f417ead94c7734624a9  ./frontend/pnpm-lock.yaml
-ac02d96368617c760f093cfe61fdec64b6244007ab3553e0d6621f706f54a353  ./frontend/pnpm-workspace.yaml
+b72384515204c77ad239d5e8016cd6742769bb1a6029675b8c9d272f385a1ff1  ./frontend/pnpm-lock.yaml
+bb3c1b4158344e74c59235fd30628f90877561f98d0439eba919c585cc95db40  ./frontend/pnpm-workspace.yaml
 cfac9342c294a1b892645452c7f0c13c86919e6ed9525d8b03f4ffcbd3d7dada  ./frontend/scripts/check-asset-budget.mjs
 e4623ff4216a18f1c1a452f36784ff3e4f782c2eb3dd4b2c096d2ec278e3bd98  ./frontend/scripts/generate-api-contracts.mjs
 ee55c7733b4b94bbb6f7f8420b784b00c68e6c2b7f74ea871e0295eef75b1d6e  ./frontend/scripts/openapi-zod-schemas.hbs

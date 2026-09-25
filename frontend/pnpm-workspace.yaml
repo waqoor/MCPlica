@@ -1,2 +1,6 @@
 allowBuilds:
   esbuild: true
+
+overrides:
+  # Redocly pins the vulnerable patch; keep its YAML parser on the security fix.
+  "@redocly/openapi-core>js-yaml": 4.3.2
