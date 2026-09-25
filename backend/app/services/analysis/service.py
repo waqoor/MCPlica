@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Any
 from uuid import UUID
@@ -167,6 +168,10 @@ class AnalysisService:
             )
             self._validate_result(operation, generated.value, set(chunk_ids))
         except Exception as exc:
+            logging.getLogger("mcplica.builder").exception(
+                "analysis.operation_failed",
+                extra={"build_id": str(build_id), "run_key": run_key},
+            )
             generation_usage = (
                 exc.usage
                 if isinstance(exc, StructuredGenerationError)
