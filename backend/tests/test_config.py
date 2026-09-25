@@ -196,7 +196,7 @@ def test_example_environment_has_unique_keys_and_loads() -> None:
 def test_compose_recovery_and_isolation_contract() -> None:
     root = Path(__file__).resolve().parents[2]
     services = yaml.safe_load((root / "infra/compose.yaml").read_text())["services"]
-    oneshot = {"migrate", "runtime-init"}
+    oneshot = {"migrate", "runtime-init", "log-init"}
     for name, service in services.items():
         if name in oneshot:
             assert service["restart"] == "no"
@@ -228,6 +228,7 @@ def test_all_production_application_images_disable_local_builds() -> None:
     for name in (
         "migrate",
         "runtime-init",
+        "log-init",
         "api",
         "builder-worker",
         "deployment-worker",

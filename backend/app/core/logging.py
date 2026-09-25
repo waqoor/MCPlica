@@ -2,11 +2,61 @@ import json
 import logging
 import math
 import re
+from collections.abc import Generator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import ClassVar, cast
 from urllib.parse import urlsplit
+from uuid import UUID
+
+from app.core.log_archive import ArchiveHandler, report_failure
 
 _EVENT_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
+_CONTEXT: ContextVar[dict[str, object] | None] = ContextVar("log_context", default=None)
+
+
+@contextmanager
+def log_context(
+    *,
+    project_id: UUID | None = None,
+    build_id: UUID | None = None,
+    request_id: str | None = None,
+    correlation_id: str | None = None,
+    attempt_number: int | None = None,
+) -> Generator[None]:
+    """A build archive requires both IDs obtained from authoritative build state."""
+    values: dict[str, object] = {}
+    if isinstance(project_id, UUID) and isinstance(build_id, UUID):
+        values.update(scope="build", project_id=str(project_id), build_id=str(build_id))
+        values["_archive_build"] = (str(project_id), str(build_id))
+    for key, value in (
+        ("request_id", request_id),
+        ("correlation_id", correlation_id),
+        ("attempt_number", attempt_number),
+    ):
+        if value is not None:
+            values[key] = value
+    token = _CONTEXT.set({**(_CONTEXT.get() or {}), **values})
+    try:
+        yield
+    finally:
+        _CONTEXT.reset(token)
+
+
+class ContextFilter(logging.Filter):
+    def __init__(self, service: str) -> None:
+        super().__init__()
+        self.service = service
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.service = self.service
+        record.scope = "platform"
+        record._archive_build = None
+        for key, value in (_CONTEXT.get() or {}).items():
+            setattr(record, key, value)
+        return True
 
 
 def _safe_event_name(record: logging.LogRecord) -> str:
@@ -46,6 +96,10 @@ def _safe_exception(
 
 
 _CONTEXT_FIELDS: tuple[str, ...] = (
+    "scope",
+    "correlation_id",
+    "stage",
+    "outcome",
     "service",
     "component",
     "request_id",
@@ -86,6 +140,8 @@ def _safe_context_value(field: str, value: object) -> str | int | float | bool |
     if field == "route":
         parsed = urlsplit(value)
         return parsed.path or "/"
+    if not _EVENT_NAME.fullmatch(value):
+        return None
     return value
 
 
@@ -98,8 +154,8 @@ class JsonLogFormatter(logging.Formatter):
         payload: dict[str, object] = {
             "timestamp": datetime.fromtimestamp(record.created, UTC).isoformat(),
             "level": record.levelname.lower(),
-            "service": getattr(record, "service", "mcplica"),
-            "component": getattr(record, "component", record.name),
+            "service": "mcplica",
+            "component": _safe_context_value("component", record.name) or "application",
             "message": _safe_event_name(record),
         }
         for field in self.context_fields:
@@ -115,7 +171,8 @@ class JsonLogFormatter(logging.Formatter):
 class SafeTextLogFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         timestamp = datetime.fromtimestamp(record.created, UTC).isoformat()
-        rendered = f"{timestamp} {record.levelname} {record.name} {_safe_event_name(record)}"
+        component = _safe_context_value("component", record.name) or "application"
+        rendered = f"{timestamp} {record.levelname} {component} {_safe_event_name(record)}"
         for field in _CONTEXT_FIELDS:
             value = getattr(record, field, None)
             safe_value = _safe_context_value(field, value)
@@ -132,11 +189,40 @@ class SafeTextLogFormatter(logging.Formatter):
         return rendered
 
 
-def configure_logging(level: str, *, json_logs: bool = False) -> None:
-    handler = logging.StreamHandler()
+class SafeStreamHandler(logging.StreamHandler):  # pyright: ignore[reportMissingTypeArgument]
+    # StreamHandler is generic only in type stubs, not at runtime.
+    def handleError(self, record: logging.LogRecord) -> None:
+        # Stdlib's debug fallback prints the original message and args on failure.
+        report_failure("log.console_write_failed")
+
+
+def configure_logging(
+    level: str,
+    *,
+    json_logs: bool = False,
+    service: str = "mcplica",
+    directory: str | None = None,
+    max_bytes: int = 10485760,
+) -> None:
+    threshold = getattr(logging, level.upper(), logging.INFO)
+    handler = SafeStreamHandler()
+    handler.setLevel(threshold)
     handler.setFormatter(JsonLogFormatter() if json_logs else SafeTextLogFormatter())
+    handler.addFilter(ContextFilter(service))
+    handlers: list[logging.Handler] = [handler]
+    if directory is not None:
+        archive = ArchiveHandler(Path(directory), max_bytes)
+        archive.setLevel(threshold)
+        archive.setFormatter(JsonLogFormatter())
+        archive.addFilter(ContextFilter(service))
+        handlers.append(archive)
     logging.basicConfig(
-        level=getattr(logging, level.upper(), logging.INFO),
-        handlers=[handler],
+        level=threshold,
+        handlers=handlers,
         force=True,
     )
+    # Uvicorn/RQ may already have console handlers; route through safe formatting.
+    for name in ("uvicorn", "uvicorn.error", "uvicorn.access", "rq.worker", "rq.scheduler"):
+        logger = logging.getLogger(name)
+        logger.handlers.clear()
+        logger.propagate = True

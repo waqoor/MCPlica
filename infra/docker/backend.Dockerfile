@@ -28,8 +28,8 @@ RUN apt-get update \
         /usr/local/lib/python3.13/site-packages/pip-26.2.1.dist-info \
         /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.13 \
     && useradd --create-home --uid 10001 mcplica \
-    && mkdir -p /data/artifacts \
-    && chown -R mcplica:mcplica /data/artifacts
+    && mkdir -p /data/artifacts /var/log/mcplica \
+    && chown -R mcplica:mcplica /data/artifacts /var/log/mcplica
 WORKDIR /workspace
 COPY VERSION pyproject.toml uv.lock ./
 COPY packages/contracts /workspace/packages/contracts
