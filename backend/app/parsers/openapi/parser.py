@@ -989,10 +989,6 @@ def parse_openapi(
             source_ref=_source_ref(source_version_id, "#/x-mcplica-project-default-base-url"),
         )
         global_server_keys = [key]
-    if not global_server_keys:
-        raise SourceParseError(
-            "OpenAPI source has no server URL and the Project has no default base URL"
-        )
 
     oauth_relative_base = default_base_url
     if oauth_relative_base is None and len(global_server_keys) == 1:
@@ -1350,6 +1346,10 @@ def parse_openapi(
 
     if not operations:
         raise SourceParseError("OpenAPI source contains no executable operations")
+    if not servers:
+        raise SourceParseError(
+            "OpenAPI source has no server URL and the Project has no default base URL"
+        )
     unknown_mapping_keys = set(server_mappings or {}) - {operation.key for operation in operations}
     if unknown_mapping_keys:
         raise SourceParseError(

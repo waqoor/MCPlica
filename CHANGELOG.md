@@ -8,7 +8,9 @@ version is not published until its immutable tag and release workflow complete.
 
 ### Changed
 
-- Declared `JSONB(none_as_null=True)` on the AI run's response/usage/cost columns so a `None` value
-  is stored as true SQL `NULL`, fixing an intermittent `IntegrityError` on
-  `ck_build_ai_runs_outcome` when an AI operation genuinely failed, and expanded diagnostic logging
-  to surface the full exception chain and root cause instead of only the outermost exception type.
+- Resolved path-level OpenAPI servers before checking whether the document has a usable server URL,
+  so a spec declaring servers only under a path item (valid per OpenAPI 3.1) no longer fails at
+  server selection before the parser's existing path-level handling ever runs.
+
+## [1.0.0-rc.1] - 2026-09-04
+
