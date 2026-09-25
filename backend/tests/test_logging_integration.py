@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 import httpx
 import pytest
 from rq.logutils import setup_loghandlers
+from tests.test_log_archive import make_logger, records
 
 from app.core.config import Settings
 from app.core.logging import SafeStreamHandler, configure_logging
@@ -18,7 +19,6 @@ from app.models.audit import AuditEvent
 from app.repositories.audit import AuditRepository
 from app.services.builds import pipeline as pipeline_module
 from app.services.builds.pipeline import BuildPipeline
-from tests.test_log_archive import make_logger, records
 
 
 async def test_audit_append_uses_database_without_file_archive(tmp_path, preserve_logging):
