@@ -260,6 +260,7 @@ class SourceService:
         *,
         limit: int,
         offset: int,
+        include_superseded: bool = False,
     ) -> tuple[list[SourceSummaryRecord], int]:
         async with self._database.session_scope() as session:
             if await self._projects.get(session, project_id) is None:
@@ -269,6 +270,7 @@ class SourceService:
                 project_id,
                 limit=limit,
                 offset=offset,
+                include_superseded=include_superseded,
             )
             build_ids = sorted(
                 {item.metadata_build_id for item in items if item.metadata_build_id is not None},
@@ -849,11 +851,21 @@ class SourceService:
             )
             replacement = None
             if source.is_primary:
-                replacement = await self._sources.first_versioned_executable(
+                sibling = await self._sources.latest_in_group(
                     session,
                     project_id,
+                    source.name,
+                    source.kind,
                     exclude_source_id=source_id,
                 )
+                if sibling is not None and sibling.current_version_id is not None:
+                    replacement = sibling
+                else:
+                    replacement = await self._sources.first_versioned_executable(
+                        session,
+                        project_id,
+                        exclude_source_id=source_id,
+                    )
             if not await self._sources.delete_source(session, source_id):
                 raise NotFoundError("Source was not found")
             if replacement is not None:
@@ -1307,7 +1319,10 @@ class SourceService:
             if await self._projects.lock(session, project_id) is None:
                 raise NotFoundError("Project was not found")
             source = await self._sources.get_source(session, source_id)
+            inherits_primary = False
             if source is None:
+                superseded = await self._sources.latest_in_group(session, project_id, name, kind)
+                inherits_primary = superseded is not None and superseded.is_primary
                 source = await self._sources.create_source(
                     session,
                     source_id=source_id,
@@ -1401,7 +1416,7 @@ class SourceService:
                     session,
                     project_id,
                 )
-                if is_primary or current_primary is None:
+                if is_primary or current_primary is None or inherits_primary:
                     promoted = await self._sources.promote_executable(
                         session,
                         project_id=project_id,

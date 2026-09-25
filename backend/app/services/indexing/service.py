@@ -1,11 +1,11 @@
 import asyncio
 import hashlib
 import json
+import logging
 import math
 from collections.abc import Awaitable, Callable
 from uuid import UUID, uuid4
 
-import structlog
 from mcp_contracts import CanonicalApi
 
 from app.clients.database import DatabaseClient
@@ -28,7 +28,7 @@ from app.repositories.cleanup import CleanupRepository
 from app.repositories.indexing import IndexGenerationRepository
 from app.repositories.sources import SourceRepository
 
-logger = structlog.get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def _documentation_fingerprint(bindings: list[BoundSourceVersionRecord]) -> str:
@@ -336,7 +336,7 @@ class IndexingService:
                 )
             if embedding_model is None:
                 raise IndexingError("An embedding model is required when documentation is attached")
-            vectors, actual_model, dimension = await self._resolve_embeddings(
+            vectors, _actual_model, dimension = await self._resolve_embeddings(
                 chunks,
                 embedding_model,
                 project_id=project_id,
@@ -365,7 +365,7 @@ class IndexingService:
                     await cancellation_check()
             return await self._complete(
                 generation.id,
-                model=actual_model,
+                model=embedding_model,
                 dimensions=dimension,
                 collection=collection,
                 chunk_count=len(chunks),
@@ -389,9 +389,10 @@ class IndexingService:
                 if cleanup_error is not None:
                     logger.warning(
                         "index_generation_cleanup_failed",
-                        project_id=str(project_id),
-                        generation_id=str(generation.id),
-                        error_type=type(cleanup_error).__name__,
+                        extra={
+                            "project_id": str(project_id),
+                            "error_code": "INDEX_GENERATION_CLEANUP_FAILED",
+                        },
                     )
             summary = str(exc) if isinstance(exc, MCPlicaError) else type(exc).__name__
             async with self._database.session_scope() as session:

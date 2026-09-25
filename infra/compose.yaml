@@ -12,6 +12,9 @@ x-control-plane-environment: &control-plane-environment
   MULTIPART_SPOOL_CAPACITY_BYTES: ${MULTIPART_SPOOL_CAPACITY_BYTES:-220000000}
   MILVUS_URI: http://milvus:19530
   ARTIFACT_ROOT: /data/artifacts
+  LOG_DIRECTORY: ${LOG_DIRECTORY:-/var/log/mcplica}
+  LOG_MAX_FILE_BYTES: ${LOG_MAX_FILE_BYTES:-10485760}
+  LOG_RETENTION_DAYS: ${LOG_RETENTION_DAYS:-30}
   API_DOMAIN: ${API_DOMAIN:-api.localhost}
   FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:8080}
   BUILD_QUEUE_NAME: ${BUILD_QUEUE_NAME:-mcplica-builds}
@@ -48,6 +51,24 @@ x-logging: &bounded-logging
     max-file: "${DOCKER_LOG_MAX_FILES:-3}"
 
 services:
+  log-init:
+    <<: *backend
+    env_file: []
+    user: "0:0"
+    environment:
+      LOG_DIRECTORY: ${LOG_DIRECTORY:-/var/log/mcplica}
+    entrypoint: ["python", "-c"]
+    command:
+      - "import os; p = os.environ['LOG_DIRECTORY']; os.chown(p, 10001, 10001); os.chmod(p, 0o700)"
+    volumes:
+      - application-logs:${LOG_DIRECTORY:-/var/log/mcplica}
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, FOWNER]
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"
+
   postgres:
     logging: *bounded-logging
     restart: unless-stopped
@@ -84,7 +105,7 @@ services:
   etcd:
     logging: *bounded-logging
     restart: unless-stopped
-    image: quay.io/coreos/etcd:v3.5.25@sha256:52f17f7e56e4f7239f0320dbfcbcc24721163d7d78ae710b466af3254ccf6366
+    image: quay.io/coreos/etcd:v3.7.2@sha256:e9afa62b1e914f02db62e5c46a7a140d8cdf026f2ed888cab4e5a142ec4d06fd
     environment:
       ETCD_AUTO_COMPACTION_MODE: revision
       ETCD_AUTO_COMPACTION_RETENTION: "1000"
@@ -103,7 +124,10 @@ services:
   minio:
     logging: *bounded-logging
     restart: unless-stopped
-    image: minio/minio:RELEASE.2024-05-28T17-19-04Z@sha256:391d1d45fdbe79944cb6de9337b073864bb9ee38c4c24280bfb39572e925af08
+    image: mcplica/minio:RELEASE.2024-05-28T17-19-04Z
+    build:
+      context: ..
+      dockerfile: infra/docker/minio.Dockerfile
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
@@ -111,7 +135,7 @@ services:
       - minio-data:/minio_data
     command: minio server /minio_data --console-address ":9001"
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:9000/minio/health/ready"]
       interval: 30s
       timeout: 20s
       retries: 3
@@ -119,7 +143,7 @@ services:
 
   milvus:
     logging: *bounded-logging
-    image: milvusdb/milvus:v3.0.1@sha256:7984f52e02fc14df553615acbf3ecf3cc131e7ce77c79e7ee23c63652919cae8
+    image: milvusdb/milvus:v3.0.2@sha256:5f13bf88e110a517911c3e6dd8172454e90042c21e606a868084615a4302c8a0
     command: ["milvus", "run", "standalone"]
     # Recover from transient standalone failures (for example, an etcd timeout)
     # without requiring an operator to notice and restart the container manually.
@@ -168,6 +192,7 @@ services:
     <<: *backend
     volumes:
       - artifacts:/data/artifacts
+      - application-logs:${LOG_DIRECTORY:-/var/log/mcplica}
     ports:
       - "127.0.0.1:${API_PORT:-8000}:8000"
     read_only: true
@@ -191,6 +216,8 @@ services:
       timeout: 5s
       retries: 12
     depends_on:
+      log-init:
+        condition: service_completed_successfully
       migrate:
         condition: service_completed_successfully
       postgres:
@@ -260,8 +287,12 @@ services:
     <<: *backend
     command:
       [
-        "rq",
-        "worker",
+        "python",
+        "-m",
+        "app.jobs.worker_logging",
+        "mcplica-builder",
+        "--worker-class",
+        "app.jobs.rq_worker.RegistrationRecoveringWorker",
         "--with-scheduler",
         "--url",
         "redis://redis:6379/0",
@@ -269,6 +300,7 @@ services:
       ]
     volumes:
       - artifacts:/data/artifacts
+      - application-logs:${LOG_DIRECTORY:-/var/log/mcplica}
     read_only: true
     tmpfs:
       - /tmp:size=128m,mode=1777
@@ -291,6 +323,8 @@ services:
       start_period: 15s
       retries: 12
     depends_on:
+      log-init:
+        condition: service_completed_successfully
       migrate:
         condition: service_completed_successfully
       postgres:
@@ -344,6 +378,8 @@ services:
         "python",
         "-m",
         "app.jobs.deployment_worker",
+        "--worker-class",
+        "app.jobs.rq_worker.RegistrationRecoveringWorker",
         "--with-scheduler",
         "--url",
         "redis://redis:6379/0",
@@ -351,6 +387,7 @@ services:
       ]
     volumes:
       - artifacts:/data/artifacts
+      - application-logs:${LOG_DIRECTORY:-/var/log/mcplica}
       # Docker socket belongs only on the deployment worker, not the public API container.
       - /var/run/docker.sock:/var/run/docker.sock
       # Write through a private worker path; Docker receives the daemon-visible source path.
@@ -381,6 +418,8 @@ services:
       start_period: 15s
       retries: 12
     depends_on:
+      log-init:
+        condition: service_completed_successfully
       migrate:
         condition: service_completed_successfully
       postgres:
@@ -439,7 +478,7 @@ services:
   traefik:
     logging: *bounded-logging
     restart: unless-stopped
-    image: traefik:v3.7.12@sha256:9c2a54d87f76f5c2f5f2682c68394af92fb12c0a2686798d6462a3f84bd78eaf
+    image: traefik:v3.7.13@sha256:f86a2cab1b5c649070c49f883c743dd32d8485a56e3368c5f93b9e91f1e91259
     command: ["--configFile=/etc/traefik/traefik.yml"]
     ports:
       - "${EDGE_PORT:-80}:80"
@@ -480,3 +519,4 @@ volumes:
   minio-data:
   milvus-data:
   artifacts:
+  application-logs:

@@ -989,10 +989,6 @@ def parse_openapi(
             source_ref=_source_ref(source_version_id, "#/x-mcplica-project-default-base-url"),
         )
         global_server_keys = [key]
-    if not global_server_keys:
-        raise SourceParseError(
-            "OpenAPI source has no server URL and the Project has no default base URL"
-        )
 
     oauth_relative_base = default_base_url
     if oauth_relative_base is None and len(global_server_keys) == 1:
@@ -1350,11 +1346,29 @@ def parse_openapi(
 
     if not operations:
         raise SourceParseError("OpenAPI source contains no executable operations")
+    if not servers:
+        raise SourceParseError(
+            "OpenAPI source has no server URL and the Project has no default base URL"
+        )
     unknown_mapping_keys = set(server_mappings or {}) - {operation.key for operation in operations}
     if unknown_mapping_keys:
         raise SourceParseError(
             "Configured server mappings reference unknown OpenAPI operations",
             details={"operation_keys": sorted(unknown_mapping_keys)},
+        )
+    unknown_scheme_refs = sorted(
+        {
+            scheme_name
+            for operation in operations
+            for requirement in operation.security
+            for scheme_name in requirement.scheme_scopes
+            if scheme_name not in security_schemes
+        }
+    )
+    if unknown_scheme_refs:
+        raise SourceParseError(
+            "Operation security requirements reference undefined security schemes",
+            details={"security_scheme_names": unknown_scheme_refs},
         )
     active_ref = active_server_ref
     if active_ref is None and len(servers) == 1:

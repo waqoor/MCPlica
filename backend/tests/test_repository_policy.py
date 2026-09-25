@@ -63,7 +63,7 @@ def test_frontend_package_manager_uses_current_security_configuration() -> None:
 
     assert package["packageManager"] == "pnpm@11.25.0"
     assert "pnpm" not in package
-    assert workspace == "allowBuilds:\n  esbuild: true\n"
+    assert yaml.safe_load(workspace)["allowBuilds"] == {"esbuild": True}
     assert "frontend/pnpm-workspace.yaml" in dockerfile
 
 

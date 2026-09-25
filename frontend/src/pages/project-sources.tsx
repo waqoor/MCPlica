@@ -33,17 +33,44 @@ import {
   uploadFormatLabel,
 } from "@/lib/uploads";
 
+function groupSources(items: readonly ProjectSource[]) {
+  const groups = new Map<string, ProjectSource[]>();
+  const order: string[] = [];
+  for (const item of items) {
+    const key = `${item.name}::${item.kind}`;
+    if (!groups.has(key)) {
+      groups.set(key, []);
+      order.push(key);
+    }
+    groups.get(key)!.push(item);
+  }
+  return order.map((key) => {
+    const members = groups.get(key)!;
+    const latest =
+      members.find((m) => m.is_latest) ?? members[members.length - 1];
+    const superseded = members
+      .filter((m) => m.id !== latest.id)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
+    return { latest, superseded };
+  });
+}
+
 export function ProjectSourcesPage() {
   const project = useProject();
   const queryClient = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
+  const [includeSuperseded, setIncludeSuperseded] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const rawPage = Number(searchParams.get("page") ?? "1");
   const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1;
   const sources = useQuery({
-    queryKey: ["projects", project.id, "sources", { page }],
+    queryKey: ["projects", project.id, "sources", { page, includeSuperseded }],
     queryFn: ({ signal }) =>
-      sourceApi.listPage(project.id, { page, page_size: 25 }, signal),
+      sourceApi.listPage(
+        project.id,
+        { page, page_size: 25, include_superseded: includeSuperseded },
+        signal,
+      ),
   });
   const invalidate = () =>
     queryClient.invalidateQueries({
@@ -72,10 +99,20 @@ export function ProjectSourcesPage() {
             Immutable versions preserve exactly what each build consumed.
           </p>
         </div>
-        <Button onClick={() => setAddOpen(true)}>
-          <FilePlus2 aria-hidden="true" className="size-4" />
-          Add source
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => setIncludeSuperseded((value) => !value)}
+            variant="outline"
+          >
+            {includeSuperseded
+              ? "Hide previous sources"
+              : "Show previous sources"}
+          </Button>
+          <Button onClick={() => setAddOpen(true)}>
+            <FilePlus2 aria-hidden="true" className="size-4" />
+            Add source
+          </Button>
+        </div>
       </div>
       {sources.data.items.length === 0 ? (
         <EmptyState
@@ -90,15 +127,39 @@ export function ProjectSourcesPage() {
         />
       ) : (
         <div className="space-y-4">
-          {sources.data.items.map((source) => (
-            <SourceCard
-              key={source.id}
-              projectId={project.id}
-              refreshing={refresh.isPending && refresh.variables === source.id}
-              source={source}
-              onRefresh={() => refresh.mutate(source.id)}
-              onVersionAdded={invalidate}
-            />
+          {groupSources(sources.data.items).map(({ latest, superseded }) => (
+            <div className="space-y-2" key={latest.id}>
+              <SourceCard
+                projectId={project.id}
+                refreshing={
+                  refresh.isPending && refresh.variables === latest.id
+                }
+                source={latest}
+                onRefresh={() => refresh.mutate(latest.id)}
+                onVersionAdded={invalidate}
+              />
+              {superseded.length > 0 && (
+                <div className="ml-4 space-y-2 border-l border-border pl-4">
+                  <p className="text-xs text-muted">
+                    {superseded.length} previous{" "}
+                    {superseded.length === 1 ? "source" : "sources"} with this
+                    name
+                  </p>
+                  {superseded.map((source) => (
+                    <SourceCard
+                      key={source.id}
+                      projectId={project.id}
+                      refreshing={
+                        refresh.isPending && refresh.variables === source.id
+                      }
+                      source={source}
+                      onRefresh={() => refresh.mutate(source.id)}
+                      onVersionAdded={invalidate}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
           <div className="flex items-center justify-between">
             <Button
@@ -164,6 +225,7 @@ function SourceCard({
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const metadata = useQuery({
     queryKey: ["source-versions", source.latest_version?.id, "metadata"],
     queryFn: ({ signal }) =>
@@ -185,7 +247,10 @@ function SourceCard({
   });
   const remove = useMutation({
     mutationFn: () => sourceApi.remove(projectId, source.id),
-    onSuccess: onVersionAdded,
+    onSuccess: () => {
+      setDeleteOpen(false);
+      onVersionAdded();
+    },
   });
   const latest = metadata.data ?? source.latest_version;
   return (
@@ -249,14 +314,7 @@ function SourceCard({
             )}
           <Button
             disabled={remove.isPending}
-            onClick={() => {
-              if (
-                window.confirm(
-                  "Delete this source? Sources referenced by an immutable build are protected.",
-                )
-              )
-                remove.mutate();
-            }}
+            onClick={() => setDeleteOpen(true)}
             size="sm"
             variant="ghost"
           >
@@ -265,9 +323,29 @@ function SourceCard({
           </Button>
         </div>
       </CardHeader>
-      {(promote.error || remove.error) && (
-        <MutationError error={promote.error ?? remove.error} />
-      )}
+      {promote.error && <MutationError error={promote.error} />}
+      <Dialog
+        description="Sources referenced by an immutable build are protected and cannot be deleted."
+        onClose={() => setDeleteOpen(false)}
+        open={deleteOpen}
+        title={`Delete ${source.name}?`}
+      >
+        <div className="space-y-3">
+          {remove.error && <MutationError error={remove.error} />}
+          <div className="flex justify-end gap-2">
+            <Button onClick={() => setDeleteOpen(false)} variant="outline">
+              Cancel
+            </Button>
+            <Button
+              disabled={remove.isPending}
+              onClick={() => remove.mutate()}
+              variant="destructive"
+            >
+              Delete
+            </Button>
+          </div>
+        </div>
+      </Dialog>
       {latest ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Fact

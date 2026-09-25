@@ -1,7 +1,7 @@
-FROM node:24.16.0-alpine3.24@sha256:21f403ab171f2dc89bad4dd69d7721bfd15f084ccb46cdd225f31f2bc59b5c9a AS build
+FROM node:26.9.0-alpine3.24@sha256:dbaa92e5758cbbcf85d65d5403fdb530fe3442cbe8c6dbfb7ef23365450d5070 AS build
 ARG VERSION
 WORKDIR /app
-RUN corepack enable
+RUN npm install --global corepack@0.35.0 && corepack enable
 COPY VERSION /VERSION
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
 RUN test -n "${VERSION}" \
@@ -11,7 +11,7 @@ RUN test -n "${VERSION}" \
 COPY frontend/ ./
 RUN pnpm build
 
-FROM nginxinc/nginx-unprivileged:1.31.5-alpine3.24-slim@sha256:7d289d4f8935051d213bc3ecee3b4fc2d52f97ea5a954273e031054b633e7934
+FROM nginxinc/nginx-unprivileged:1.31.6-alpine3.24-slim@sha256:dcc9bf9c084901dddbbce305130a7295c5637b6a8fce3e29cf678d86336982e4
 ARG VERSION
 ARG VCS_REF=local
 ARG SOURCE_URL=https://github.com/waqoor/MCPlica

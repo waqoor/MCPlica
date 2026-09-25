@@ -316,3 +316,83 @@ async def test_reclaimed_build_rejects_every_stale_result_writer() -> None:
     finally:
         await _cleanup(database)
         await database.close()
+
+
+async def test_usage_counts_real_embedding_calls_and_failed_runs_store_sql_null() -> None:
+    database = DatabaseClient(_database_url(), pool_size=4, max_overflow=0)
+    build_id = UUID(int=18_400)
+    repository = BuildAIRunRepository()
+    model = "usage-regression/model"
+    try:
+        await _cleanup(database)
+        await _seed(database)
+        async with database.session_scope() as session:
+            session.add(_build(build_id, 1, BuildStatus.ANALYZING))
+        for index, usage in enumerate(
+            [
+                {"structured_generation": {"total_tokens": 10}, "retrieval_embedding": None},
+                {
+                    "structured_generation": {"total_tokens": 20},
+                    "retrieval_embedding": {"total_tokens": 5, "cost": 0.01},
+                },
+                None,
+            ]
+        ):
+            async with database.session_scope() as session:
+                await repository.create(
+                    session,
+                    build_id=build_id,
+                    run_key=f"usage-{index}",
+                    stage="analysis",
+                    operation_key=None,
+                    model=model,
+                    prompt_template_id="analysis",
+                    prompt_template_version="1",
+                    input_context_sha256="1" * 64,
+                    retrieved_chunk_ids=[],
+                    response_schema_id="analysis/v1",
+                    response_sha256=None if index == 2 else "2" * 64,
+                    response_json=None if index == 2 else {"accepted": True},
+                    usage=usage,
+                    cost=None if index == 2 else {"cost": 0.1},
+                    latency_ms=1,
+                    status="failed" if index == 2 else "succeeded",
+                    error_code="AI_ANALYSIS_ERROR" if index == 2 else None,
+                    admission_token=_token(build_id),
+                )
+        async with database.session_scope() as session:
+            rows = await repository.usage_by_model(session)
+            generation = next(row for row in rows if row.model == model)
+            assert generation.call_count == 3
+            assert generation.total_tokens == 30
+            assert generation.total_cost == pytest.approx(0.2)
+            embeddings = next(row for row in rows if not row.is_attributable)
+            assert embeddings.call_count == 1
+            assert embeddings.total_tokens == 5
+            assert embeddings.total_cost == pytest.approx(0.01)
+            logs, total = await repository.list_by_model(session, model=model, page=1, page_size=2)
+            assert total == 3 and len(logs) == 2
+            assert all(run.response is None for run in logs)
+            assert (
+                await session.scalar(
+                    select(func.count())
+                    .select_from(BuildAIRun)
+                    .where(
+                        BuildAIRun.build_id == build_id,
+                        BuildAIRun.status == "failed",
+                        BuildAIRun.response_json.is_(None),
+                        BuildAIRun.usage_json.is_(None),
+                        BuildAIRun.cost_json.is_(None),
+                    )
+                )
+                == 1
+            )
+            assert (
+                await repository.usage_by_model(
+                    session, since=datetime.now(UTC) + timedelta(days=1)
+                )
+                == []
+            )
+    finally:
+        await _cleanup(database)
+        await database.close()

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from rq import get_current_job
+from sqlalchemy.exc import IntegrityError
 
 from app.clients.ai import OpenRouterClient
 from app.clients.database import DatabaseClient
@@ -22,7 +23,7 @@ from app.core.exceptions import (
     ClientUnavailableError,
 )
 from app.core.lifecycle import register_bounded_close
-from app.core.logging import configure_logging
+from app.core.logging import configure_logging, log_context
 from app.domain.build_admission import BuildLeaseState
 from app.observability import observe_build_job
 from app.providers.ai.openrouter import OpenRouterProvider
@@ -120,7 +121,13 @@ async def _run(
     outcome = "succeeded"
     job = get_current_job()
     settings = get_settings()
-    configure_logging(settings.log_level, json_logs=settings.is_production)
+    configure_logging(
+        settings.log_level,
+        json_logs=settings.is_production,
+        service="mcplica-builder",
+        directory=settings.log_directory,
+        max_bytes=settings.log_max_file_bytes,
+    )
     logger = logging.getLogger("mcplica.builder")
     clients = await _create_build_job_clients(settings)
     database = clients.database
@@ -183,6 +190,21 @@ async def _run(
                 return
             raise
         except Exception as exc:
+            diag_extra: dict[str, object] = {
+                "build_id": str(build_id),
+                "attempt_number": attempt_number,
+            }
+            if isinstance(exc, IntegrityError):
+                orig = exc.orig
+                diag = getattr(orig, "diag", None)
+                diag_extra["pg_constraint_name"] = getattr(diag, "constraint_name", None)
+                diag_extra["pg_table_name"] = getattr(diag, "table_name", None)
+                diag_extra["pg_message_detail"] = getattr(diag, "message_detail", None)
+                diag_extra["pg_message_primary"] = getattr(diag, "message_primary", None)
+            logging.getLogger("mcplica.builder").exception(
+                "build.attempt_failed",
+                extra=diag_extra,
+            )
             retryable = is_retryable_build_error(exc)
             outcome = "retry_scheduled" if retryable and not final_attempt else "failed"
             await pipeline.record_attempt_failure(
@@ -315,8 +337,13 @@ def _pipeline(
         settings,
     )
 
+    _openrouter_key_cache: list[str | None] = []
+
     async def resolve_openrouter_key() -> str | None:
-        return await settings_service.resolve_openrouter_api_key()
+        # Avoids a DB round-trip plus decryption on every OpenRouter request.
+        if not _openrouter_key_cache:
+            _openrouter_key_cache.append(await settings_service.resolve_openrouter_api_key())
+        return _openrouter_key_cache[0]
 
     openrouter = OpenRouterClient(
         http,
@@ -405,11 +432,12 @@ def run_build_job(build_id: str, admission_token: str) -> None:
         else retries_left + 1
     )
     attempt_number = max(1, max_attempts - retries_left)
-    asyncio.run(
-        _run(
-            UUID(build_id),
-            UUID(admission_token),
-            final_attempt=final_attempt,
-            attempt_number=attempt_number,
+    with log_context(correlation_id=build_id, attempt_number=attempt_number):
+        asyncio.run(
+            _run(
+                UUID(build_id),
+                UUID(admission_token),
+                final_attempt=final_attempt,
+                attempt_number=attempt_number,
+            )
         )
-    )

@@ -12,6 +12,11 @@ x-production-environment: &production-environment
   RUNTIME_HOST_ROOT: ${RUNTIME_HOST_ROOT:?Set an absolute RUNTIME_HOST_ROOT}
 
 services:
+  log-init:
+    image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE to an immutable release digest}
+    build: !reset null
+    pull_policy: always
+
   migrate:
     build: !reset null
     image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE to an immutable release digest}

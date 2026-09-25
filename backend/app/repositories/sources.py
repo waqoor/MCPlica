@@ -3,9 +3,10 @@ from typing import cast
 from uuid import UUID
 
 from mcp_contracts.json_types import JsonObject
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import and_, delete, exists, func, or_, select, tuple_, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.core.exceptions import InvalidStateError
 from app.domain.builds import BuildStatus
@@ -226,26 +227,67 @@ class SourceRepository:
         *,
         limit: int,
         offset: int,
+        include_superseded: bool = False,
     ) -> tuple[list[SourceSummaryRecord], int]:
-        total = int(
-            await session.scalar(
-                select(func.count(ProjectSource.id)).where(ProjectSource.project_id == project_id)
+        # Derived from created_at, not stored, so it can't drift.
+        sibling = aliased(ProjectSource)
+        is_superseded = exists(
+            select(1).where(
+                sibling.project_id == ProjectSource.project_id,
+                sibling.name == ProjectSource.name,
+                sibling.kind == ProjectSource.kind,
+                or_(
+                    sibling.created_at > ProjectSource.created_at,
+                    and_(
+                        sibling.created_at == ProjectSource.created_at,
+                        sibling.id > ProjectSource.id,
+                    ),
+                ),
             )
-            or 0
         )
-        source_models = list(
+        # Page over latest sources only, so `total`/`page_size` count distinct
+        # sources rather than raw version rows.
+        latest_filters = [ProjectSource.project_id == project_id, ~is_superseded]
+        total_query = select(func.count(ProjectSource.id)).where(*latest_filters)
+        total = int(await session.scalar(total_query) or 0)
+        latest_models = list(
             await session.scalars(
                 select(ProjectSource)
-                .where(ProjectSource.project_id == project_id)
+                .where(*latest_filters)
                 .order_by(ProjectSource.created_at.asc(), ProjectSource.id.asc())
                 .limit(limit)
                 .offset(offset)
             )
         )
-        if not source_models:
+        if not latest_models:
             return [], total
 
+        if include_superseded:
+            # Pull every sibling version of each latest source on this page, so a
+            # supersession group is never split across a page boundary.
+            group_keys = {(model.name, model.kind) for model in latest_models}
+            source_models = list(
+                await session.scalars(
+                    select(ProjectSource)
+                    .where(
+                        ProjectSource.project_id == project_id,
+                        tuple_(ProjectSource.name, ProjectSource.kind).in_(group_keys),
+                    )
+                    .order_by(ProjectSource.created_at.asc(), ProjectSource.id.asc())
+                )
+            )
+        else:
+            source_models = latest_models
+
         source_ids = [model.id for model in source_models]
+        is_latest_by_id = {
+            source_id: not superseded
+            for source_id, superseded in (
+                await session.execute(
+                    select(ProjectSource.id, is_superseded).where(ProjectSource.id.in_(source_ids))
+                )
+            ).tuples()
+        }
         counts = {
             source_id: int(count)
             for source_id, count in (
@@ -317,6 +359,7 @@ class SourceRepository:
             summaries.append(
                 SourceSummaryRecord(
                     source=_source_to_domain(source_model),
+                    is_latest=is_latest_by_id.get(source_model.id, True),
                     latest_version=(
                         _version_to_domain(version_model) if version_model is not None else None
                     ),
@@ -492,6 +535,29 @@ class SourceRepository:
             delete(ProjectSource).where(ProjectSource.id == source_id).returning(ProjectSource.id)
         )
         return deleted_id is not None
+
+    async def latest_in_group(
+        self,
+        session: AsyncSession,
+        project_id: UUID,
+        name: str,
+        kind: SourceKind,
+        *,
+        exclude_source_id: UUID | None = None,
+    ) -> ProjectSourceRecord | None:
+        statement = (
+            select(ProjectSource)
+            .where(
+                ProjectSource.project_id == project_id,
+                ProjectSource.name == name,
+                ProjectSource.kind == kind,
+            )
+            .order_by(ProjectSource.created_at.desc(), ProjectSource.id.desc())
+        )
+        if exclude_source_id is not None:
+            statement = statement.where(ProjectSource.id != exclude_source_id)
+        model = await session.scalar(statement.limit(1))
+        return _source_to_domain(model) if model else None
 
     async def first_versioned_executable(
         self,

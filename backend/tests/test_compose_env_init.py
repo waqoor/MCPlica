@@ -5,6 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 from dotenv import dotenv_values
 
 from app.core.config import Settings
@@ -14,11 +15,15 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_initialization_creates_private_consistent_environment_without_overwrite(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     target = tmp_path / ".env"
     command = [sys.executable, str(ROOT / "scripts/init_env.py"), "--output", str(target)]
     result = subprocess.run(command, capture_output=True, text=True, check=True)
     environment = dotenv_values(target)
+    # Verify the generated file independently of an operator's process settings.
+    for name in environment:
+        monkeypatch.delenv(name, raising=False)
     configured_env_file = Path(str(environment["CONTROL_PLANE_ENV_FILE"]))
     if not configured_env_file.is_absolute():
         configured_env_file = ROOT / "infra" / configured_env_file

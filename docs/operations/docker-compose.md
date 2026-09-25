@@ -23,7 +23,7 @@ release validation before publication.
 ```bash
 python scripts/init_env.py
 docker compose --env-file .env -f infra/compose.yaml config --quiet
-docker compose --env-file .env -f infra/compose.yaml build api runtime-validator frontend
+docker compose --env-file .env -f infra/compose.yaml build api runtime-validator frontend minio
 docker compose --env-file .env -f infra/compose.yaml up --no-build --detach --wait --wait-timeout 300
 docker compose --env-file .env -f infra/compose.yaml exec -T api python -m app.cli.ensure_development_admin
 docker compose --env-file .env -f infra/compose.yaml ps --all
@@ -80,3 +80,26 @@ On a new disposable environment only, follow [the integration instructions](../.
 The canonical harness exercises migrations, source/build/deployment state, authenticated MCP
 calls, dependency outage recovery, rebuild/redeploy, rollback, and persistence through container
 recreation. It refuses production mode and must never be copied into startup commands.
+
+## MinIO source build
+
+The pinned 2024-05-28 MinIO registry image is no longer publicly pullable. The canonical
+Compose service builds the same upstream release from commit
+`f92beb79b555ca0762e01d5aca11e531353e9eae`, verifies its archive checksum, and uses pinned
+Go and Alpine base images. Build `minio` with the application images before using
+`up --no-build`. The data path remains `/minio_data`; the source-built container runs
+as UID/GID `10001:10001`. Fresh volumes receive that ownership automatically.
+For a retained volume created by the old root-running image, stop the installation,
+back up its volumes, and transfer ownership once before starting the new image:
+
+```bash
+docker compose --env-file .env -f infra/compose.yaml run --rm --no-deps --user 0:0 minio chown -R 10001:10001 /minio_data
+```
+
+Use the selected installation's environment file for this command. It changes file
+ownership without removing objects. Readiness uses the server HTTP endpoint rather
+than an additional CLI binary.
+The source and AGPL license are available from [the upstream release](https://github.com/minio/minio/tree/f92beb79b555ca0762e01d5aca11e531353e9eae).
+
+This restores reproducible installation of the existing dependency; it does not claim
+that this historical MinIO release has current upstream maintenance or security support.

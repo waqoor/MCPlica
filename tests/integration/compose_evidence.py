@@ -13,7 +13,7 @@ ENV_FILE = Path(os.getenv("MCPLICA_ENV_FILE", ".env"))
 if not ENV_FILE.is_absolute():
     ENV_FILE = ROOT / ENV_FILE
 COMMAND = ["docker", "compose", "--env-file", str(ENV_FILE), "-f", "infra/compose.yaml"]
-ONESHOT = {"migrate", "runtime-init"}
+ONESHOT = {"migrate", "runtime-init", "log-init"}
 
 
 def _command(*args: str) -> str:

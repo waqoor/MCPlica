@@ -175,3 +175,35 @@ async def test_production_same_origin_ui_proxy_host_is_allowed() -> None:
         assert (await client.get("/api/v1/health")).status_code == 200
         rejected = await client.get("/api/v1/health", headers={"Host": "unrelated.example.com"})
         assert rejected.status_code == 400
+
+
+@pytest.mark.parametrize("text_format", [False, True])
+def test_postgres_diagnostics_omit_private_rows_and_exception_messages(text_format: bool) -> None:
+    from types import SimpleNamespace
+
+    from sqlalchemy.exc import IntegrityError
+
+    from app.core.logging import SafeTextLogFormatter
+
+    sentinel = "PRIVATE-DATABASE-ROW-CREDENTIAL"
+    original = RuntimeError(sentinel)
+    original.diag = SimpleNamespace(
+        constraint_name="ck_build_ai_runs_outcome", message_detail=sentinel
+    )
+    error = IntegrityError("INSERT private", {"secret": sentinel}, original)
+    error.__cause__ = original
+    record = logging.LogRecord(
+        "mcplica.builder",
+        logging.ERROR,
+        __file__,
+        1,
+        "build.failed",
+        (),
+        (type(error), error, None),
+    )
+    formatter = SafeTextLogFormatter() if text_format else JsonLogFormatter()
+    rendered = formatter.format(record)
+    assert "ck_build_ai_runs_outcome" in rendered
+    assert "IntegrityError" in rendered
+    assert sentinel not in rendered
+    assert "INSERT private" not in rendered

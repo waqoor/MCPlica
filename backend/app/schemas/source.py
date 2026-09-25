@@ -118,6 +118,7 @@ class SourceVersionSummaryRead(SourceVersionRead):
 
 
 class SourceSummaryRead(SourceRead):
+    is_latest: bool
     latest_version: SourceVersionSummaryRead | None
     version_count: int = Field(ge=0)
     health: Literal["missing", "pending", "valid", "invalid"]

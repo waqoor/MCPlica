@@ -21,7 +21,7 @@ dependencies = [
 dev = [
   "pytest>=9.0.3,<10",
   "pytest-asyncio>=1.1,<2",
-  "pyright>=1.1.400,<2",
+  "pyright>=1.1.414,<2",
   "ruff>=0.16.5,<1",
 ]
 

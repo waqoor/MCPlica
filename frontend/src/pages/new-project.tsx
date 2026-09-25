@@ -362,17 +362,31 @@ export function NewProjectPage() {
         />
       )}
       {step === 6 && (
-        <StartBuildStep
-          existingBuildId={
-            journey.data?.build_status &&
-            !["FAILED", "CANCELLED"].includes(journey.data.build_status)
-              ? buildId
-              : null
-          }
-          onBack={() => go(5)}
-          onStarted={(id) => go(7, { build: id })}
-          projectId={projectId!}
-        />
+        <>
+          {journey.data?.build_status === "FAILED" && buildId && (
+            <Alert className="mb-5" title="Build failed" tone="danger">
+              The previous build could not be completed. Inspect the failed
+              build for details before starting another attempt.{" "}
+              <Link
+                className="font-medium underline"
+                to={`/projects/${projectId}/builds/${buildId}`}
+              >
+                Inspect failed build
+              </Link>
+            </Alert>
+          )}
+          <StartBuildStep
+            existingBuildId={
+              journey.data?.build_status &&
+              !["FAILED", "CANCELLED"].includes(journey.data.build_status)
+                ? buildId
+                : null
+            }
+            onBack={() => go(5)}
+            onStarted={(id) => go(7, { build: id })}
+            projectId={projectId!}
+          />
+        </>
       )}
       {step === 7 && (
         <BuildProgressStep
@@ -519,7 +533,9 @@ function IdentityStep({
           )}
         </div>
       </div>
-      {save.error && <MutationError error={save.error} />}
+      <div className="mt-5">
+        {save.error && <MutationError error={save.error} />}
+      </div>
       <StepActions>
         <Button disabled={save.isPending} type="submit">
           {save.isPending
@@ -729,7 +745,9 @@ function SourceStep({
           </div>
         )}
       </div>
-      {create.error && <MutationError error={create.error} />}
+      <div className="mt-5">
+        {create.error && <MutationError error={create.error} />}
+      </div>
       <StepActions back={onBack}>
         <div className="flex flex-wrap gap-2">
           {existing.length > 0 && (
@@ -955,7 +973,9 @@ function ServerStep({
           ))}
         </div>
       )}
-      {update.error && <MutationError error={update.error} />}
+      <div className="mt-5">
+        {update.error && <MutationError error={update.error} />}
+      </div>
       <StepActions back={onBack}>
         <Button
           disabled={
@@ -1234,7 +1254,9 @@ function CredentialStep({
         MCP inbound access is configured separately in step 9. Upstream
         credentials never become tool arguments or manifest fields.
       </Alert>
-      {create.error && <MutationError error={create.error} />}
+      <div className="mt-5">
+        {create.error && <MutationError error={create.error} />}
+      </div>
       {discovery.isPending && (
         <div className="mt-5">
           <Spinner label="Loading source security schemes" />
@@ -1348,7 +1370,9 @@ function StartBuildStep({
           </p>
         </div>
       </div>
-      {start.error && <MutationError error={start.error} />}
+      <div className="mt-5">
+        {start.error && <MutationError error={start.error} />}
+      </div>
       <StepActions back={onBack}>
         <div className="flex flex-wrap gap-2">
           {existingBuildId && (
@@ -1635,9 +1659,11 @@ function AdminAccessControls({
           </Button>
         </div>
       </div>
-      {(configure.error || token.error) && (
-        <MutationError error={configure.error ?? token.error} />
-      )}
+      <div className="mt-5">
+        {(configure.error || token.error) && (
+          <MutationError error={configure.error ?? token.error} />
+        )}
+      </div>
       <StepActions back={onBack}>
         <Button disabled={!accessConfigured} onClick={onComplete}>
           Continue to deploy
@@ -1756,7 +1782,9 @@ function DeployStep({
               "Complete the current authoritative setup step before deploying."}
           </Alert>
         )}
-      {deploy.error && <MutationError error={deploy.error} />}
+      <div className="mt-5">
+        {deploy.error && <MutationError error={deploy.error} />}
+      </div>
       {buildsQuery.error && (
         <ErrorNotice
           error={buildsQuery.error}

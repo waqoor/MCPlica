@@ -59,7 +59,7 @@ jobs:
           path: ${{ runner.temp }}/mcplica-source.tar.gz
           retention-days: 1
           if-no-files-found: error
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1 (repository-approved pin)
         with:
           python-version: "3.13"
           enable-cache: true
@@ -82,7 +82,7 @@ jobs:
         working-directory: mcp_runtime
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1 (repository-approved pin)
         with:
           python-version: "3.13"
           enable-cache: true
@@ -156,7 +156,7 @@ jobs:
           --verbosity info
       - name: Set up uv for the private-repository dependency audit
         if: github.event.repository.private
-        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1 (repository-approved pin)
         with:
           python-version: "3.13"
           enable-cache: true
@@ -181,7 +181,7 @@ jobs:
         run: |
           printf 'TEST_RUNTIME_WORKER_ROOT=%s/dynamic-runtime-test\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
           printf 'TEST_RUNTIME_HOST_ROOT=%s/dynamic-runtime-test\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1 (repository-approved pin)
         with:
           python-version: "3.13"
           enable-cache: true
@@ -202,7 +202,7 @@ jobs:
       - name: Verify Docker excludes private runtime and environment files
         run: python tests/integration/docker_context_check.py
       - name: Build canonical application images
-        run: docker compose --env-file .env -f infra/compose.yaml build api runtime-validator frontend
+        run: docker compose --env-file .env -f infra/compose.yaml build api runtime-validator frontend minio
       - name: Verify image versions, OCI metadata, and runtime users
         run: python tests/integration/image_metadata_check.py
       - name: Scan backend candidate image

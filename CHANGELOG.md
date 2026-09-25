@@ -6,6 +6,55 @@ version is not published until its immutable tag and release workflow complete.
 
 ## [Unreleased]
 
+### Changed
+
+- Integrated structured, rotating application logs, worker registration recovery, protected login
+  destinations, and asynchronous build failure feedback.
+- Preserved canonicalization isolation across cancelled requests, mutable source roles, byte limits,
+  and callers; bounded cached results and retained safe database diagnostics without private rows.
+- Excluded absent retrieval embeddings from AI usage counts and verified failed-run SQL NULL storage.
+- Updated the container and application dependencies, explicitly installed Corepack for Node 26,
+  and rebuilt the existing MinIO release from verified official source after registry removal.
+
+- Added top margin to the project setup wizard's inline error alerts so they no longer visually
+  merge with the content above them, most noticeably the info cards on the **Start build** step.
+
+- Paged the sources list over distinct sources rather than raw version rows, so a superseded source
+  version can no longer land on a different page than its latest version and render as an orphaned
+  top-level entry.
+
+- Retried a canonicalization request as the new leader instead of failing it when the concurrent
+  in-flight request it was coalesced onto was cancelled by an unrelated caller, preventing one
+  cancelled poll from failing every other request waiting on the same result.
+
+- Replaced the native `window.confirm()` prompt on the Sources tab with the same in-app dialog
+  already used for project deletion, so source deletion confirmation is consistent across the site.
+
+- Raised a dedicated `ExecutionOwnershipError` when a build's execution lease is stale, and skipped
+  the failure-audit write when that loss is itself the error being recorded, so an expired lease no
+  longer masks the real failure behind a doomed ownership recheck.
+
+- Declared `JSONB(none_as_null=True)` on the AI run's response/usage/cost columns so a `None` value
+  is stored as true SQL `NULL`, fixing an intermittent `IntegrityError` on
+  `ck_build_ai_runs_outcome` when an AI operation genuinely failed, and expanded diagnostic logging
+  to surface exception types and safe constraint identifiers without exposing private row values.
+
+- Resolved path-level OpenAPI servers before checking whether the document has a usable server URL,
+  so a spec declaring servers only under a path item (valid per OpenAPI 3.1) no longer fails at
+  server selection before the parser's existing path-level handling ever runs.
+
+- Rejected OpenAPI and API Inventory documents whose operations reference an undefined security
+  scheme at parse time instead of admitting them silently.
+
+- Persisted the configured embedding model on a document index generation instead of the model name
+  a provider's response happened to echo back, so a completed generation's `embedding_model` matches
+  what was actually requested.
+
+- Added a per-model AI usage and cost counter under **Settings > Usage**, showing call count, total
+  tokens, and total cost per model from the build AI-run history.
+
+
+
 ## [1.0.0-rc.1] - 2026-09-04
 
 ### Changed

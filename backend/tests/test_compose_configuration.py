@@ -8,6 +8,29 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def test_application_log_persistence_and_safe_worker_entrypoints() -> None:
+    compose = yaml.safe_load((ROOT / "infra/compose.yaml").read_text())
+    services = compose["services"]
+    assert "application-logs" in compose["volumes"]
+    for name in ("api", "builder-worker", "deployment-worker"):
+        assert "application-logs:${LOG_DIRECTORY:-/var/log/mcplica}" in services[name]["volumes"]
+        assert (
+            services[name]["depends_on"]["log-init"]["condition"]
+            == "service_completed_successfully"
+        )
+        assert services[name]["environment"]["LOG_RETENTION_DAYS"] == "${LOG_RETENTION_DAYS:-30}"
+        assert services[name]["logging"]["driver"] == "json-file"
+    assert services["log-init"]["env_file"] == []
+    assert set(services["log-init"]["environment"]) == {"LOG_DIRECTORY"}
+    assert services["log-init"]["network_mode"] == "none"
+    assert services["builder-worker"]["command"][:4] == [
+        "python",
+        "-m",
+        "app.jobs.worker_logging",
+        "mcplica-builder",
+    ]
+
+
 def test_control_plane_processes_share_interpolated_configuration() -> None:
     services = yaml.safe_load((ROOT / "infra/compose.yaml").read_text())["services"]
     expected = services["api"]["environment"]
@@ -54,6 +77,11 @@ def test_workers_consume_the_same_queues_as_the_control_plane() -> None:
         ("deployment-worker", "DEPLOYMENT_QUEUE_NAME"),
     ):
         assert services[service]["command"][-1] == services["api"]["environment"][queue]
+        command = services[service]["command"]
+        assert command[command.index("--worker-class") + 1] == (
+            "app.jobs.rq_worker.RegistrationRecoveringWorker"
+        )
+        assert "--with-scheduler" in command
     assert services["deployment-worker"]["command"][:3] == [
         "python",
         "-m",

@@ -12,6 +12,7 @@ from app.api import (
     projects,
     settings,
     sources,
+    usage,
     users,
 )
 
@@ -28,3 +29,4 @@ router.include_router(settings.router)
 router.include_router(audit.router)
 router.include_router(builds.router)
 router.include_router(cleanup.router)
+router.include_router(usage.router)

@@ -34,14 +34,14 @@ plane, build workers, and every concurrently active 512 MiB project runtime in a
 | Dependency         | Required/locked line                                                                |
 | ------------------ | ----------------------------------------------------------------------------------- |
 | Python             | `>=3.13,<3.14`; container baseline 3.13.15                                          |
-| uv                 | Container/release baseline 0.12.9; use a compatible current uv for host development |
-| Node.js            | `>=24,<25`; `.node-version` pins 24.16.0                                            |
+| uv                 | Container/release baseline 0.12.18; use a compatible current uv for host development |
+| Node.js            | Node 24 locally/CI; Node 26.9.0 in the container; Corepack 0.35.0                                            |
 | pnpm               | 11.25.0 through Corepack                                                            |
 | PostgreSQL         | Compose image 18.6 by immutable digest                                              |
 | Redis              | Compose image 8.2 Alpine by immutable digest                                        |
-| Milvus             | Compose image 3.0.1 by immutable digest                                             |
-| Traefik            | Compose image 3.7.12 by immutable digest                                            |
-| NGINX unprivileged | Frontend runtime image 1.31.5 Alpine slim by immutable digest                       |
+| Milvus             | Compose image 3.0.2 by immutable digest                                             |
+| Traefik            | Compose image 3.7.13 by immutable digest                                            |
+| NGINX unprivileged | Frontend runtime image 1.31.6 Alpine slim by immutable digest                       |
 | MCP Python SDK     | Locked 2.1.1 in backend/runtime; candidate validation pins protocol `2026-07-28`    |
 
 Use the committed `uv.lock`, `frontend/pnpm-lock.yaml`, and digest-pinned Compose/base images.
