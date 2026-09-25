@@ -45,7 +45,7 @@ required = [
     "docs/security/threat-model.md",
     "docs/maintainers/releasing.md",
     "docs/maintainers/release-checklist.md",
-    "docs/releases/v1.0.0-rc.1.md",
+    "docs/releases/v1.0.0-rc.2.md",
     "scripts/release_version.py",
     "scripts/github_labels.py",
     "scripts/validate_docs.py",

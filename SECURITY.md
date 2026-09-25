@@ -4,7 +4,7 @@
 
 | Version | Support status |
 | --- | --- |
-| `1.0.0-rc.1` | Evaluation only; do not expose to untrusted networks without the full operator review |
+| `1.0.0-rc.2` | Evaluation only; do not expose to untrusted networks without the full operator review |
 | `1.0.x` | Planned stable line after `v1.0.0` publication |
 | Earlier snapshots | Unsupported; upgrade using the current candidate migration guidance |
 

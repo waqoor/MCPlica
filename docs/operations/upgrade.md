@@ -10,7 +10,7 @@ Upgrade only between verified releases and never by pulling mutable `latest` tag
 4. Export the current Compose render, database revision, active deployment/image/manifest digests, and health evidence.
 5. Test the upgrade on a restored non-production copy, including login, source parsing, build validation, credential connection, deployment, MCP invocation, and rollback.
 
-For the first v1 upgrade, retain every existing secret and add `MCPLICA_VERSION=1.0.0-rc.1` to the
+For the first v1 upgrade, retain every existing secret and add `MCPLICA_VERSION=1.0.0-rc.2` to the
 private environment. Remove an old operator-defined `MCP_RUNTIME_VERSION`; the canonical Compose
 topology now derives it from the product release version so API, validator, generated runtimes, and
 image metadata cannot drift independently.

@@ -49,7 +49,7 @@ conflicts.
 - [Changelog](../CHANGELOG.md) — user and operator-visible history.
 - [Release process](maintainers/releasing.md)
 - [Release checklist](maintainers/release-checklist.md)
-- [v1.0.0-rc.1 notes](releases/v1.0.0-rc.1.md)
+- [v1.0.0-rc.2 notes](releases/v1.0.0-rc.2.md)
 
 Root-level community and legal policies remain authoritative: [license](../LICENSE),
 [contributing](../CONTRIBUTING.md), [CLA](../CLA.md), [code of conduct](../CODE_OF_CONDUCT.md),

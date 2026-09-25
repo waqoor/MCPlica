@@ -4,7 +4,7 @@
     "analysis_model": null,
     "build_id": "fixture-pipeline-matrix-3.1-yaml",
     "canonical_sha256": "8674b9cae69bc7793be35d34dc8a6e47e9b85dc8bf48c0198ab93f8c0f2e2d48",
-    "compiler_version": "1.0.0-rc.1",
+    "compiler_version": "1.0.0-rc.2",
     "created_at": "2026-08-27T00:00:00+00:00",
     "embedding_model": null,
     "prompt_bundle_version": null,
@@ -14,14 +14,14 @@
     ],
     "validation_model": null
   },
-  "manifest_id": "d708ad38d4668b2535a507c72357c4f135c1ccc305517d80259d0e47039c08ff",
+  "manifest_id": "1e121a4377b6fad318e9b0c730f3532ac43cfda3404afec9d9af4f81d5285407",
   "project": {
     "id": "00000000-0000-0000-0000-000000000001",
     "name": "MCPlica YAML pipeline matrix",
     "slug": "pipeline-matrix-3.1-yaml"
   },
   "resources": [],
-  "runtime_compatibility": ">=1.0.0-rc.1,<2.0",
+  "runtime_compatibility": ">=1.0.0-rc.2,<2.0",
   "schema_version": "mcp-manifest/v1",
   "security": {
     "allow_insecure_none_only_in_development": true,

@@ -7,7 +7,7 @@ attestations. A successful repository workflow does not certify an operator envi
 ## Version and branch conventions
 
 Root `VERSION` is authoritative and contains SemVer without a leading `v`, for example `1.0.0` or
-`1.0.0-rc.1`. Release branches use `release/vX.Y.Z-preparation`; annotated tags and GitHub Releases
+`1.0.0-rc.2`. Release branches use `release/vX.Y.Z-preparation`; annotated tags and GitHub Releases
 use matching `vX.Y.Z` names. Published tags and container tags are never moved, reused, or
 overwritten.
 
@@ -46,8 +46,8 @@ git pull --ff-only origin master
 python scripts/release_version.py --check
 python scripts/checksum_manifest.py --check
 git status --short
-git tag -s -a v1.0.0-rc.1 -m "MCPlica v1.0.0-rc.1"
-git push origin v1.0.0-rc.1
+git tag -s -a v1.0.0-rc.2 -m "MCPlica v1.0.0-rc.2"
+git push origin v1.0.0-rc.2
 ```
 
 Use the value in `VERSION`; the prerelease above is the current example. If no approved signed-tag
