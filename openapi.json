@@ -5172,6 +5172,10 @@
             "title": "Id",
             "type": "string"
           },
+          "is_latest": {
+            "title": "Is Latest",
+            "type": "boolean"
+          },
           "is_primary": {
             "title": "Is Primary",
             "type": "boolean"
@@ -5266,6 +5270,7 @@
           "last_observed_at",
           "last_observed_etag",
           "last_observed_last_modified",
+          "is_latest",
           "latest_version",
           "version_count",
           "health"
@@ -9011,6 +9016,16 @@
               "minimum": 1,
               "title": "Page Size",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_superseded",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Superseded",
+              "type": "boolean"
             }
           }
         ],

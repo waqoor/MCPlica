@@ -53,16 +53,19 @@ async def list_sources(
     container: Annotated[ServiceContainer, Depends(services)],
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 50,
+    include_superseded: Annotated[bool, Query()] = False,
 ) -> SourcePageRead:
     items, total = await container.sources.list_summaries(
         project_id,
         limit=page_size,
         offset=(page - 1) * page_size,
+        include_superseded=include_superseded,
     )
     return SourcePageRead(
         items=[
             SourceSummaryRead(
                 **SourceRead.model_validate(item.source).model_dump(),
+                is_latest=item.is_latest,
                 latest_version=(
                     SourceVersionSummaryRead(
                         **_version_read(item.latest_version).model_dump(),
