@@ -348,7 +348,7 @@ cc0381ffd02711e2cce1ec115a6a9f49974519026407818d1d77e56a69007204  ./docs/maintai
 cc4a31395f46dc181699a163a2ac397bb042b42b5c88b01ea75d2a6c30be216a  ./docs/open_source_and_sponsorship_model.md
 1ce76c9644c0bc64b745b8a6b5d793ea70949ac2201a71d8030825f3eda3650d  ./docs/operations/backup-restore.md
 bc6a10f7e784febeaa710386a6167f9fa44d68be13f9274736a1d3f20937bc10  ./docs/operations/configuration.md
-1ba0ccc1ca59b401ad1989f17d075104a6d843c79477aa169d0666a18c17e6de  ./docs/operations/docker-compose.md
+b6bc532a34450541e3e3dad14f1e65ed4ce593fbaf7c4fc7e99e0a24acbfb58a  ./docs/operations/docker-compose.md
 4f90265ec3fbb45b8e97f4f2048063e5e20d7f255c4339e7838db8e0941fabb0  ./docs/operations/domain-tls.md
 89553af5a731b39eb5953f4c1cbd7e73baae46542ade1081605d56b43a3d62de  ./docs/operations/installation.md
 98372ec2f6fc3092ecacbe7f6cdf25bc7c761c1aa8e7c81446a55d51a1ba9a98  ./docs/operations/runbook.md
@@ -525,7 +525,7 @@ e9df8b1fe6a54fee07a19c84da90cee5c6d01bd3e08ddcb3551d71de368eb7ff  ./frontend/vit
 6c23518a56c3036e6c3f767e446c2348040965400daaedb7943e7b9343a11ace  ./infra/compose.yaml
 b7b919157f100d14f8cdf18e08eff0f6c0466470b9a4d809e95c1f6706da4aee  ./infra/docker/backend.Dockerfile
 d1a6cff05b214b605dbecfd419ec2d57bcb775648cf91612561e8590b2c807c5  ./infra/docker/frontend.Dockerfile
-b0d5ccab5b974f5d0bf0c2402aff22a34cc9b709b6f1d190dc2fcba49751abd6  ./infra/docker/minio.Dockerfile
+7b143509fa97c1e0d9f0f5438b25ecb01bcfa734aba6880501b646d5ad370875  ./infra/docker/minio.Dockerfile
 1cdad31d93e732d4ba3535ed10ac4288533b30278815e1537700c9e12ef9a173  ./infra/docker/nginx.conf
 58215dc3f80b4dceea3278de54ee027ee1d0db96a8cd60a76ac0d9d8f758de04  ./infra/docker/runtime.Dockerfile
 63e602c18612f162080c295a7da04e1f5ce03727810adbd47a2c2f2e06fcb321  ./infra/milvus/README.md
