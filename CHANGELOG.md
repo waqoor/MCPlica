@@ -6,6 +6,11 @@ version is not published until its immutable tag and release workflow complete.
 
 ## [Unreleased]
 
+### Changed
+
+- Added top margin to the project setup wizard's inline error alerts so they no longer visually
+  merge with the content above them, most noticeably the info cards on the **Start build** step.
+
 ## [1.0.0-rc.1] - 2026-09-04
 
 ### Changed
