@@ -1,7 +1,7 @@
 FROM node:26.9.0-alpine3.24@sha256:dbaa92e5758cbbcf85d65d5403fdb530fe3442cbe8c6dbfb7ef23365450d5070 AS build
 ARG VERSION
 WORKDIR /app
-RUN corepack enable
+RUN npm install --global corepack@0.35.0 && corepack enable
 COPY VERSION /VERSION
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
 RUN test -n "${VERSION}" \

@@ -336,7 +336,7 @@ class IndexingService:
                 )
             if embedding_model is None:
                 raise IndexingError("An embedding model is required when documentation is attached")
-            vectors, actual_model, dimension = await self._resolve_embeddings(
+            vectors, _actual_model, dimension = await self._resolve_embeddings(
                 chunks,
                 embedding_model,
                 project_id=project_id,

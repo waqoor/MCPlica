@@ -42,8 +42,7 @@ async def usage_logs(
     )
     return Page(
         items=[
-            BuildAIRunRead.model_validate(item.model_dump(exclude={"response"}))
-            for item in runs
+            BuildAIRunRead.model_validate(item.model_dump(exclude={"response"})) for item in runs
         ],
         total=total,
         page=page,

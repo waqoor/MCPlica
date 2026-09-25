@@ -46,7 +46,8 @@ function groupSources(items: readonly ProjectSource[]) {
   }
   return order.map((key) => {
     const members = groups.get(key)!;
-    const latest = members.find((m) => m.is_latest) ?? members[members.length - 1];
+    const latest =
+      members.find((m) => m.is_latest) ?? members[members.length - 1];
     const superseded = members
       .filter((m) => m.id !== latest.id)
       .sort((a, b) => b.created_at.localeCompare(a.created_at));
@@ -63,12 +64,7 @@ export function ProjectSourcesPage() {
   const rawPage = Number(searchParams.get("page") ?? "1");
   const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1;
   const sources = useQuery({
-    queryKey: [
-      "projects",
-      project.id,
-      "sources",
-      { page, includeSuperseded },
-    ],
+    queryKey: ["projects", project.id, "sources", { page, includeSuperseded }],
     queryFn: ({ signal }) =>
       sourceApi.listPage(
         project.id,
@@ -135,7 +131,9 @@ export function ProjectSourcesPage() {
             <div className="space-y-2" key={latest.id}>
               <SourceCard
                 projectId={project.id}
-                refreshing={refresh.isPending && refresh.variables === latest.id}
+                refreshing={
+                  refresh.isPending && refresh.variables === latest.id
+                }
                 source={latest}
                 onRefresh={() => refresh.mutate(latest.id)}
                 onVersionAdded={invalidate}

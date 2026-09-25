@@ -9,6 +9,7 @@ from sqlalchemy import CursorResult, Numeric, delete, func, select, update
 from sqlalchemy import cast as sql_cast
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.exceptions import ConflictError, InvalidStateError
 from app.domain.builds import (
@@ -738,21 +739,21 @@ class BuildAIRunRepository:
         generation_tokens = func.coalesce(
             sql_cast(
                 BuildAIRun.usage_json["structured_generation"]["total_tokens"].astext,
-                Numeric,
+                Numeric(),
             ),
-            sql_cast(BuildAIRun.usage_json["total_tokens"].astext, Numeric),
+            sql_cast(BuildAIRun.usage_json["total_tokens"].astext, Numeric()),
             0,
         )
-        generation_cost = func.coalesce(sql_cast(BuildAIRun.cost_json["cost"].astext, Numeric), 0)
+        generation_cost = func.coalesce(sql_cast(BuildAIRun.cost_json["cost"].astext, Numeric()), 0)
         embedding_tokens = sql_cast(
             BuildAIRun.usage_json["retrieval_embedding"]["total_tokens"].astext,
-            Numeric,
+            Numeric(),
         )
         embedding_cost = sql_cast(
             BuildAIRun.usage_json["retrieval_embedding"]["cost"].astext,
-            Numeric,
+            Numeric(),
         )
-        predicates = []
+        predicates: list[ColumnElement[bool]] = []
         if since is not None:
             predicates.append(BuildAIRun.created_at >= since)
         if until is not None:
@@ -816,9 +817,7 @@ class BuildAIRunRepository:
         if until is not None:
             predicates.append(BuildAIRun.created_at < until)
         total = int(
-            await session.scalar(
-                select(func.count()).select_from(BuildAIRun).where(*predicates)
-            )
+            await session.scalar(select(func.count()).select_from(BuildAIRun).where(*predicates))
             or 0
         )
         result = await session.scalars(

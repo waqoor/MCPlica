@@ -177,3 +177,85 @@ def test_configuration_fingerprint_includes_frozen_role_name_and_aliases() -> No
     )
 
     assert before != after
+
+
+async def test_cancelled_follower_does_not_cancel_shared_canonicalization() -> None:
+    root = _binding(50, SourceKind.OPENAPI, primary=True)
+    started, release = asyncio.Event(), asyncio.Event()
+    document = {
+        "openapi": "3.1.0",
+        "info": {"title": "Example", "version": "1"},
+        "servers": [{"url": "https://api.example.com"}],
+        "paths": {"/records": {"get": {"responses": {"200": {"description": "OK"}}}}},
+    }
+
+    async def read(key: str, *, max_bytes: int) -> bytes:
+        started.set()
+        await release.wait()
+        return json.dumps(document).encode()
+
+    storage = SimpleNamespace(get=AsyncMock(side_effect=read))
+    project = SimpleNamespace(default_base_url=None, active_server_ref=None, server_mappings={})
+    service = CanonicalizationService(
+        cast(Any, _Database()),
+        cast(Any, SimpleNamespace(get=AsyncMock(return_value=project))),
+        cast(Any, object()),
+        cast(Any, object()),
+        cast(Any, storage),
+    )
+    leader = asyncio.create_task(service.canonicalize(UUID(int=1), [root], max_source_bytes=10000))
+    await started.wait()
+    follower = asyncio.create_task(
+        service.canonicalize(UUID(int=1), [root], max_source_bytes=10000)
+    )
+    await asyncio.sleep(0)
+    follower.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await follower
+    release.set()
+    assert len((await leader).operations) == 1
+    storage.get.assert_awaited_once()
+
+
+async def test_canonicalization_cache_respects_binding_metadata_limits_and_result_isolation() -> (
+    None
+):
+    from app.core.exceptions import SourceParseError
+
+    root = _binding(50, SourceKind.OPENAPI, primary=True)
+    document = {
+        "openapi": "3.1.0",
+        "info": {"title": "Example", "version": "1"},
+        "servers": [{"url": "https://api.example.com"}],
+        "paths": {"/records": {"get": {"responses": {"200": {"description": "OK"}}}}},
+    }
+
+    async def read(key: str, *, max_bytes: int) -> bytes:
+        payload = json.dumps(document).encode()
+        if len(payload) > max_bytes:
+            raise SourceParseError("Source exceeds byte limit")
+        return payload
+
+    storage = SimpleNamespace(get=AsyncMock(side_effect=read))
+    project = SimpleNamespace(default_base_url=None, active_server_ref=None, server_mappings={})
+    service = CanonicalizationService(
+        cast(Any, _Database()),
+        cast(Any, SimpleNamespace(get=AsyncMock(return_value=project))),
+        cast(Any, object()),
+        cast(Any, object()),
+        cast(Any, storage),
+    )
+    first = await service.canonicalize(UUID(int=1), [root], max_source_bytes=10000)
+    first.operations.clear()
+    assert (
+        len((await service.canonicalize(UUID(int=1), [root], max_source_bytes=10000)).operations)
+        == 1
+    )
+    storage.get.assert_awaited_once()
+    with pytest.raises(SourceParseError, match="byte limit"):
+        await service.canonicalize(UUID(int=1), [root], max_source_bytes=1)
+    demoted = root.model_copy(
+        update={"source": root.source.model_copy(update={"is_primary": False})}
+    )
+    with pytest.raises(SourceParseError, match="exactly one primary"):
+        await service.canonicalize(UUID(int=1), [demoted], max_source_bytes=10000)

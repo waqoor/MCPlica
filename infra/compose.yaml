@@ -103,7 +103,10 @@ services:
   minio:
     logging: *bounded-logging
     restart: unless-stopped
-    image: minio/minio:RELEASE.2024-05-28T17-19-04Z@sha256:391d1d45fdbe79944cb6de9337b073864bb9ee38c4c24280bfb39572e925af08
+    image: mcplica/minio:RELEASE.2024-05-28T17-19-04Z
+    build:
+      context: ..
+      dockerfile: infra/docker/minio.Dockerfile
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
@@ -111,7 +114,7 @@ services:
       - minio-data:/minio_data
     command: minio server /minio_data --console-address ":9001"
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:9000/minio/health/ready"]
       interval: 30s
       timeout: 20s
       retries: 3

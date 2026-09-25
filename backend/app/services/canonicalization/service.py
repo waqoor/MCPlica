@@ -10,7 +10,11 @@ from app.core.canonical_json import canonical_sha256
 from app.core.exceptions import NotFoundError, SourceParseError
 from app.domain.canonicalization import CanonicalSnapshotRecord
 from app.domain.projects import ProjectRoutingConfiguration
-from app.domain.sources import BoundSourceVersionRecord, SourceKind
+from app.domain.sources import (
+    BoundSourceVersionRecord,
+    SourceKind,
+    source_configuration_fingerprint,
+)
 from app.parsers.api_inventory import parse_api_inventory
 from app.parsers.openapi.parser import ExternalOpenApiDocument, parse_openapi
 from app.parsers.structured import parse_json_or_yaml
@@ -37,7 +41,8 @@ def _attribute_source_error(
 
 _FAILURE_COOLDOWN_SECONDS = 15.0
 
-_CacheKey = tuple[UUID, str, str | None, str | None, tuple[tuple[str, str], ...]]
+_CACHE_LIMIT = 128
+_CacheKey = tuple[UUID, str, str, int]
 
 
 def _source_fingerprint(bindings: list[BoundSourceVersionRecord]) -> str:
@@ -113,13 +118,17 @@ class CanonicalizationService:
         cache_key = (
             project_id,
             _source_fingerprint(bindings),
-            effective_routing.default_base_url,
-            effective_routing.active_server_ref,
-            tuple(sorted(effective_routing.server_mappings.items())),
+            source_configuration_fingerprint(
+                bindings=bindings,
+                default_base_url=effective_routing.default_base_url,
+                active_server_ref=effective_routing.active_server_ref,
+                server_mappings=effective_routing.server_mappings,
+            ),
+            max_source_bytes,
         )
         cached = self._cache.get(cache_key)
         if cached is not None:
-            return cached
+            return cached.model_copy(deep=True)
         pending_failure = self._failures.get(cache_key)
         if pending_failure is not None:
             failed_at, exc = pending_failure
@@ -129,9 +138,10 @@ class CanonicalizationService:
         existing = self._inflight.get(cache_key)
         if existing is not None:
             try:
-                return await existing
+                return (await asyncio.shield(existing)).model_copy(deep=True)
             except asyncio.CancelledError:
-                if asyncio.current_task().cancelling():
+                task = asyncio.current_task()
+                if task is not None and task.cancelling():
                     raise
                 # The in-flight leader was cancelled, not us; retry as the new leader.
                 return await self.canonicalize(
@@ -153,6 +163,8 @@ class CanonicalizationService:
         except BaseException as exc:
             del self._inflight[cache_key]
             if isinstance(exc, Exception):
+                if len(self._failures) >= _CACHE_LIMIT:
+                    del self._failures[next(iter(self._failures))]
                 self._failures[cache_key] = (time.monotonic(), exc)
                 future.set_exception(exc)
                 future.exception()  # mark retrieved so asyncio doesn't warn if nobody awaits it
@@ -160,7 +172,9 @@ class CanonicalizationService:
                 future.cancel()
             raise
         self._failures.pop(cache_key, None)
-        self._cache[cache_key] = result
+        if len(self._cache) >= _CACHE_LIMIT:
+            del self._cache[next(iter(self._cache))]
+        self._cache[cache_key] = result.model_copy(deep=True)
         future.set_result(result)
         del self._inflight[cache_key]
         return result

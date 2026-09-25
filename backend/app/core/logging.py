@@ -3,7 +3,7 @@ import logging
 import math
 import re
 from datetime import UTC, datetime
-from typing import ClassVar
+from typing import ClassVar, cast
 from urllib.parse import urlsplit
 
 _EVENT_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
@@ -20,13 +20,10 @@ def _safe_pg_diag(current: BaseException) -> dict[str, object]:
     orig = getattr(current, "orig", None)
     diag = getattr(orig, "diag", None)
     constraint_name = getattr(diag, "constraint_name", None)
-    if not constraint_name:
+    if not isinstance(constraint_name, str) or not _EVENT_NAME.fullmatch(constraint_name):
         return {}
-    detail: dict[str, object] = {"pg_constraint": constraint_name}
-    message_detail = getattr(diag, "message_detail", None)
-    if isinstance(message_detail, str):
-        detail["pg_detail"] = message_detail.replace("\r", " ").replace("\n", " ")[:512]
-    return detail
+    # PostgreSQL details can contain entire private rows, including credentials.
+    return {"pg_constraint": constraint_name}
 
 
 def _safe_exception(
@@ -36,19 +33,15 @@ def _safe_exception(
     chain: list[str] = []
     seen: set[int] = set()
     diag: dict[str, object] = {}
-    root_message: str | None = None
     while current is not None and id(current) not in seen and len(chain) < 8:
         seen.add(id(current))
         chain.append(type(current).__name__)
         if not diag:
             diag = _safe_pg_diag(current)
-        root_message = str(current).replace("\r", " ").replace("\n", " ")[:512]
         current = current.__cause__ or current.__context__
     if not chain:
         return {"type": "Exception"}
     result: dict[str, object] = {"type": chain[0], "chain": chain, **diag}
-    if root_message and len(chain) > 1:
-        result["root_message"] = root_message
     return result
 
 
@@ -131,15 +124,11 @@ class SafeTextLogFormatter(logging.Formatter):
         if record.exc_info:
             exception = _safe_exception(record.exc_info)
             rendered += f" exception_type={exception['type']}"
-            chain = exception.get("chain")
-            if isinstance(chain, list) and len(chain) > 1:
+            chain = cast(list[str], exception.get("chain", []))
+            if len(chain) > 1:
                 rendered += f" exception_chain={'<-'.join(chain)}"
-            if "root_message" in exception:
-                rendered += f" root_message={exception['root_message']!r}"
             if "pg_constraint" in exception:
                 rendered += f" pg_constraint={exception['pg_constraint']}"
-            if "pg_detail" in exception:
-                rendered += f" pg_detail={exception['pg_detail']}"
         return rendered
 
 

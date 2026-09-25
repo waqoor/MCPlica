@@ -186,10 +186,7 @@ function UsageLogsDialog({
     enabled: model !== null,
     queryKey: ["usage", "logs", model, { from, to, page }],
     queryFn: ({ signal }) =>
-      usageApi.logs(
-        { model: model!, from, to, page, page_size: 50 },
-        signal,
-      ),
+      usageApi.logs({ model: model!, from, to, page, page_size: 50 }, signal),
   });
   const pageCount = logs.data
     ? Math.max(1, Math.ceil(logs.data.total / logs.data.page_size))
