@@ -3,7 +3,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import InvalidStateError, NotFoundError
+from app.core.exceptions import ExecutionOwnershipError, InvalidStateError, NotFoundError
 from app.domain.builds import TERMINAL_STATUSES
 from app.models.build import Build
 
@@ -28,9 +28,8 @@ async def require_build_execution_owner(
         or build.admission_lease_expires_at <= database_now
         or build.status in TERMINAL_STATUSES
     ):
-        raise InvalidStateError(
+        raise ExecutionOwnershipError(
             "Build execution ownership is stale",
-            details={"reason_code": "BUILD_EXECUTION_OWNERSHIP_LOST"},
         )
     if build.cancellation_requested_at is not None and not allow_cancellation:
         raise InvalidStateError(
