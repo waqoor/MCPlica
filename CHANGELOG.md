@@ -6,6 +6,8 @@ version is not published until its immutable tag and release workflow complete.
 
 ## [Unreleased]
 
+## [1.0.0-rc.2] - 2026-09-26
+
 ### Changed
 
 - Integrated structured, rotating application logs, worker registration recovery, protected login

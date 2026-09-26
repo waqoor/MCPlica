@@ -12,8 +12,8 @@ MCPlica guides you from an OpenAPI specification or API inventory to a reviewed 
 an isolated project runtime. It combines deterministic compilation with optional AI-assisted
 analysis, so teams can understand, build, validate, and operate MCP integrations from one place.
 
-> **Prerelease:** this branch is prepared as `v1.0.0-rc.1`. It is suitable for evaluation, not a
-> claim of production certification. See the [release notes](docs/releases/v1.0.0-rc.1.md) for
+> **Prerelease:** this branch is prepared as `v1.0.0-rc.2`. It is suitable for evaluation, not a
+> claim of production certification. See the [release notes](docs/releases/v1.0.0-rc.2.md) for
 > compatibility and known limitations.
 
 ![MCPlica project setup](docs/assets/mcplica-platform.png)
