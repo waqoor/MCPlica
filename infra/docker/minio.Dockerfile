@@ -1,5 +1,5 @@
 # Rebuild the existing MinIO release after its upstream registry images were removed.
-FROM golang:1.26.7-alpine3.24@sha256:28d89ee9cc0ff9fec75c82ca201e6bf7fdf9a679d4b7b24dfa04f2bb766bb468 AS build
+FROM golang:1.27.1-alpine3.24@sha256:8a5910f31396cd4d89662f56c68b3ae31d374308270a1c3bd96672ee5ed43414 AS build
 WORKDIR /src
 ADD --checksum=sha256:8872a8266ac623e35956e3cd7758b85c5ba79de419b1c05d4b46288e95f576dd https://codeload.github.com/minio/minio/tar.gz/f92beb79b555ca0762e01d5aca11e531353e9eae /src/minio.tar.gz
 RUN tar -xzf minio.tar.gz --strip-components=1 && rm minio.tar.gz
