@@ -1,4 +1,4 @@
-FROM node:26.9.0-alpine3.24@sha256:dbaa92e5758cbbcf85d65d5403fdb530fe3442cbe8c6dbfb7ef23365450d5070 AS build
+FROM node:26.11.1-alpine3.24@sha256:143494b1da2945f061539253adc65e4f1569ddf07da2d384c022c791a9d90a4a AS build
 ARG VERSION
 WORKDIR /app
 RUN npm install --global corepack@0.35.0 && corepack enable
