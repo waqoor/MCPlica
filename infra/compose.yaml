@@ -143,7 +143,7 @@ services:
 
   milvus:
     logging: *bounded-logging
-    image: milvusdb/milvus:v3.0.2@sha256:5f13bf88e110a517911c3e6dd8172454e90042c21e606a868084615a4302c8a0
+    image: milvusdb/milvus:v3.0.5@sha256:b9b79b4a284b41cd12d60abc418310f84621fa4c977d409b38f501519a7ccf8a
     command: ["milvus", "run", "standalone"]
     # Recover from transient standalone failures (for example, an etcd timeout)
     # without requiring an operator to notice and restart the container manually.
