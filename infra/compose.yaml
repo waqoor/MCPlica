@@ -478,7 +478,7 @@ services:
   traefik:
     logging: *bounded-logging
     restart: unless-stopped
-    image: traefik:v3.7.13@sha256:f86a2cab1b5c649070c49f883c743dd32d8485a56e3368c5f93b9e91f1e91259
+    image: traefik:v3.7.17@sha256:f4bb143d1135a579b630ed491e17ec50f6f7c9c6a30585ff3d385471d2a86f5a
     command: ["--configFile=/etc/traefik/traefik.yml"]
     ports:
       - "${EDGE_PORT:-80}:80"
